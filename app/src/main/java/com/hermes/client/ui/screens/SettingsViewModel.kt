@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hermes.client.AppContainer
+import com.hermes.client.data.api.featureEnabled
 import com.hermes.client.data.fcm.FirebaseInit
 import com.hermes.client.data.store.ClientSettings
 import com.hermes.client.data.store.SettingsStore
