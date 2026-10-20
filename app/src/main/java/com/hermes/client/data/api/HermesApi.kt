@@ -28,7 +28,7 @@ private const val IDEMPOTENCY_HEADER = "Idempotency-Key"
 
 /**
  * HTTP client for the Hermes API Server (gateway/platforms/api_server.py).
- * Base URL looks like https://host:port, paths are /v1/* and /api/*.
+ * Base URL looks like https://host:port, paths start with /v1/ and /api/.
  */
 class HermesApi(
     baseUrl: String,

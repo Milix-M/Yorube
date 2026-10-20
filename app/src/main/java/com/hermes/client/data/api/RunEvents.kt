@@ -1,6 +1,7 @@
 package com.hermes.client.data.api
 
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonObject
 
 /** One parsed SSE frame from GET /v1/runs/{id}/events. */
