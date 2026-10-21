@@ -218,15 +218,29 @@ class ChatViewModelTest {
         assertNull(vm.error)
     }
 
+    private fun eventsBody(vararg frames: String): String =
+        frames.joinToString("") { it + "\n\n" }
+
     @Test
     fun stopAndSteer_postControls() = runVmTest {
-        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
-        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
-        // Hold the event stream open: headers never arrive, so no terminal
-        // can clear runId before the controls are posted.
-        server.enqueue(MockResponse().setHeadersDelay(60, TimeUnit.SECONDS))
-        server.enqueue(MockResponse().setBody("{}"))
-        server.enqueue(MockResponse().setBody("{}"))
+        // Simpler deterministic flow: dedicated responses per path.
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            var creates = 0
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                return when {
+                    request.path == "/v1/runs" && request.method == "POST" -> {
+                        creates++
+                        MockResponse().setResponseCode(202)
+                            .setBody("""{"run_id":"r1","status":"queued"}""")
+                    }
+                    request.path == "/v1/runs/r1" ->
+                        MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
+                    request.path == "/v1/runs/r1/events" ->
+                        MockResponse().setBody("").setHeader("Content-Type", "text/event-stream")
+                    else -> MockResponse().setBody("{}")
+                }
+            }
+        }
         val c = containerWithSettings()
         val vm = ChatViewModel(c, null)
         vm.input = "hi"
@@ -257,20 +271,33 @@ class ChatViewModelTest {
 
     @Test
     fun approvalAnswer_postsDecision() = runVmTest {
-        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
-        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
-        server.enqueue(
-            events(
-                frame("message.delta", """{"event":"message.delta","delta":"part"}"""),
-                frame(
-                    "approval.request",
-                    """{"event":"approval.request","request_id":"r1","execution_generation":3,"command":"rm"}""",
-                ),
-            )
-        )
-        // Hold any reconnect open: headers never arrive, so no terminal
-        // can clear runId before the answer is posted.
-        server.enqueue(MockResponse().setHeadersDelay(60, TimeUnit.SECONDS))
+        var eventsServed = 0
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                return when {
+                    request.path == "/v1/runs" && request.method == "POST" ->
+                        MockResponse().setResponseCode(202)
+                            .setBody("""{"run_id":"r1","status":"queued"}""")
+                    request.path == "/v1/runs/r1" ->
+                        MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
+                    request.path == "/v1/runs/r1/events" -> {
+                        eventsServed++
+                        if (eventsServed == 1) {
+                            events(
+                                frame("message.delta", """{"event":"message.delta","delta":"part"}"""),
+                                frame(
+                                    "approval.request",
+                                    """{"event":"approval.request","request_id":"r1","execution_generation":3,"command":"rm"}""",
+                                ),
+                            )
+                        } else {
+                            events()
+                        }
+                    }
+                    else -> MockResponse().setBody("{}")
+                }
+            }
+        }
         val c = containerWithSettings()
         val vm = ChatViewModel(c, null)
         vm.input = "hi"
@@ -279,26 +306,39 @@ class ChatViewModelTest {
         vm.answerApproval("once")
         val bodies = pollBodies { it.startsWith("/v1/runs/r1/approval") }
         assertTrue(
-            "bodies=$bodies error=${vm.error} busy=${vm.busy} approval=${vm.approval} choices=${vm.approval?.choices}",
+            "bodies=$bodies error=${vm.error} busy=${vm.busy}",
             bodies.any { it.startsWith("/v1/runs/r1/approval") && it.contains("\"choice\":\"once\"") },
         )
     }
 
     @Test
     fun clarifyAnswer_postsAnswer() = runVmTest {
-        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
-        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
-        server.enqueue(
-            events(
-                frame(
-                    "clarify.request",
-                    """{"event":"clarify.request","request_id":"c1","execution_generation":2,"prompt":"which?"}""",
-                ),
-            )
-        )
-        // Hold any reconnect open: headers never arrive, so no terminal
-        // can clear runId before the answer is posted.
-        server.enqueue(MockResponse().setHeadersDelay(60, TimeUnit.SECONDS))
+        var eventsServed = 0
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                return when {
+                    request.path == "/v1/runs" && request.method == "POST" ->
+                        MockResponse().setResponseCode(202)
+                            .setBody("""{"run_id":"r1","status":"queued"}""")
+                    request.path == "/v1/runs/r1" ->
+                        MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
+                    request.path == "/v1/runs/r1/events" -> {
+                        eventsServed++
+                        if (eventsServed == 1) {
+                            events(
+                                frame(
+                                    "clarify.request",
+                                    """{"event":"clarify.request","request_id":"c1","execution_generation":2,"prompt":"which?"}""",
+                                ),
+                            )
+                        } else {
+                            events()
+                        }
+                    }
+                    else -> MockResponse().setBody("{}")
+                }
+            }
+        }
         val c = containerWithSettings()
         val vm = ChatViewModel(c, null)
         vm.input = "hi"
