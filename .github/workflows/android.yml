@@ -36,6 +36,7 @@ jobs:
             app/build/reports/tests/testDebugUnitTest
             app/build/test-results/testDebugUnitTest
             app/build/reports/jacoco
+            app/build/outputs/unit_test_code_coverage
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4

@@ -38,6 +38,9 @@ android {
     }
 
     buildTypes {
+        getByName("debug") {
+            enableUnitTestCoverage = true
+        }
         release {
             isMinifyEnabled = true
             proguardFiles(
@@ -130,8 +133,13 @@ fun jacocoClassDirs(): FileCollection {
     )
 }
 
-fun jacocoExec(): FileCollection =
-    files(layout.buildDirectory.dir("jacoco/testDebugUnitTest.exec").get().asFile)
+fun jacocoExec(): FileCollection {
+    val buildDir = layout.buildDirectory.get().asFile
+    return files(
+        fileTree("$buildDir/outputs/unit_test_code_coverage") { include("**/*.exec") },
+        fileTree("$buildDir/jacoco") { include("**/*.exec") },
+    )
+}
 
 tasks.register<JacocoReport>("jacocoTestReport") {
     dependsOn("testDebugUnitTest")
