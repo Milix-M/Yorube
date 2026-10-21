@@ -14,7 +14,8 @@ android {
         minSdk = 26
         targetSdk = 34
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "0.1.2"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -65,4 +66,8 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.mockwebserver)
     testImplementation(libs.coroutines.test)
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation(libs.compose.ui.test.junit4)
+    androidTestImplementation(libs.espresso.core)
+    debugImplementation(libs.compose.ui.test.manifest)
 }

@@ -19,6 +19,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -57,8 +58,8 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
                 .verticalScroll(rememberScrollState())
         ) {
             SectionTitle(stringResource(R.string.section_server))
-            SettingField(stringResource(R.string.base_url), vm.baseUrl, "https://host:port") { vm.baseUrl = it }
-            SettingField(stringResource(R.string.api_key), vm.apiKey, "Bearer", secret = true) { vm.apiKey = it }
+            SettingField(stringResource(R.string.base_url), vm.baseUrl, "https://host:port", tag = "baseUrl") { vm.baseUrl = it }
+            SettingField(stringResource(R.string.api_key), vm.apiKey, "Bearer", secret = true, tag = "apiKey") { vm.apiKey = it }
             SettingField(stringResource(R.string.model), vm.model, "hermes-agent") { vm.model = it }
             SettingField(stringResource(R.string.provider_optional), vm.provider, "openrouter") { vm.provider = it }
 
@@ -82,7 +83,10 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
                 vm.firebaseSenderId = it
             }
 
-            Button(onClick = vm::save, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+            Button(
+                onClick = vm::save,
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp).testTag("save"),
+            ) {
                 Text(if (vm.saved) stringResource(R.string.saved) else stringResource(R.string.save))
             }
             OutlinedButton(
@@ -115,6 +119,7 @@ private fun SettingField(
     placeholder: String,
     keyboardType: KeyboardType = KeyboardType.Text,
     secret: Boolean = false,
+    tag: String = "",
     onChange: (String) -> Unit,
 ) {
     OutlinedTextField(
@@ -125,6 +130,6 @@ private fun SettingField(
         visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         singleLine = true,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).testTag(tag),
     )
 }

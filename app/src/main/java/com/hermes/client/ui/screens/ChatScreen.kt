@@ -28,6 +28,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -88,7 +89,7 @@ fun ChatScreen(
                     OutlinedTextField(
                         value = vm.input,
                         onValueChange = { vm.input = it },
-                        modifier = Modifier.weight(1f).padding(end = 8.dp),
+                        modifier = Modifier.weight(1f).padding(end = 8.dp).testTag("chatInput"),
                         placeholder = {
                             Text(
                                 if (vm.busy) stringResource(R.string.steer_hint)
@@ -98,9 +99,9 @@ fun ChatScreen(
                         maxLines = 4,
                     )
                     if (vm.busy) {
-                        Button(onClick = vm::onSteer) { Text("→") }
+                        Button(onClick = vm::onSteer, modifier = Modifier.testTag("sendButton")) { Text("→") }
                     } else {
-                        Button(onClick = vm::onSend) { Text("↑") }
+                        Button(onClick = vm::onSend, modifier = Modifier.testTag("sendButton")) { Text("↑") }
                     }
                 }
             }
