@@ -34,8 +34,11 @@ class HermesMessagingServiceTest {
     fun newToken_isPersisted() {
         val service = Robolectric.buildService(HermesMessagingService::class.java).create().get()
         service.onNewToken("tok123")
-        kotlinx.coroutines.runBlocking { awaitToken(service) }
-        assertEquals("tok123", app().container.settingsStore.current().fcmToken)
+        val stored = kotlinx.coroutines.runBlocking {
+            awaitToken(service)
+            app().container.settingsStore.current().fcmToken
+        }
+        assertEquals("tok123", stored)
     }
 
     @Test

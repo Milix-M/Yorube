@@ -86,6 +86,7 @@ dependencies {
     testImplementation(libs.mockwebserver)
     testImplementation(libs.coroutines.test)
     testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.ui.test)
     testImplementation(libs.compose.ui.test.junit4)
     testImplementation(libs.robolectric)
     testImplementation(libs.test.core)

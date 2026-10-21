@@ -17,9 +17,14 @@ class MainActivityTest {
         val controller = Robolectric.buildActivity(MainActivity::class.java).setup()
         val activity = controller.get()
         assertNotNull(activity)
-        activity.onNewIntent(
-            Intent(activity, MainActivity::class.java)
-                .putExtra(MainActivity.EXTRA_SESSION_ID, "s9")
+        val m = MainActivity::class.java.getDeclaredMethod(
+            "onNewIntent", android.content.Intent::class.java
+        )
+        m.isAccessible = true
+        m.invoke(
+            activity,
+            android.content.Intent(activity, MainActivity::class.java)
+                .putExtra(MainActivity.EXTRA_SESSION_ID, "s9"),
         )
     }
 }

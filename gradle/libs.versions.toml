@@ -34,6 +34,7 @@ firebase-messaging = { module = "com.google.firebase:firebase-messaging", versio
 junit = { module = "junit:junit", version.ref = "junit" }
 mockwebserver = { module = "com.squareup.okhttp3:mockwebserver", version.ref = "okhttp" }
 coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
+compose-ui-test = { module = "androidx.compose.ui:ui-test" }
 compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4" }
 compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
 espresso-core = { module = "androidx.test.espresso:espresso-core", version.ref = "espresso" }

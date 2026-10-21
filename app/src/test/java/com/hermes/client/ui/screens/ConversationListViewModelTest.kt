@@ -57,7 +57,7 @@ class ConversationListViewModelTest {
         return c
     }
 
-    private suspend fun awaitCondition(timeoutMs: Long = 15_000, cond: () -> Boolean) {
+    private suspend fun awaitCondition(timeoutMs: Long = 15_000, cond: suspend () -> Boolean) {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (!cond()) {
             if (System.currentTimeMillis() >= deadline) error("timed out waiting")
