@@ -273,7 +273,7 @@ class ChatViewModelTest {
         vm.answerApproval("once")
         val bodies = pollBodies { it.startsWith("/v1/runs/r1/approval") }
         assertTrue(
-            "bodies=$bodies",
+            "bodies=$bodies error=${vm.error} busy=${vm.busy} approval=${vm.approval} choices=${vm.approval?.choices}",
             bodies.any { it.startsWith("/v1/runs/r1/approval") && it.contains("\"choice\":\"once\"") },
         )
     }
