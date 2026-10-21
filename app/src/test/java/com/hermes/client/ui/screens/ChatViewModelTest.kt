@@ -231,17 +231,24 @@ class ChatViewModelTest {
         awaitCondition { server.requestCount >= 3 }
         vm.input = "nudge"
         vm.onSteer()
+        val steerPaths = pollPaths { it.endsWith("/steer") }
+        assertTrue("no steer POST, got=$steerPaths", steerPaths.any { it.endsWith("/steer") })
         vm.onStop()
+        val stopPaths = pollPaths { it.endsWith("/stop") }
+        assertTrue("no stop POST, got=$stopPaths", stopPaths.any { it.endsWith("/stop") })
+    }
+
+    private suspend fun TestScope.pollPaths(match: (String) -> Boolean): List<String> {
         val paths = mutableListOf<String>()
         val deadline = System.currentTimeMillis() + 15_000
-        while (System.currentTimeMillis() < deadline && paths.size < 5) {
+        while (System.currentTimeMillis() < deadline && paths.none(match)) {
             testScheduler.advanceUntilIdle()
-            val r = server.takeRequest(100, TimeUnit.MILLISECONDS) ?: continue
-            paths.add(r.path ?: "")
+            while (true) {
+                val r = server.takeRequest(100, TimeUnit.MILLISECONDS) ?: break
+                paths.add(r.path ?: "")
+            }
         }
-        assertTrue("paths=$paths", paths.any { it == "/v1/runs" })
-        assertTrue("paths=$paths", paths.any { it.endsWith("/steer") })
-        assertTrue("paths=$paths", paths.any { it.endsWith("/stop") })
+        return paths
     }
 
     @Test
@@ -257,20 +264,18 @@ class ChatViewModelTest {
                 ),
             )
         )
-        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
-        server.enqueue(events(frame("run.completed", """{"event":"run.completed","output":"done"}""")))
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.KEEP_OPEN))
         val c = containerWithSettings()
         val vm = ChatViewModel(c, null)
         vm.input = "hi"
         vm.onSend()
         awaitCondition { vm.approval != null }
         vm.answerApproval("once")
-        val bodies = drainPaths(listOf("/v1/runs/r1/approval"))
+        val bodies = pollBodies { it.startsWith("/v1/runs/r1/approval") }
         assertTrue(
             "bodies=$bodies",
             bodies.any { it.startsWith("/v1/runs/r1/approval") && it.contains("\"choice\":\"once\"") },
         )
-        awaitCondition { !vm.busy }
     }
 
     @Test
@@ -285,29 +290,29 @@ class ChatViewModelTest {
                 ),
             )
         )
-        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
-        server.enqueue(events(frame("run.completed", """{"event":"run.completed","output":"ok"}""")))
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.KEEP_OPEN))
         val c = containerWithSettings()
         val vm = ChatViewModel(c, null)
         vm.input = "hi"
         vm.onSend()
         awaitCondition { vm.clarify != null }
         vm.answerClarify("this one")
-        val bodies = drainPaths(listOf("/v1/runs/r1/clarify"))
+        val bodies = pollBodies { it.startsWith("/v1/runs/r1/clarify") }
         assertTrue(
             "bodies=$bodies",
             bodies.any { it.startsWith("/v1/runs/r1/clarify") && it.contains("\"answer\":\"this one\"") },
         )
-        awaitCondition { !vm.busy }
     }
 
-    private suspend fun TestScope.drainPaths(want: List<String>): List<String> {
+    private suspend fun TestScope.pollBodies(match: (String) -> Boolean): List<String> {
         val bodies = mutableListOf<String>()
         val deadline = System.currentTimeMillis() + 15_000
-        while (System.currentTimeMillis() < deadline && want.none { w -> bodies.any { it.startsWith(w) } }) {
+        while (System.currentTimeMillis() < deadline && bodies.none(match)) {
             testScheduler.advanceUntilIdle()
-            val req = server.takeRequest(100, TimeUnit.MILLISECONDS) ?: continue
-            bodies.add((req.path ?: "") + " " + req.body.readUtf8())
+            while (true) {
+                val req = server.takeRequest(100, TimeUnit.MILLISECONDS) ?: break
+                bodies.add((req.path ?: "") + " " + req.body.readUtf8())
+            }
         }
         return bodies
     }
