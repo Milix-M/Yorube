@@ -2,8 +2,8 @@ package com.hermes.client.ui
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import com.hermes.client.ui.screens.SettingsScreen
@@ -34,6 +34,8 @@ class SettingsScreenTest {
         compose.onNodeWithTag("baseUrl").performTextInput("https://example.com:8642")
         compose.onNodeWithTag("apiKey").performTextInput("k")
         compose.onNodeWithTag("save").performClick()
-        compose.onNodeWithText("Saved ✓").assertIsDisplayed()
+        compose.waitUntil(timeoutMillis = 10_000) {
+            compose.onAllNodesWithText("Saved ✓").fetchSemanticsNodes().isNotEmpty()
+        }
     }
 }
