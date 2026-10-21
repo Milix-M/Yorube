@@ -14,6 +14,7 @@ firebase-messaging = "24.0.1"
 junit = "4.13.2"
 espresso = "3.5.1"
 robolectric = "4.13"
+test-core = "1.5.0"
 
 [libraries]
 core-ktx = { module = "androidx.core:core-ktx", version.ref = "core-ktx" }
@@ -37,3 +38,4 @@ compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4" }
 compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
 espresso-core = { module = "androidx.test.espresso:espresso-core", version.ref = "espresso" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+test-core = { module = "androidx.test:core", version.ref = "test-core" }
