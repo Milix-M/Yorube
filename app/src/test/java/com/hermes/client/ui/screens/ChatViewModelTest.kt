@@ -227,8 +227,12 @@ class ChatViewModelTest {
     @Test
     fun stopAndSteer_postControls() = runVmTest {
         // Simpler deterministic flow: dedicated responses per path.
+        // Second and later status polls are delayed so the reconnect loop
+        // cannot exhaust (clearing runId) before steer/stop are posted.
+        // The delay blocks only IO threads; the test thread stays free.
         server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
             var creates = 0
+            var getRuns = 0
             override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
                 return when {
                     request.path == "/v1/runs" && request.method == "POST" -> {
@@ -236,8 +240,14 @@ class ChatViewModelTest {
                         MockResponse().setResponseCode(202)
                             .setBody("""{"run_id":"r1","status":"queued"}""")
                     }
-                    request.path == "/v1/runs/r1" ->
-                        MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
+                    request.path == "/v1/runs/r1" -> {
+                        if (getRuns++ == 0) {
+                            MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
+                        } else {
+                            MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
+                                .setBodyDelay(5, TimeUnit.SECONDS)
+                        }
+                    }
                     request.path == "/v1/runs/r1/events" ->
                         MockResponse().setBody("").setHeader("Content-Type", "text/event-stream")
                     else -> MockResponse().setBody("{}")
@@ -246,17 +256,22 @@ class ChatViewModelTest {
         }
         val c = containerWithSettings()
         val vm = ChatViewModel(c, null)
-        vm.input = "hi"
-        vm.onSend()
-        awaitCondition { vm.busy }
-        awaitCondition { server.requestCount >= 3 }
-        vm.input = "nudge"
-        vm.onSteer()
-        val steerPaths = pollPaths { it.endsWith("/steer") }
-        assertTrue("no steer POST, got=$steerPaths", steerPaths.any { it.endsWith("/steer") })
-        vm.onStop()
-        val stopPaths = pollPaths { it.endsWith("/stop") }
-        assertTrue("no stop POST, got=$stopPaths", stopPaths.any { it.endsWith("/stop") })
+        try {
+            vm.input = "hi"
+            vm.onSend()
+            awaitCondition { vm.busy }
+            awaitCondition { server.requestCount >= 3 }
+            vm.input = "nudge"
+            vm.onSteer()
+            val steerPaths = pollPaths { it.endsWith("/steer") }
+            assertTrue("no steer POST, got=$steerPaths", steerPaths.any { it.endsWith("/steer") })
+            vm.onStop()
+            val stopPaths = pollPaths { it.endsWith("/stop") }
+            assertTrue("no stop POST, got=$stopPaths", stopPaths.any { it.endsWith("/stop") })
+        } finally {
+            vm.viewModelScope.cancel()
+            testScheduler.advanceUntilIdle()
+        }
     }
 
     private suspend fun TestScope.pollPaths(match: (String) -> Boolean): List<String> {
@@ -275,14 +290,22 @@ class ChatViewModelTest {
     @Test
     fun approvalAnswer_postsDecision() = runVmTest {
         var eventsServed = 0
+        var getRuns = 0
         server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
             override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
                 return when {
                     request.path == "/v1/runs" && request.method == "POST" ->
                         MockResponse().setResponseCode(202)
                             .setBody("""{"run_id":"r1","status":"queued"}""")
-                    request.path == "/v1/runs/r1" ->
-                        MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
+                    request.path == "/v1/runs/r1" -> {
+                        // Stall reconnect polls so runId survives until the answer is posted.
+                        if (getRuns++ == 0) {
+                            MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
+                        } else {
+                            MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
+                                .setBodyDelay(5, TimeUnit.SECONDS)
+                        }
+                    }
                     request.path == "/v1/runs/r1/events" -> {
                         eventsServed++
                         if (eventsServed == 1) {
@@ -303,28 +326,41 @@ class ChatViewModelTest {
         }
         val c = containerWithSettings()
         val vm = ChatViewModel(c, null)
-        vm.input = "hi"
-        vm.onSend()
-        awaitCondition { vm.approval != null }
-        vm.answerApproval("once")
-        val bodies = pollBodies { it.startsWith("/v1/runs/r1/approval") }
-        assertTrue(
-            "bodies=$bodies error=${vm.error} busy=${vm.busy}",
-            bodies.any { it.startsWith("/v1/runs/r1/approval") && it.contains("\"choice\":\"once\"") },
-        )
+        try {
+            vm.input = "hi"
+            vm.onSend()
+            awaitCondition { vm.approval != null }
+            vm.answerApproval("once")
+            val bodies = pollBodies { it.startsWith("/v1/runs/r1/approval") }
+            assertTrue(
+                "bodies=$bodies error=${vm.error} busy=${vm.busy}",
+                bodies.any { it.startsWith("/v1/runs/r1/approval") && it.contains("\"choice\":\"once\"") },
+            )
+        } finally {
+            vm.viewModelScope.cancel()
+            testScheduler.advanceUntilIdle()
+        }
     }
 
     @Test
     fun clarifyAnswer_postsAnswer() = runVmTest {
         var eventsServed = 0
+        var getRuns = 0
         server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
             override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
                 return when {
                     request.path == "/v1/runs" && request.method == "POST" ->
                         MockResponse().setResponseCode(202)
                             .setBody("""{"run_id":"r1","status":"queued"}""")
-                    request.path == "/v1/runs/r1" ->
-                        MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
+                    request.path == "/v1/runs/r1" -> {
+                        // Stall reconnect polls so runId survives until the answer is posted.
+                        if (getRuns++ == 0) {
+                            MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
+                        } else {
+                            MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
+                                .setBodyDelay(5, TimeUnit.SECONDS)
+                        }
+                    }
                     request.path == "/v1/runs/r1/events" -> {
                         eventsServed++
                         if (eventsServed == 1) {
@@ -344,15 +380,20 @@ class ChatViewModelTest {
         }
         val c = containerWithSettings()
         val vm = ChatViewModel(c, null)
-        vm.input = "hi"
-        vm.onSend()
-        awaitCondition { vm.clarify != null }
-        vm.answerClarify("this one")
-        val bodies = pollBodies { it.startsWith("/v1/runs/r1/clarify") }
-        assertTrue(
-            "bodies=$bodies",
-            bodies.any { it.startsWith("/v1/runs/r1/clarify") && it.contains("\"answer\":\"this one\"") },
-        )
+        try {
+            vm.input = "hi"
+            vm.onSend()
+            awaitCondition { vm.clarify != null }
+            vm.answerClarify("this one")
+            val bodies = pollBodies { it.startsWith("/v1/runs/r1/clarify") }
+            assertTrue(
+                "bodies=$bodies",
+                bodies.any { it.startsWith("/v1/runs/r1/clarify") && it.contains("\"answer\":\"this one\"") },
+            )
+        } finally {
+            vm.viewModelScope.cancel()
+            testScheduler.advanceUntilIdle()
+        }
     }
 
     private suspend fun TestScope.pollBodies(match: (String) -> Boolean): List<String> {
