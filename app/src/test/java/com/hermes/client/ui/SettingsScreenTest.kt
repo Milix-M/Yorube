@@ -1,6 +1,5 @@
 package com.hermes.client.ui
 
-import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -50,8 +49,15 @@ class SettingsScreenTest {
                 SettingsScreen(onNavigateBack = {})
             }
         }
-        compose.onNodeWithText("Client ID").assertExists()
-        compose.onNodeWithText("Client Secret").assertExists()
-        compose.onNodeWithText("Firebase manual setup (optional)").assertExists()
+        assertTrue(
+            compose.onAllNodesWithText("Client ID").fetchSemanticsNodes().isNotEmpty()
+        )
+        assertTrue(
+            compose.onAllNodesWithText("Client Secret").fetchSemanticsNodes().isNotEmpty()
+        )
+        assertTrue(
+            compose.onAllNodesWithText("Firebase manual setup (optional)")
+                .fetchSemanticsNodes().isNotEmpty()
+        )
     }
 }

@@ -1,11 +1,11 @@
 package com.hermes.client.ui.screens
 
 import android.app.Application
-import androidx.compose.ui.test.assertDoesNotExist
-import androidx.compose.ui.test.assertExists
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -81,16 +81,17 @@ class ConversationListDeleteUiTest {
         assertEquals("s1", opened)
 
         compose.onNodeWithText("Hello").performTouchInput { longClick() }
-        compose.onNodeWithText("Delete conversation?").assertExists()
+        assertTrue(
+            compose.onAllNodesWithText("Delete conversation?").fetchSemanticsNodes().isNotEmpty()
+        )
         compose.onNodeWithText("Cancel").performClick()
-        compose.onNodeWithText("Hello").assertExists()
+        compose.onNodeWithText("Hello").assertIsDisplayed()
 
         compose.onNodeWithText("Hello").performTouchInput { longClick() }
         compose.onNodeWithText("Delete").performClick()
         compose.waitUntil(timeoutMillis = 10_000) {
             compose.onAllNodes(hasText("Hello")).fetchSemanticsNodes().isEmpty()
         }
-        compose.onNodeWithText("Hello").assertDoesNotExist()
         val paths = mutableListOf<String>()
         repeat(3) {
             val req = server.takeRequest(5, TimeUnit.SECONDS) ?: return@repeat
