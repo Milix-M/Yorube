@@ -66,8 +66,17 @@ class NavGraphTest {
 
     @Test
     fun fullFlow_listToChatToSettingsAndBack() {
-        server.enqueue(MockResponse().setBody("""{"sessions":[{"id":"s1","title":"Hello"}]}"""))
-        server.enqueue(MockResponse().setBody("""{"messages":[]}"""))
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                return when {
+                    (request.path ?: "").startsWith("/api/sessions/") ->
+                        MockResponse().setBody("""{"messages":[]}""")
+                    (request.path ?: "").startsWith("/api/sessions") ->
+                        MockResponse().setBody("""{"sessions":[{"id":"s1","title":"Hello"}]}""")
+                    else -> MockResponse().setBody("{}")
+                }
+            }
+        }
         saveSettings()
         compose.setContent {
             HermesAppTheme {
@@ -104,10 +113,10 @@ class NavGraphTest {
         server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
             override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
                 return when {
-                    request.path == "/api/sessions" ->
-                        MockResponse().setBody("""{"sessions":[{"id":"s1","title":"Hello"}]}""")
                     (request.path ?: "").startsWith("/api/sessions/") ->
                         MockResponse().setBody("""{"messages":[]}""")
+                    (request.path ?: "").startsWith("/api/sessions") ->
+                        MockResponse().setBody("""{"sessions":[{"id":"s1","title":"Hello"}]}""")
                     else -> MockResponse().setBody("{}")
                 }
             }
@@ -123,7 +132,7 @@ class NavGraphTest {
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
         // Open ChatGPT-like drawer and start a new chat from it.
         compose.onNodeWithTag("menuButton").performClick()
-        compose.onNodeWithTag("newChat").performClick()
+        compose.onNodeWithTag("drawerNewChat").performClick()
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
     }
 
@@ -132,10 +141,10 @@ class NavGraphTest {
         server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
             override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
                 return when {
-                    request.path == "/api/sessions" ->
-                        MockResponse().setBody("""{"sessions":[{"id":"s1","title":"Hello"}]}""")
                     (request.path ?: "").startsWith("/api/sessions/") ->
                         MockResponse().setBody("""{"messages":[]}""")
+                    (request.path ?: "").startsWith("/api/sessions") ->
+                        MockResponse().setBody("""{"sessions":[{"id":"s1","title":"Hello"}]}""")
                     else -> MockResponse().setBody("{}")
                 }
             }

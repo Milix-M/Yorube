@@ -178,7 +178,7 @@ fun ConversationDrawerContent(
             }
             FilledTonalButton(
                 onClick = { onOpenChat(null) },
-                modifier = Modifier.fillMaxWidth().testTag("newChat"),
+                modifier = Modifier.fillMaxWidth().testTag("drawerNewChat"),
             ) {
                 Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                 Text(stringResource(R.string.new_chat), modifier = Modifier.padding(start = 8.dp))
@@ -196,7 +196,7 @@ fun ConversationDrawerContent(
             }
             TextButton(
                 onClick = onOpenSettings,
-                modifier = Modifier.fillMaxWidth().testTag("settingsButton"),
+                modifier = Modifier.fillMaxWidth().testTag("drawerSettings"),
             ) {
                 Icon(Icons.Filled.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
                 Text(stringResource(R.string.settings), modifier = Modifier.padding(start = 8.dp))
