@@ -12,7 +12,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
-import okhttp3.mockwebserver.SocketPolicy
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -222,7 +221,11 @@ class ChatViewModelTest {
     fun stopAndSteer_postControls() = runVmTest {
         server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
         server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
-        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.KEEP_OPEN))
+        // Hold the event stream open: headers never arrive, so no terminal
+        // can clear runId before the controls are posted.
+        server.enqueue(MockResponse().setHeadersDelay(60, TimeUnit.SECONDS))
+        server.enqueue(MockResponse().setBody("{}"))
+        server.enqueue(MockResponse().setBody("{}"))
         val c = containerWithSettings()
         val vm = ChatViewModel(c, null)
         vm.input = "hi"
@@ -264,7 +267,10 @@ class ChatViewModelTest {
                 ),
             )
         )
-        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.KEEP_OPEN))
+        server.enqueue(MockResponse().setBody("{}"))
+        // Hold any reconnect open: headers never arrive, so no terminal
+        // can clear runId before the answer is posted.
+        server.enqueue(MockResponse().setHeadersDelay(60, TimeUnit.SECONDS))
         val c = containerWithSettings()
         val vm = ChatViewModel(c, null)
         vm.input = "hi"
@@ -290,7 +296,10 @@ class ChatViewModelTest {
                 ),
             )
         )
-        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.KEEP_OPEN))
+        server.enqueue(MockResponse().setBody("{}"))
+        // Hold any reconnect open: headers never arrive, so no terminal
+        // can clear runId before the answer is posted.
+        server.enqueue(MockResponse().setHeadersDelay(60, TimeUnit.SECONDS))
         val c = containerWithSettings()
         val vm = ChatViewModel(c, null)
         vm.input = "hi"
