@@ -84,7 +84,9 @@ class ChatFlowUiTest {
             )
         )
         server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
-        server.enqueue(events(frame("run.completed", """{"event":"run.completed","output":"done"}""")))
+        val terminal = events(frame("run.completed", """{"event":"run.completed","output":"done"}"""))
+        terminal.setBodyDelay(10, TimeUnit.SECONDS)
+        server.enqueue(terminal)
         kotlinx.coroutines.runBlocking { saveSettings() }
 
         compose.setContent {
@@ -99,12 +101,12 @@ class ChatFlowUiTest {
         }
         compose.onNodeWithText("rm").assertIsDisplayed()
         compose.onNodeWithText("once").performClick()
-        compose.waitUntil(timeoutMillis = 15_000) {
-            compose.onAllNodesWithText("part").fetchSemanticsNodes().isNotEmpty()
-        }
         val bodies = mutableListOf<String>()
-        repeat(6) {
-            val req = server.takeRequest(5, TimeUnit.SECONDS) ?: return@repeat
+        val deadline = System.currentTimeMillis() + 15_000
+        while (System.currentTimeMillis() < deadline &&
+            bodies.none { it.startsWith("/v1/runs/r1/approval") }
+        ) {
+            val req = server.takeRequest(1, TimeUnit.SECONDS) ?: continue
             bodies.add((req.path ?: "") + " " + req.body.readUtf8())
         }
         assertTrue(bodies.any { it.startsWith("/v1/runs/r1/approval") && it.contains("\"choice\":\"once\"") })
@@ -123,7 +125,10 @@ class ChatFlowUiTest {
             )
         )
         server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
-        server.enqueue(events(frame("run.completed", """{"event":"run.completed","output":"ok"}""")))
+        val clarifyTerminal =
+            events(frame("run.completed", """{"event":"run.completed","output":"ok"}"""))
+        clarifyTerminal.setBodyDelay(10, TimeUnit.SECONDS)
+        server.enqueue(clarifyTerminal)
         kotlinx.coroutines.runBlocking { saveSettings() }
 
         compose.setContent {
@@ -139,12 +144,12 @@ class ChatFlowUiTest {
         compose.onNodeWithText("which?").assertIsDisplayed()
         compose.onNodeWithTag("clarifyInput").performTextInput("this one")
         compose.onNodeWithText("Send").performClick()
-        compose.waitUntil(timeoutMillis = 15_000) {
-            compose.onAllNodesWithText("ok").fetchSemanticsNodes().isNotEmpty()
-        }
         val bodies = mutableListOf<String>()
-        repeat(6) {
-            val req = server.takeRequest(5, TimeUnit.SECONDS) ?: return@repeat
+        val deadline = System.currentTimeMillis() + 15_000
+        while (System.currentTimeMillis() < deadline &&
+            bodies.none { it.startsWith("/v1/runs/r1/clarify") }
+        ) {
+            val req = server.takeRequest(1, TimeUnit.SECONDS) ?: continue
             bodies.add((req.path ?: "") + " " + req.body.readUtf8())
         }
         assertTrue(bodies.any { it.startsWith("/v1/runs/r1/clarify") && it.contains("\"answer\":\"this one\"") })

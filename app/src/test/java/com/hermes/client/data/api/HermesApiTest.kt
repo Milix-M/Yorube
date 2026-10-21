@@ -170,7 +170,12 @@ class HermesApiTest {
         server.enqueue(MockResponse().setBody("""{"nope":1}"""))
         assertTrue(api.listSessions().isEmpty())
         server.enqueue(MockResponse().setResponseCode(500).setBody("x"))
-        assertTrue(api.listSessions().isEmpty())
+        try {
+            api.listSessions()
+            fail("expected HermesApiException")
+        } catch (e: HermesApiException) {
+            assertEquals(500, e.status)
+        }
     }
 
     @Test

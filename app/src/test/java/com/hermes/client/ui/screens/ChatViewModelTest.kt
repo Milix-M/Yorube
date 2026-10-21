@@ -232,9 +232,10 @@ class ChatViewModelTest {
         vm.input = "nudge"
         vm.onSteer()
         vm.onStop()
+        awaitCondition { server.requestCount >= 5 }
         val paths = mutableListOf<String>()
         repeat(5) {
-            val r = server.takeRequest(5, TimeUnit.SECONDS) ?: return@repeat
+            val r = server.takeRequest() ?: return@repeat
             paths.add(r.path ?: "")
         }
         assertTrue(paths.any { it == "/v1/runs" })
