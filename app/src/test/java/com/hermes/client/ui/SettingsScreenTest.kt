@@ -6,6 +6,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import com.hermes.client.ui.screens.SettingsScreen
 import com.hermes.client.ui.theme.HermesAppTheme
@@ -34,6 +35,7 @@ class SettingsScreenTest {
         compose.onNodeWithText("Server").assertIsDisplayed()
         compose.onNodeWithTag("baseUrl").performTextInput("https://example.com:8642")
         compose.onNodeWithTag("apiKey").performTextInput("k")
+        compose.onNodeWithTag("save").performScrollTo()
         compose.onNodeWithTag("save").performClick()
         compose.waitUntil(timeoutMillis = 10_000) {
             compose.onAllNodesWithText("Saved ✓").fetchSemanticsNodes().isNotEmpty()
