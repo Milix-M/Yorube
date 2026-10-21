@@ -301,7 +301,7 @@ class ChatViewModelTest {
         awaitCondition { !vm.busy }
     }
 
-    private suspend fun drainPaths(want: List<String>): List<String> {
+    private suspend fun TestScope.drainPaths(want: List<String>): List<String> {
         val bodies = mutableListOf<String>()
         val deadline = System.currentTimeMillis() + 15_000
         while (System.currentTimeMillis() < deadline && want.none { w -> bodies.any { it.startsWith(w) } }) {
