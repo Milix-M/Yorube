@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Hermes クライアント</string>
+
+    <string name="empty_conversations">会話はまだありません。+で始めます。</string>
+    <string name="delete_title">会話を消しますか?</string>
+    <string name="delete">消す</string>
+    <string name="cancel">やめる</string>
+
+    <string name="new_chat">新しい会話</string>
+    <string name="stop">止める</string>
+    <string name="message_hint">メッセージ…</string>
+    <string name="steer_hint">実行中に一言…</string>
+    <string name="approval_title">承認が必要です</string>
+    <string name="question_title">質問</string>
+    <string name="send">送る</string>
+
+    <string name="settings">設定</string>
+    <string name="section_server">サーバー</string>
+    <string name="base_url">Base URL</string>
+    <string name="api_key">APIキー</string>
+    <string name="model">モデル</string>
+    <string name="provider_optional">プロバイダ (任意)</string>
+    <string name="section_notifications">通知 (M3)</string>
+    <string name="relay_optional">中継URL (任意)</string>
+    <string name="fcm_token">FCMトークン: %1$s…</string>
+    <string name="fcm_token_none">FCMトークン: (まだなし)</string>
+    <string name="section_firebase">Firebase手動設定 (任意)</string>
+    <string name="fb_project">プロジェクトID</string>
+    <string name="fb_app">アプリID</string>
+    <string name="fb_key">APIキー</string>
+    <string name="fb_sender">送信者ID</string>
+    <string name="save">保存</string>
+    <string name="saved">保存済み ✓</string>
+    <string name="test">接続試験</string>
+    <string name="testing">確認中…</string>
+
+    <string name="st_loading">履歴を読込中</string>
+    <string name="st_starting">開始中</string>
+    <string name="st_writing">書込中</string>
+    <string name="st_reconnecting">再接続中</string>
+    <string name="st_stopping">停止中</string>
+    <string name="st_steered">一言送付済み</string>
+    <string name="st_approved">承認済み: %1$s</string>
+    <string name="st_answered">回答済み</string>
+    <string name="st_waiting_approval">承認待ち</string>
+    <string name="st_question">質問あり</string>
+    <string name="st_cancelled">中止済み</string>
+    <string name="st_failed">失敗</string>
+    <string name="st_stream_ended">配信が切れました</string>
+    <string name="st_unknown_restart">再起動で状態不明です。新規会話を始めてください。</string>
+    <string name="st_undelivered">未達の一言を保持: %1$s</string>
+
+    <string name="err_not_configured">Base URLとAPIキーが未設定です。設定を開いてください。</string>
+    <string name="err_conflict">以前の要求と競合しました (%1$d)。状態を取り直しました。</string>
+    <string name="err_unknown_exec">結果不明です。再送せず新規会話を始めてください。</string>
+    <string name="err_foreign">他の画面の会話です (%1$d)。</string>
+    <string name="err_draining">サーバーが混雑・停止中です (%1$d)。待って再試行してください。</string>
+    <string name="err_server">サーバー誤り %1$d: %2$s</string>
+    <string name="err_health_key">Base URLとAPIキーが必要です。</string>
+    <string name="err_checking">確認中</string>
+    <string name="err_health_caps">health=%1$s、機能取得に失敗: %2$s</string>
+
+    <string name="tool_started">▶ %1$s %2$s</string>
+    <string name="tool_finished">■ %1$s (%2$s秒) %3$s</string>
+    <string name="delegating">委譲中: %1$s</string>
+    <string name="child_done">子 %1$s: %2$s</string>
+</resources>

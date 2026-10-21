@@ -19,6 +19,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -27,6 +28,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.hermes.client.HermesApp
+import com.hermes.client.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,7 +45,7 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Settings") },
+                title = { Text(stringResource(R.string.settings)) },
                 navigationIcon = {
                     TextButton(onClick = onNavigateBack) { Text("‹") }
                 }
@@ -54,36 +56,37 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
             Modifier.fillMaxSize().padding(padding).padding(16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
-            SectionTitle("Server")
-            SettingField("Base URL", vm.baseUrl, "https://host:port") { vm.baseUrl = it }
-            SettingField("API key", vm.apiKey, "Bearer key", secret = true) { vm.apiKey = it }
-            SettingField("Model", vm.model, "hermes-agent") { vm.model = it }
-            SettingField("Provider (optional)", vm.provider, "openrouter") { vm.provider = it }
+            SectionTitle(stringResource(R.string.section_server))
+            SettingField(stringResource(R.string.base_url), vm.baseUrl, "https://host:port") { vm.baseUrl = it }
+            SettingField(stringResource(R.string.api_key), vm.apiKey, "Bearer", secret = true) { vm.apiKey = it }
+            SettingField(stringResource(R.string.model), vm.model, "hermes-agent") { vm.model = it }
+            SettingField(stringResource(R.string.provider_optional), vm.provider, "openrouter") { vm.provider = it }
 
-            SectionTitle("Notifications (M3)")
-            SettingField("Relay URL (optional)", vm.relayUrl, "https://relay:port") { vm.relayUrl = it }
+            SectionTitle(stringResource(R.string.section_notifications))
+            SettingField(stringResource(R.string.relay_optional), vm.relayUrl, "https://relay:port") { vm.relayUrl = it }
             Text(
-                "FCM token: ${vm.fcmToken.take(12)}${if (vm.fcmToken.isNotBlank()) "…" else "(none yet)"}",
+                if (vm.fcmToken.isBlank()) stringResource(R.string.fcm_token_none)
+                else stringResource(R.string.fcm_token, vm.fcmToken.take(12)),
                 style = MaterialTheme.typography.labelSmall,
             )
 
-            SectionTitle("Firebase manual setup (optional)")
-            SettingField("Project ID", vm.firebaseProjectId, "") { vm.firebaseProjectId = it }
-            SettingField("App ID", vm.firebaseAppId, "") { vm.firebaseAppId = it }
-            SettingField("API key", vm.firebaseApiKey, "", secret = true) { vm.firebaseApiKey = it }
-            SettingField("Sender ID", vm.firebaseSenderId, "", KeyboardType.Number) {
+            SectionTitle(stringResource(R.string.section_firebase))
+            SettingField(stringResource(R.string.fb_project), vm.firebaseProjectId, "") { vm.firebaseProjectId = it }
+            SettingField(stringResource(R.string.fb_app), vm.firebaseAppId, "") { vm.firebaseAppId = it }
+            SettingField(stringResource(R.string.fb_key), vm.firebaseApiKey, "", secret = true) { vm.firebaseApiKey = it }
+            SettingField(stringResource(R.string.fb_sender), vm.firebaseSenderId, "", KeyboardType.Number) {
                 vm.firebaseSenderId = it
             }
 
             Button(onClick = vm::save, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
-                Text(if (vm.saved) "Saved ✓" else "Save")
+                Text(if (vm.saved) stringResource(R.string.saved) else stringResource(R.string.save))
             }
             OutlinedButton(
                 onClick = vm::test,
                 enabled = !vm.testing,
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             ) {
-                Text(if (vm.testing) "Checking…" else "Test connection")
+                Text(if (vm.testing) stringResource(R.string.testing) else stringResource(R.string.test))
             }
             if (vm.testResult.isNotBlank()) {
                 Text(vm.testResult, modifier = Modifier.padding(top = 8.dp))

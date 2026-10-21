@@ -28,11 +28,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.hermes.client.HermesApp
+import com.hermes.client.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,13 +66,13 @@ fun ChatScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (vm.sessionId.isBlank()) "New chat" else vm.sessionId.take(20)) },
+                title = { Text(if (vm.sessionId.isBlank()) stringResource(R.string.new_chat) else vm.sessionId.take(20)) },
                 navigationIcon = {
                     TextButton(onClick = onNavigateBack) { Text("‹") }
                 },
                 actions = {
                     if (vm.busy) {
-                        TextButton(onClick = vm::onStop) { Text("Stop") }
+                        TextButton(onClick = vm::onStop) { Text(stringResource(R.string.stop)) }
                     }
                     TextButton(onClick = onOpenSettings) { Text("⚙") }
                 }
@@ -87,7 +89,12 @@ fun ChatScreen(
                         value = vm.input,
                         onValueChange = { vm.input = it },
                         modifier = Modifier.weight(1f).padding(end = 8.dp),
-                        placeholder = { Text(if (vm.busy) "Steer the run…" else "Message…") },
+                        placeholder = {
+                            Text(
+                                if (vm.busy) stringResource(R.string.steer_hint)
+                                else stringResource(R.string.message_hint)
+                            )
+                        },
                         maxLines = 4,
                     )
                     if (vm.busy) {
@@ -113,7 +120,7 @@ fun ChatScreen(
         AlertDialog(
             onDismissRequest = { /* must choose */ },
             confirmButton = {},
-            title = { Text("Approval needed") },
+            title = { Text(stringResource(R.string.approval_title)) },
             text = {
                 Column {
                     req.command?.let { Text(it) }
@@ -138,9 +145,9 @@ fun ChatScreen(
                 TextButton(onClick = {
                     vm.answerClarify(clarifyAnswer.value)
                     clarifyAnswer.value = ""
-                }) { Text("Send") }
+                }) { Text(stringResource(R.string.send)) }
             },
-            title = { Text("Question") },
+            title = { Text(stringResource(R.string.question_title)) },
             text = {
                 Column {
                     Text(prompt.prompt)

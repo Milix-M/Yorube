@@ -27,11 +27,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.hermes.client.HermesApp
+import com.hermes.client.R
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -75,7 +77,7 @@ fun ConversationListScreen(
                     CircularProgressIndicator(Modifier.align(Alignment.Center))
                 vm.sessions.isEmpty() ->
                     Text(
-                        "No conversations yet. Tap + to start.",
+                        stringResource(R.string.empty_conversations),
                         Modifier.align(Alignment.Center).padding(24.dp),
                     )
                 else -> LazyColumn(Modifier.fillMaxSize()) {
@@ -101,12 +103,16 @@ fun ConversationListScreen(
         AlertDialog(
             onDismissRequest = { pendingDelete.value = null },
             confirmButton = {
-                TextButton(onClick = { vm.delete(id); pendingDelete.value = null }) { Text("Delete") }
+                TextButton(onClick = { vm.delete(id); pendingDelete.value = null }) {
+                    Text(stringResource(R.string.delete))
+                }
             },
             dismissButton = {
-                TextButton(onClick = { pendingDelete.value = null }) { Text("Cancel") }
+                TextButton(onClick = { pendingDelete.value = null }) {
+                    Text(stringResource(R.string.cancel))
+                }
             },
-            title = { Text("Delete conversation?") },
+            title = { Text(stringResource(R.string.delete_title)) },
             text = { Text(id.take(40)) },
         )
     }

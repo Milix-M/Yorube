@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hermes.client.AppContainer
+import com.hermes.client.R
 import com.hermes.client.data.api.featureEnabled
 import com.hermes.client.data.fcm.FirebaseInit
 import com.hermes.client.data.store.ClientSettings
@@ -74,13 +75,14 @@ class SettingsViewModel(
     fun test() {
         viewModelScope.launch {
             testing = true
-            testResult = "checking"
+            val ctx = container.appContext
+            testResult = ctx.getString(R.string.err_checking)
             try {
                 val before = ClientSettings(
                     baseUrl = baseUrl, apiKey = apiKey, model = model, provider = provider,
                 )
                 if (!before.isConfigured) {
-                    testResult = "Base URL and API key are required."
+                    testResult = ctx.getString(R.string.err_health_key)
                     return@launch
                 }
                 val api = container.api()
@@ -88,7 +90,9 @@ class SettingsViewModel(
                 val caps = try {
                     api.getCapabilities()
                 } catch (e: Exception) {
-                    testResult = "health=$healthy, capabilities failed: ${(e.message ?: "").take(120)}"
+                    testResult = ctx.getString(
+                        R.string.err_health_caps, healthy.toString(), (e.message ?: "").take(120)
+                    )
                     return@launch
                 }
                 val flags = listOf("run_status", "run_events_sse", "run_stop", "run_steer", "run_approval_response")

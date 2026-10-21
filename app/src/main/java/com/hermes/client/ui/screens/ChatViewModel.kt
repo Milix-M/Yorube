@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hermes.client.AppContainer
+import com.hermes.client.R
 import com.hermes.client.data.api.ApprovalAnswer
 import com.hermes.client.data.api.ApprovalRequest
 import com.hermes.client.data.api.ClarifyRequest
@@ -58,13 +59,16 @@ class ChatViewModel(
     private var assistantIndex: Int = -1
     private var idSeq = 0L
 
+    private fun s(id: Int, vararg args: Any): String =
+        container.appContext.getString(id, *args)
+
     init {
         if (sessionId.isNotBlank()) loadHistory(sessionId)
     }
 
     fun loadHistory(id: String) {
         viewModelScope.launch {
-            statusLine = "loading history"
+            statusLine = s(R.string.st_loading)
             try {
                 val api = container.api()
                 val history = api.getSessionMessages(id)
@@ -97,7 +101,7 @@ class ChatViewModel(
         viewModelScope.launch {
             try {
                 container.api().steerRun(id, text)
-                statusLine = "steered"
+                statusLine = s(R.string.st_steered)
             } catch (e: Exception) {
                 error = friendlyError(e)
             }
@@ -109,7 +113,7 @@ class ChatViewModel(
         viewModelScope.launch {
             try {
                 container.api().stopRun(id)
-                statusLine = "stopping"
+                statusLine = s(R.string.st_stopping)
             } catch (e: Exception) {
                 error = friendlyError(e)
             }
@@ -123,7 +127,7 @@ class ChatViewModel(
         viewModelScope.launch {
             try {
                 container.api().answerApproval(id, ApprovalAnswer(req.requestId, req.executionGeneration, choice))
-                statusLine = "approved: $choice"
+                statusLine = s(R.string.st_approved, choice)
             } catch (e: Exception) {
                 error = friendlyError(e)
             }
@@ -139,7 +143,7 @@ class ChatViewModel(
                     prompt.runId,
                     ClarifyRequest(prompt.requestId, prompt.executionGeneration, answer),
                 )
-                statusLine = "answered"
+                statusLine = s(R.string.st_answered)
             } catch (e: Exception) {
                 error = friendlyError(e)
             }
@@ -153,7 +157,7 @@ class ChatViewModel(
     private fun startRun(text: String, history: List<HistoryMessage>?) {
         busy = true
         error = null
-        statusLine = "starting"
+        statusLine = s(R.string.st_starting)
         assistantIndex = -1
         viewModelScope.launch {
             val settings = try {
@@ -165,7 +169,7 @@ class ChatViewModel(
             }
             if (!settings.isConfigured) {
                 busy = false
-                error = "Base URL and API key are not set. Open Settings."
+                error = s(R.string.err_not_configured)
                 return@launch
             }
             val api = try {
@@ -241,7 +245,7 @@ class ChatViewModel(
                     val cur = messages[assistantIndex]
                     messages[assistantIndex] = cur.copy(text = cur.text + event.text)
                 }
-                statusLine = "writing"
+                statusLine = s(R.string.st_writing)
             }
             is RunEvent.Interim -> {
                 if (!event.alreadyStreamed && event.text.isNotBlank()) {
@@ -249,26 +253,26 @@ class ChatViewModel(
                 }
             }
             is RunEvent.ToolStarted ->
-                messages.add(UiMessage(idSeq++, MsgKind.TOOL, "▶ ${event.tool} ${event.preview}".trim()))
+                messages.add(UiMessage(idSeq++, MsgKind.TOOL, s(R.string.tool_started, event.tool, event.preview).trim()))
             is RunEvent.ToolCompleted ->
                 messages.add(
                     UiMessage(
                         idSeq++,
                         if (event.isError) MsgKind.ERROR else MsgKind.TOOL,
-                        "■ ${event.tool} (${event.durationSeconds}s) ${event.preview}".trim(),
+                        s(R.string.tool_finished, event.tool, event.durationSeconds.toString(), event.preview).trim(),
                     )
                 )
             is RunEvent.SubagentStarted ->
-                messages.add(UiMessage(idSeq++, MsgKind.STATUS, "delegating: ${event.summary}"))
+                messages.add(UiMessage(idSeq++, MsgKind.STATUS, s(R.string.delegating, event.summary)))
             is RunEvent.SubagentCompleted ->
-                messages.add(UiMessage(idSeq++, MsgKind.STATUS, "child ${event.status}: ${event.summary}"))
+                messages.add(UiMessage(idSeq++, MsgKind.STATUS, s(R.string.child_done, event.status, event.summary)))
             is RunEvent.ApprovalRequested -> {
                 approval = event.request
-                statusLine = "waiting for approval"
+                statusLine = s(R.string.st_waiting_approval)
             }
             is RunEvent.ClarifyRequested -> {
                 clarify = ClarifyPrompt(id, event.requestId, event.executionGeneration, event.prompt)
-                statusLine = "question waiting"
+                statusLine = s(R.string.st_question)
             }
             is RunEvent.Terminal -> {
                 finishTerminal(event)
@@ -286,8 +290,8 @@ class ChatViewModel(
         runId = null
         statusLine = when (event.status) {
             "completed" -> ""
-            "cancelled" -> "cancelled"
-            "failed" -> "failed"
+            "cancelled" -> s(R.string.st_cancelled)
+            "failed" -> s(R.string.st_failed)
             else -> event.status
         }
         if (assistantIndex < 0 && !event.output.isNullOrBlank()) {
@@ -297,7 +301,7 @@ class ChatViewModel(
             messages.add(UiMessage(idSeq++, MsgKind.ERROR, event.error))
         }
         event.pendingSteer?.ifBlank { null }?.let {
-            messages.add(UiMessage(idSeq++, MsgKind.STATUS, "undelivered steer kept: $it"))
+            messages.add(UiMessage(idSeq++, MsgKind.STATUS, s(R.string.st_undelivered, it)))
         }
     }
 
@@ -306,10 +310,10 @@ class ChatViewModel(
             busy = false
             runId = null
             statusLine = ""
-            error = cause?.let { friendlyError(it) } ?: "stream ended"
+            error = cause?.let { friendlyError(it) } ?: s(R.string.st_stream_ended)
             return
         }
-        statusLine = "reconnecting"
+        statusLine = s(R.string.st_reconnecting)
         try {
             val status = container.api().getRun(id)
             when (status.status) {
@@ -323,7 +327,7 @@ class ChatViewModel(
                     busy = false
                     runId = null
                     statusLine = ""
-                    error = "Run state is unknown after a restart. Start a new conversation."
+                    error = s(R.string.st_unknown_restart)
                     return
                 }
             }
@@ -342,14 +346,14 @@ class ChatViewModel(
         if (e is HermesApiException) {
             return when (e.code) {
                 "admission_conflict", "idempotency_key_conflict" ->
-                    "Conflict with an earlier request (${e.status}). State reloaded."
+                    s(R.string.err_conflict, e.status)
                 "unknown_execution" ->
-                    "Run outcome is unknown. Start a new conversation instead of resending."
+                    s(R.string.err_unknown_exec)
                 "permission_denied", "not_found" ->
-                    "This session belongs to another surface (${e.status})."
+                    s(R.string.err_foreign, e.status)
                 "runtime_draining", "storage_unavailable" ->
-                    "Server is busy or draining (${e.status}). Wait and retry."
-                else -> "Server error ${e.status}: ${e.message.take(200)}"
+                    s(R.string.err_draining, e.status)
+                else -> s(R.string.err_server, e.status, e.message.take(200))
             }
         }
         if (e is IllegalArgumentException) return e.message ?: "Bad settings."
