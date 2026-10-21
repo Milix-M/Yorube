@@ -232,15 +232,84 @@ class ChatViewModelTest {
         vm.input = "nudge"
         vm.onSteer()
         vm.onStop()
-        awaitCondition { server.requestCount >= 5 }
         val paths = mutableListOf<String>()
-        repeat(5) {
-            val r = server.takeRequest() ?: return@repeat
+        val deadline = System.currentTimeMillis() + 15_000
+        while (System.currentTimeMillis() < deadline && paths.size < 5) {
+            testScheduler.advanceUntilIdle()
+            val r = server.takeRequest(100, TimeUnit.MILLISECONDS) ?: continue
             paths.add(r.path ?: "")
         }
         assertTrue("paths=$paths", paths.any { it == "/v1/runs" })
         assertTrue("paths=$paths", paths.any { it.endsWith("/steer") })
         assertTrue("paths=$paths", paths.any { it.endsWith("/stop") })
+    }
+
+    @Test
+    fun approvalAnswer_postsDecision() = runVmTest {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        server.enqueue(
+            events(
+                frame("message.delta", """{"event":"message.delta","delta":"part"}"""),
+                frame(
+                    "approval.request",
+                    """{"event":"approval.request","request_id":"r1","execution_generation":3,"command":"rm"}""",
+                ),
+            )
+        )
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        server.enqueue(events(frame("run.completed", """{"event":"run.completed","output":"done"}""")))
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { vm.approval != null }
+        vm.answerApproval("once")
+        val bodies = drainPaths(listOf("/v1/runs/r1/approval"))
+        assertTrue(
+            "bodies=$bodies",
+            bodies.any { it.startsWith("/v1/runs/r1/approval") && it.contains("\"choice\":\"once\"") },
+        )
+        awaitCondition { !vm.busy }
+    }
+
+    @Test
+    fun clarifyAnswer_postsAnswer() = runVmTest {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        server.enqueue(
+            events(
+                frame(
+                    "clarify.request",
+                    """{"event":"clarify.request","request_id":"c1","execution_generation":2,"prompt":"which?"}""",
+                ),
+            )
+        )
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        server.enqueue(events(frame("run.completed", """{"event":"run.completed","output":"ok"}""")))
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { vm.clarify != null }
+        vm.answerClarify("this one")
+        val bodies = drainPaths(listOf("/v1/runs/r1/clarify"))
+        assertTrue(
+            "bodies=$bodies",
+            bodies.any { it.startsWith("/v1/runs/r1/clarify") && it.contains("\"answer\":\"this one\"") },
+        )
+        awaitCondition { !vm.busy }
+    }
+
+    private suspend fun drainPaths(want: List<String>): List<String> {
+        val bodies = mutableListOf<String>()
+        val deadline = System.currentTimeMillis() + 15_000
+        while (System.currentTimeMillis() < deadline && want.none { w -> bodies.any { it.startsWith(w) } }) {
+            testScheduler.advanceUntilIdle()
+            val req = server.takeRequest(100, TimeUnit.MILLISECONDS) ?: continue
+            bodies.add((req.path ?: "") + " " + req.body.readUtf8())
+        }
+        return bodies
     }
 
     @Test
