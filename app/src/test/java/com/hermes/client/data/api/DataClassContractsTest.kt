@@ -1,5 +1,6 @@
 package com.hermes.client.data.api
 
+import kotlinx.serialization.serializer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -13,7 +14,7 @@ import org.junit.Test
 class DataClassContractsTest {
 
     private inline fun <reified T> roundTrip(value: T): T {
-        val json = HermesJson.encodeToString(value)
+        val json = HermesJson.encodeToString(serializer(), value)
         return HermesJson.decodeFromString(json)
     }
 
