@@ -42,8 +42,7 @@ class AppContainerTest {
     }
 
     @Test
-    fun api_sendsCloudflareHeadersWhenConfigured() = runVmTest {
-        val url = server.url("").toString().removeSuffix("/")
+    fun api_sendsCloudflareHeadersWhenConfigured() = runVmTest {        val url = server.url("").toString().removeSuffix("/")
         val app = ApplicationProvider.getApplicationContext<Application>()
         val c = AppContainer(app)
         c.settingsStore.save(

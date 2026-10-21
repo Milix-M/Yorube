@@ -4,12 +4,14 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.SocketPolicy
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
+import java.io.IOException
 
 class HermesApiTest {
 
@@ -244,13 +246,77 @@ class HermesApiTest {
     }
 
     @Test
-    fun errorEnvelope_plainBody() = runTest {
-        server.enqueue(MockResponse().setResponseCode(400).setBody("boom"))
+    fun errorEnvelope_invalidJson_usesRawBody() = runTest {
+        server.enqueue(MockResponse().setResponseCode(400).setBody("{oops"))
         try {
             api.getRun("r")
             fail("expected HermesApiException")
         } catch (e: HermesApiException) {
-            assertEquals("boom", e.message)
+            assertEquals(400, e.status)
+            assertEquals("{oops", e.message)
         }
+    }
+
+    @Test
+    fun runEvents_connectionRefused_throws() = runTest {
+        val dead = MockWebServer()
+        dead.start()
+        val url = dead.url("").toString().removeSuffix("/")
+        dead.shutdown()
+        val deadApi = HermesApi(baseUrl = url, apiKey = "k")
+        try {
+            deadApi.runEvents("r1").toList()
+            fail("expected IOException")
+        } catch (e: IOException) {
+            assertTrue((e.message ?: "").isNotEmpty())
+        }
+    }
+
+    @Test
+    fun runEvents_unreadableBody_throws() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(500).setBody("partial")
+                .setSocketPolicy(SocketPolicy.DISCONNECT_DURING_RESPONSE_BODY)
+        )
+        try {
+            api.runEvents("r1").toList()
+            fail("expected HermesApiException")
+        } catch (e: HermesApiException) {
+            assertEquals(500, e.status)
+            assertEquals("empty response", e.message)
+        }
+    }
+
+    @Test
+    fun runEvents_midStreamDisconnect_throws() = runTest {
+        server.enqueue(
+            MockResponse().setBody(
+                "event: message.delta\n" +
+                    "data: {\"event\":\"message.delta\",\"delta\":\"x\"}\n\ntrailer"
+            ).setHeader("Content-Type", "text/event-stream")
+                .setSocketPolicy(SocketPolicy.DISCONNECT_DURING_RESPONSE_BODY)
+        )
+        try {
+            api.runEvents("r1").toList()
+            fail("expected IOException")
+        } catch (e: IOException) {
+            assertTrue((e.message ?: "").isNotBlank())
+        }
+    }
+
+    @Test
+    fun listSessions_invalidJson_returnsEmpty() = runTest {
+        server.enqueue(MockResponse().setBody("{oops"))
+        assertTrue(api.listSessions().isEmpty())
+        server.enqueue(MockResponse().setBody("123"))
+        assertTrue(api.listSessions().isEmpty())
+    }
+
+    @Test
+    fun getSessionMessages_invalidJson_returnsEmpty() = runTest {
+        server.enqueue(MockResponse().setBody("{oops"))
+        assertTrue(api.getSessionMessages("s").isEmpty())
+        server.enqueue(MockResponse().setBody("[\"oops\"]"))
+        assertEquals(0, api.getSessionMessages("s").size)
     }
 }

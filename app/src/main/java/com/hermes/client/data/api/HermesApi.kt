@@ -79,7 +79,8 @@ class HermesApi(
         var code: String? = null
         var message = body.ifBlank { "empty response" }.take(300)
         try {
-            val err = HermesJson.parseToJsonElement(body).jsonObject["error"]
+            val root = HermesJson.parseToJsonElement(body)
+            val err = if (root is JsonObject) root["error"] else root
             if (err is JsonObject) {
                 code = err.str("code")
                 err.str("message")?.let { message = it }
@@ -210,8 +211,8 @@ class HermesApi(
             }
         }
         try {
-            val reader = response.body?.charStream()?.buffered()
-                ?: run { close(IOException("empty stream")); return@callbackFlow }
+            // OkHttp always delivers a non-null body, even when empty.
+            val reader = response.body.charStream().buffered()
             var eventName = "message"
             val dataLines = StringBuilder()
             var terminated = false

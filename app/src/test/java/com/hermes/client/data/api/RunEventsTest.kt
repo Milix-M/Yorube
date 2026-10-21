@@ -126,4 +126,14 @@ class RunEventsTest {
         assertEquals("x", o.str("missing", "a"))
         assertNull(o.str("missing"))
     }
+
+    @Test
+    fun long_readsFirstPresentKey() {
+        val o = obj("a" to "x")
+        assertNull(o.long("missing"))
+        assertNull(o.long())
+        val n = buildJsonObject { put("n", 42) }
+        assertEquals(42L, n.long("missing", "n"))
+        assertEquals(42L, n.long("n"))
+    }
 }

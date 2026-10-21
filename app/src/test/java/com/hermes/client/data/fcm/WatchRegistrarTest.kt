@@ -33,6 +33,11 @@ class WatchRegistrarTest {
     }
 
     @Test
+    fun invalidUrl_returnsFalse() = runTest {
+        assertFalse(registrar.registerWatch("ht!tp://[::1", "r", "s", "tok"))
+    }
+
+    @Test
     fun postsWatchRequest() = runTest {
         server.enqueue(MockResponse().setResponseCode(202).setBody("{}"))
         val ok = registrar.registerWatch(

@@ -125,9 +125,11 @@ fun jacocoClassDirs(): FileCollection {
     val buildDir = layout.buildDirectory.get().asFile
     return files(
         fileTree("$buildDir/intermediates/javac/debug/classes") {
+            include("com/hermes/client/**/*")
             exclude(jacocoExcludes)
         },
         fileTree("$buildDir/tmp/kotlin-classes/debug") {
+            include("com/hermes/client/**/*")
             exclude(jacocoExcludes)
         },
     )

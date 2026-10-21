@@ -54,4 +54,19 @@ class HermesMessagingServiceTest {
         val posted = shadow.getNotification("s1".hashCode())
         assertEquals("T", posted.extras.getString("android.title"))
     }
+
+    @Test
+    fun newToken_corruptStore_doesNotCrash() {
+        val app = app()
+        val storeFile = java.io.File(app.filesDir, "datastore/hermes_settings.preferences_pb")
+        try {
+            storeFile.parentFile?.mkdirs()
+            storeFile.writeBytes(byteArrayOf(0xFF.toByte(), 0xFF.toByte()))
+            val service = Robolectric.buildService(HermesMessagingService::class.java).create().get()
+            service.onNewToken("tok123")
+            Thread.sleep(1000)
+        } finally {
+            storeFile.delete()
+        }
+    }
 }

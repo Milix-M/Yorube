@@ -15,6 +15,7 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -366,6 +367,55 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun controlErrors_setFriendlyError() = runVmTest {
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                return when {
+                    request.path == "/v1/runs" && request.method == "POST" ->
+                        MockResponse().setResponseCode(202)
+                            .setBody("""{"run_id":"r1","status":"queued"}""")
+                    request.path == "/v1/runs/r1" ->
+                        MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
+                    request.path == "/v1/runs/r1/events" ->
+                        MockResponse().setBody("").setHeader("Content-Type", "text/event-stream")
+                    request.path == "/v1/runs/r1/steer" ->
+                        MockResponse().setResponseCode(500).setBody("nope")
+                    request.path == "/v1/runs/r1/stop" ->
+                        MockResponse().setResponseCode(500).setBody("nope")
+                    else -> MockResponse().setBody("{}")
+                }
+            }
+        }
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { vm.busy }
+        vm.input = "nudge"
+        vm.onSteer()
+        awaitCondition { vm.error != null }
+        assertTrue(vm.error!!.contains("500"))
+        vm.dismissError()
+        assertNull(vm.error)
+        vm.onStop()
+        awaitCondition { vm.error != null }
+        assertTrue(vm.error!!.contains("500"))
+    }
+
+    @Test
+    fun startRun_invalidBaseUrl_reportsError() = runVmTest {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val c = AppContainer(app)
+        c.settingsStore.save(ClientSettings(baseUrl = "http://example.com", apiKey = "k"))
+        awaitCondition { c.settingsStore.current().baseUrl == "http://example.com" }
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { vm.error != null }
+        assertTrue(vm.error!!.contains("https"))
+    }
+
+    @Test
     fun nullRunIdControls_areNoOps() = runVmTest {
         val c = containerWithSettings()
         val vm = ChatViewModel(c, null)
@@ -416,6 +466,50 @@ class ChatViewModelTest {
         awaitCondition { !vm.busy }
         assertEquals("interrupted", vm.statusLine)
         assertTrue(vm.messages.any { it.kind == MsgKind.ERROR })
+    }
+
+    @Test
+    fun runContinuesDespiteHelperFailures() = runVmTest {
+        val url = server.url("").toString().removeSuffix("/")
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val c = AppContainer(app)
+        c.settingsStore.save(
+            ClientSettings(baseUrl = url, apiKey = "k", relayUrl = "http://[::1")
+        )
+        awaitCondition { c.settingsStore.current().baseUrl == url }
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setResponseCode(500).setBody("gone"))
+        server.enqueue(
+            events(frame("run.completed", """{"event":"run.completed","output":"hi"}"""))
+        )
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { !vm.busy }
+        assertNull(vm.error)
+        assertEquals("", vm.sessionId)
+        assertTrue(vm.messages.any { it.kind == MsgKind.ASSISTANT && it.text == "hi" })
+    }
+
+    @Test
+    fun multipleDeltas_appendToSingleMessage() = runVmTest {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        server.enqueue(
+            events(
+                frame("message.delta", """{"event":"message.delta","delta":"a"}"""),
+                frame("message.delta", """{"event":"message.delta","delta":"b"}"""),
+                frame("run.completed", """{"event":"run.completed"}"""),
+            )
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { !vm.busy }
+        val assistants = vm.messages.filter { it.kind == MsgKind.ASSISTANT }
+        assertEquals(1, assistants.size)
+        assertEquals("ab", assistants[0].text)
     }
 
     @Test
@@ -484,12 +578,14 @@ class ChatViewModelTest {
         val storeFile = java.io.File(app.filesDir, "datastore/hermes_settings.preferences_pb")
         try {
             storeFile.parentFile?.mkdirs()
-            storeFile.writeBytes(byteArrayOf(1, 2, 3, 4))
+            storeFile.writeBytes(byteArrayOf(0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
             val vm = ChatViewModel(AppContainer(app), null)
             vm.input = "hi"
             vm.onSend()
             awaitCondition { vm.error != null }
+            // Must come from the read failure, not from the empty-settings guard.
             assertTrue(vm.error!!.isNotBlank())
+            assertFalse(vm.error!!.contains("are not set"))
         } finally {
             storeFile.delete()
             AppContainer(app).settingsStore.save(
