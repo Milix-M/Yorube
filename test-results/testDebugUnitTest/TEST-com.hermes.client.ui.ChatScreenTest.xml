@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.hermes.client.ui.ChatScreenTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-21T14:30:09" hostname="runnervmxehtw" time="4.055">
-  <properties/>
-  <testcase name="emptySettingsSend_showsConfigError" classname="com.hermes.client.ui.ChatScreenTest" time="4.055"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>

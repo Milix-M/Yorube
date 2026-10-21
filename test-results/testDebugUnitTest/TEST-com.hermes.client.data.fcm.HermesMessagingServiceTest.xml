@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.hermes.client.data.fcm.HermesMessagingServiceTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-21T14:30:07" hostname="runnervmxehtw" time="2.342">
-  <properties/>
-  <testcase name="message_postsNotification" classname="com.hermes.client.data.fcm.HermesMessagingServiceTest" time="0.186"/>
-  <testcase name="newToken_isPersisted" classname="com.hermes.client.data.fcm.HermesMessagingServiceTest" time="0.632"/>
-  <testcase name="newToken_corruptStore_doesNotCrash" classname="com.hermes.client.data.fcm.HermesMessagingServiceTest" time="1.524"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>
