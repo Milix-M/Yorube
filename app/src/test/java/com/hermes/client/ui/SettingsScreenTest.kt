@@ -65,4 +65,16 @@ class SettingsScreenTest {
                 .fetchSemanticsNodes().isNotEmpty()
         )
     }
+
+    @Test
+    fun secretToggle_flipsVisibility() {
+        compose.setContent {
+            HermesAppTheme {
+                SettingsScreen(onNavigateBack = {})
+            }
+        }
+        compose.onNodeWithTag("apiKey").performScrollTo()
+        compose.onNodeWithTag("visibility-apiKey").performClick()
+        compose.onNodeWithTag("apiKey").assertIsDisplayed()
+    }
 }

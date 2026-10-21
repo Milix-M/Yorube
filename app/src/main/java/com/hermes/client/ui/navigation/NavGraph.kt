@@ -1,14 +1,20 @@
 package com.hermes.client.ui.navigation
 
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.hermes.client.ui.screens.ChatScreen
+import com.hermes.client.ui.screens.ConversationDrawerContent
 import com.hermes.client.ui.screens.ConversationListScreen
 import com.hermes.client.ui.screens.SettingsScreen
+import kotlinx.coroutines.launch
 
 object Routes {
     const val LIST = "list"
@@ -46,11 +52,32 @@ fun NavGraph(startSessionId: String?) {
                 }
             ),
         ) { entry ->
-            ChatScreen(
-                sessionId = entry.arguments?.getString("sessionId"),
-                onOpenSettings = { navController.navigate(Routes.SETTINGS) },
-                onNavigateBack = { navController.popBackStack() },
-            )
+            val sessionId = entry.arguments?.getString("sessionId")
+            val drawerState = rememberDrawerState(DrawerValue.Closed)
+            val scope = rememberCoroutineScope()
+            ModalNavigationDrawer(
+                drawerState = drawerState,
+                drawerContent = {
+                    ConversationDrawerContent(
+                        selectedSessionId = sessionId,
+                        onOpenChat = { id ->
+                            scope.launch { drawerState.close() }
+                            navController.navigate(Routes.chat(id)) {
+                                popUpTo(Routes.LIST) { inclusive = false }
+                            }
+                        },
+                        onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                        onCloseDrawer = { scope.launch { drawerState.close() } },
+                    )
+                },
+            ) {
+                ChatScreen(
+                    sessionId = sessionId,
+                    onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                    onNavigateBack = { navController.popBackStack() },
+                    onOpenDrawer = { scope.launch { drawerState.open() } },
+                )
+            }
         }
         composable(Routes.SETTINGS) {
             SettingsScreen(onNavigateBack = { navController.popBackStack() })

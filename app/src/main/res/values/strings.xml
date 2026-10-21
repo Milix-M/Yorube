@@ -68,4 +68,21 @@
     <string name="tool_finished">■ %1$s (%2$s s) %3$s</string>
     <string name="delegating">delegating: %1$s</string>
     <string name="child_done">child %1$s: %2$s</string>
+
+    <string name="conversations">Conversations</string>
+    <string name="search_hint">Search</string>
+    <string name="menu">Menu</string>
+    <string name="back">Back</string>
+    <string name="settings_desc">Settings</string>
+    <string name="refresh">Refresh</string>
+    <string name="scroll_to_bottom">Scroll to latest</string>
+    <string name="thinking">Thinking…</string>
+    <string name="copy">Copy</string>
+    <string name="copied">Copied</string>
+    <string name="empty_chat_title">What can I do for you?</string>
+    <string name="empty_chat_subtitle">Ask Hermes to run tasks on your server.</string>
+    <string name="suggest_1">Summarize recent changes</string>
+    <string name="suggest_2">Check server status</string>
+    <string name="suggest_3">Plan the next step</string>
+    <string name="details">Details</string>
 </resources>

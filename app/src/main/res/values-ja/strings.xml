@@ -68,4 +68,21 @@
     <string name="tool_finished">■ %1$s (%2$s秒) %3$s</string>
     <string name="delegating">委譲中: %1$s</string>
     <string name="child_done">子 %1$s: %2$s</string>
+
+    <string name="conversations">会話</string>
+    <string name="search_hint">検索</string>
+    <string name="menu">メニュー</string>
+    <string name="back">戻る</string>
+    <string name="settings_desc">設定</string>
+    <string name="refresh">更新</string>
+    <string name="scroll_to_bottom">最新へ移動</string>
+    <string name="thinking">考え中…</string>
+    <string name="copy">コピー</string>
+    <string name="copied">コピーしました</string>
+    <string name="empty_chat_title">何をお手伝いしますか?</string>
+    <string name="empty_chat_subtitle">サーバー上のHermesに作業を頼めます。</string>
+    <string name="suggest_1">最近の変更を要約して</string>
+    <string name="suggest_2">サーバーの状態を確認して</string>
+    <string name="suggest_3">次の一手を考えて</string>
+    <string name="details">詳細</string>
 </resources>
