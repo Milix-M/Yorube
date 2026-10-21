@@ -21,6 +21,8 @@ data class ClientSettings(
     val firebaseAppId: String = "",
     val firebaseApiKey: String = "",
     val firebaseSenderId: String = "",
+    val cfClientId: String = "",
+    val cfClientSecret: String = "",
 ) {
     val isConfigured: Boolean get() = baseUrl.isNotBlank() && apiKey.isNotBlank()
     val firebaseConfigured: Boolean get() =
@@ -40,6 +42,8 @@ class SettingsStore(private val context: Context) {
         val FB_APP_ID = stringPreferencesKey("fb_app_id")
         val FB_API_KEY = stringPreferencesKey("fb_api_key")
         val FB_SENDER = stringPreferencesKey("fb_sender")
+        val CF_ID = stringPreferencesKey("cf_client_id")
+        val CF_SECRET = stringPreferencesKey("cf_client_secret")
     }
 
     val settings: Flow<ClientSettings> = context.settingsDataStore.data.map { p ->
@@ -54,6 +58,8 @@ class SettingsStore(private val context: Context) {
             firebaseAppId = p[Keys.FB_APP_ID] ?: "",
             firebaseApiKey = p[Keys.FB_API_KEY] ?: "",
             firebaseSenderId = p[Keys.FB_SENDER] ?: "",
+            cfClientId = p[Keys.CF_ID] ?: "",
+            cfClientSecret = p[Keys.CF_SECRET] ?: "",
         )
     }
 
@@ -71,6 +77,8 @@ class SettingsStore(private val context: Context) {
             p[Keys.FB_APP_ID] = value.firebaseAppId.trim()
             p[Keys.FB_API_KEY] = value.firebaseApiKey.trim()
             p[Keys.FB_SENDER] = value.firebaseSenderId.trim()
+            p[Keys.CF_ID] = value.cfClientId.trim()
+            p[Keys.CF_SECRET] = value.cfClientSecret.trim()
         }
     }
 

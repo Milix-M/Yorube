@@ -34,6 +34,7 @@ class HermesApi(
     baseUrl: String,
     private val apiKey: String,
     private val allowInsecureHosts: Boolean = false,
+    private val extraHeaders: Map<String, String> = emptyMap(),
     private val client: OkHttpClient = defaultClient(),
 ) {
     private val base = baseUrl.trim().removeSuffix("/")
@@ -49,26 +50,29 @@ class HermesApi(
 
     // -- low level --
 
-    private fun get(path: String, extraHeaders: Map<String, String> = emptyMap()): Request {
+    private fun get(path: String, extra: Map<String, String> = emptyMap()): Request {
         val b = Request.Builder().url(base + path).get()
         b.header("Authorization", "Bearer $apiKey")
-        for ((k, v) in extraHeaders) b.header(k, v)
+        for ((k, v) in extraHeaders) if (v.isNotBlank()) b.header(k, v)
+        for ((k, v) in extra) b.header(k, v)
         return b.build()
     }
 
-    private fun post(path: String, body: String?, extraHeaders: Map<String, String> = emptyMap()): Request {
+    private fun post(path: String, body: String?, extra: Map<String, String> = emptyMap()): Request {
         val b = Request.Builder().url(base + path)
             .post((body ?: "").toRequestBody(JSON_MEDIA))
         b.header("Authorization", "Bearer $apiKey")
-        for ((k, v) in extraHeaders) b.header(k, v)
+        for ((k, v) in extraHeaders) if (v.isNotBlank()) b.header(k, v)
+        for ((k, v) in extra) b.header(k, v)
         return b.build()
     }
 
-    private fun delete(path: String): Request =
-        Request.Builder().url(base + path)
-            .delete()
-            .header("Authorization", "Bearer $apiKey")
-            .build()
+    private fun delete(path: String): Request {
+        val b = Request.Builder().url(base + path).delete()
+        b.header("Authorization", "Bearer $apiKey")
+        for ((k, v) in extraHeaders) if (v.isNotBlank()) b.header(k, v)
+        return b.build()
+    }
 
     private fun parseError(status: Int, body: String): Nothing {
         var code: String? = null

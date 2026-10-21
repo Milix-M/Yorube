@@ -17,7 +17,7 @@ server/fcm-relay/      完了通知の中継 (M3)
 
 ## 動かし方
 
-1. サーバー側で `API_SERVER_ENABLED=true` と `API_SERVER_KEY` を置き、HTTPSで公開する。
+1. サーバー側で `API_SERVER_ENABLED=true` と `API_SERVER_KEY` を置き、HTTPSで公開する。公開経路はCloudflare Tunnel + Accessを推奨する。Hermesは `127.0.0.1:8642` のまま置き、トンネルで `https://hermes.example.com` に出す。Accessのサービス トークンを作り、アプリ設定のCloudflare欄に入れる。
 2. アプリの設定画面でBase URLとAPIキーを入れる。接続試験で `health` と機能検出を確認する。
 3. 会話を開き、送信する。中断はStop、実行中の一言は入力欄の `→` でsteerする。
 4. 通知が要る場合は `server/fcm-relay/README.md` に従い中継を立てる。Firebaseの4項目はアプリの設定画面に入れる。`google-services.json` は要らない。

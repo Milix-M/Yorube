@@ -17,6 +17,9 @@
 
     <string name="settings">Settings</string>
     <string name="section_server">Server</string>
+    <string name="section_cloudflare">Cloudflare Access (optional)</string>
+    <string name="cf_id">Client ID</string>
+    <string name="cf_secret">Client Secret</string>
     <string name="base_url">Base URL</string>
     <string name="api_key">API key</string>
     <string name="model">Model</string>

@@ -127,6 +127,7 @@ BaseURL、APIキー、モデルを持つ。接続試験と再取得のボタン�
 ## 12. 認証と保存
 
 * APIキーは暗号化領域に置く。平文ファイルに置かない。ログに出さない。
+* Cloudflare Accessを使う場合はClient IDとClient Secretも同じ場所に置く。全要求に `CF-Access-Client-Id` と `CF-Access-Client-Secret` を付ける。HermesのAPI鍵認証はその内側で従来どおり行う。
 * BaseURLは `https://` のみ許す。例外はデバッグビルドに限る。
 * 失効時は自動再試行をしない。設定画面に誘導する。
 

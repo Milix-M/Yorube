@@ -28,6 +28,8 @@ class SettingsViewModel(
     var firebaseAppId by mutableStateOf("")
     var firebaseApiKey by mutableStateOf("")
     var firebaseSenderId by mutableStateOf("")
+    var cfClientId by mutableStateOf("")
+    var cfClientSecret by mutableStateOf("")
     var fcmToken by mutableStateOf("")
         private set
     var testResult by mutableStateOf("")
@@ -48,6 +50,8 @@ class SettingsViewModel(
             firebaseAppId = s.firebaseAppId
             firebaseApiKey = s.firebaseApiKey
             firebaseSenderId = s.firebaseSenderId
+            cfClientId = s.cfClientId
+            cfClientSecret = s.cfClientSecret
             fcmToken = s.fcmToken
         }
     }
@@ -116,5 +120,6 @@ class SettingsViewModel(
         relayUrl = relayUrl, fcmToken = fcmToken,
         firebaseProjectId = firebaseProjectId, firebaseAppId = firebaseAppId,
         firebaseApiKey = firebaseApiKey, firebaseSenderId = firebaseSenderId,
+        cfClientId = cfClientId, cfClientSecret = cfClientSecret,
     )
 }

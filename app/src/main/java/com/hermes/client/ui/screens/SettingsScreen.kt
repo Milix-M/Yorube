@@ -62,6 +62,10 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
             SettingField(stringResource(R.string.model), vm.model, "hermes-agent") { vm.model = it }
             SettingField(stringResource(R.string.provider_optional), vm.provider, "openrouter") { vm.provider = it }
 
+            SectionTitle(stringResource(R.string.section_cloudflare))
+            SettingField(stringResource(R.string.cf_id), vm.cfClientId, "") { vm.cfClientId = it }
+            SettingField(stringResource(R.string.cf_secret), vm.cfClientSecret, "", secret = true) { vm.cfClientSecret = it }
+
             SectionTitle(stringResource(R.string.section_notifications))
             SettingField(stringResource(R.string.relay_optional), vm.relayUrl, "https://relay:port") { vm.relayUrl = it }
             Text(

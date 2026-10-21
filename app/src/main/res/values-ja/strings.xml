@@ -17,6 +17,9 @@
 
     <string name="settings">設定</string>
     <string name="section_server">サーバー</string>
+    <string name="section_cloudflare">Cloudflare Access (任意)</string>
+    <string name="cf_id">クライアントID</string>
+    <string name="cf_secret">クライアントシークレット</string>
     <string name="base_url">Base URL</string>
     <string name="api_key">APIキー</string>
     <string name="model">モデル</string>

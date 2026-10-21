@@ -12,10 +12,17 @@ class AppContainer(val appContext: android.content.Context) {
 
     suspend fun api(): HermesApi {
         val s: ClientSettings = settingsStore.current()
+        val extra = buildMap {
+            if (s.cfClientId.isNotBlank() && s.cfClientSecret.isNotBlank()) {
+                put("CF-Access-Client-Id", s.cfClientId)
+                put("CF-Access-Client-Secret", s.cfClientSecret)
+            }
+        }
         return HermesApi(
             baseUrl = s.baseUrl,
             apiKey = s.apiKey,
             allowInsecureHosts = BuildConfig.DEBUG,
+            extraHeaders = extra,
         )
     }
 }
