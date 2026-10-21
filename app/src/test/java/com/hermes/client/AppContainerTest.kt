@@ -7,7 +7,7 @@ import com.hermes.client.testutil.awaitCondition
 import com.hermes.client.testutil.runVmTest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.test.TestScope
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
@@ -37,7 +37,7 @@ class AppContainerTest {
         server.shutdown()
     }
 
-    private suspend fun awaitStored(c: AppContainer, expectedBaseUrl: String) {
+    private suspend fun TestScope.awaitStored(c: AppContainer, expectedBaseUrl: String) {
         awaitCondition { c.settingsStore.current().baseUrl == expectedBaseUrl }
     }
 

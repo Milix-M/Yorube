@@ -9,7 +9,7 @@ import com.hermes.client.testutil.runVmTest
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.SocketPolicy
@@ -42,7 +42,7 @@ class ChatViewModelTest {
         server.shutdown()
     }
 
-    private suspend fun containerWithSettings(): AppContainer {
+    private suspend fun TestScope.containerWithSettings(): AppContainer {
         val url = server.url("").toString().removeSuffix("/")
         val app = ApplicationProvider.getApplicationContext<Application>()
         val c = AppContainer(app)

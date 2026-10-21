@@ -7,7 +7,9 @@ import com.hermes.client.data.api.SessionInfo
 import com.hermes.client.data.store.ClientSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.test.TestScope
+import com.hermes.client.testutil.awaitCondition
+import com.hermes.client.testutil.runVmTest
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
@@ -38,7 +40,7 @@ class ConversationListViewModelTest {
         server.shutdown()
     }
 
-    private suspend fun containerWithSettings(): AppContainer {
+    private suspend fun TestScope.containerWithSettings(): AppContainer {
         val app = ApplicationProvider.getApplicationContext<Application>()
         val c = AppContainer(app)
         c.settingsStore.save(
@@ -49,14 +51,6 @@ class ConversationListViewModelTest {
         )
         awaitCondition { c.settingsStore.current().baseUrl.isNotEmpty() }
         return c
-    }
-
-    private suspend fun awaitCondition(timeoutMs: Long = 15_000, cond: suspend () -> Boolean) {
-        val deadline = System.currentTimeMillis() + timeoutMs
-        while (!cond()) {
-            if (System.currentTimeMillis() >= deadline) error("timed out waiting")
-            withContext(Dispatchers.IO) { Thread.sleep(100) }
-        }
     }
 
     @Test
