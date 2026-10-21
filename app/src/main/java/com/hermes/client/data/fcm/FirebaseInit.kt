@@ -11,6 +11,13 @@ import com.hermes.client.data.store.ClientSettings
  * the user fills the four Firebase fields in Settings.
  */
 object FirebaseInit {
+
+    /**
+     * Test seam: replaces the real FirebaseApp init. Null (default) uses the
+     * real SDK. Tests set a fake to cover success and failure deterministically.
+     */
+    internal var initializer: ((Context, FirebaseOptions) -> Unit)? = null
+
     @Synchronized
     fun ensureInitialized(context: Context, settings: ClientSettings): Boolean {
         if (!settings.firebaseConfigured) return false
@@ -22,7 +29,11 @@ object FirebaseInit {
                     .setApiKey(settings.firebaseApiKey)
                     .setGcmSenderId(settings.firebaseSenderId)
                     .build()
-                FirebaseApp.initializeApp(context, options)
+                val init = initializer ?: { ctx: Context, opts: FirebaseOptions ->
+                    FirebaseApp.initializeApp(ctx, opts)
+                    Unit
+                }
+                init(context, options)
             }
             FirebaseApp.getApps(context).isNotEmpty()
         } catch (_: Exception) {

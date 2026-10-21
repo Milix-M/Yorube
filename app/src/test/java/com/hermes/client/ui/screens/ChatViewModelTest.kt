@@ -3,6 +3,7 @@ package com.hermes.client.ui.screens
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import com.hermes.client.AppContainer
+import com.hermes.client.HermesApp
 import com.hermes.client.data.store.ClientSettings
 import com.hermes.client.testutil.awaitCondition
 import com.hermes.client.testutil.runVmTest
@@ -360,6 +361,24 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun terminalInterrupted_setsStatus() = runVmTest {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        server.enqueue(
+            events(
+                frame("run.interrupted", """{"event":"run.interrupted","error":"shut down"}"""),
+            )
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { !vm.busy }
+        assertEquals("interrupted", vm.statusLine)
+        assertTrue(vm.messages.any { it.kind == MsgKind.ERROR })
+    }
+
+    @Test
     fun unknownRestart_suggestsNewChat() = runVmTest {
         server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
         server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
@@ -371,6 +390,72 @@ class ChatViewModelTest {
         vm.onSend()
         awaitCondition { vm.error != null }
         assertTrue(vm.error!!.isNotBlank())
+    }
+
+    @Test
+    fun reconnectTerminal_finishesRun() = runVmTest {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        server.enqueue(MockResponse().setBody(""))
+        server.enqueue(
+            MockResponse().setBody("""{"run_id":"r1","status":"completed","output":"late answer"}""")
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { !vm.busy && vm.error == null }
+        assertTrue(vm.messages.any { it.kind == MsgKind.ASSISTANT && it.text == "late answer" })
+    }
+
+    @Test
+    fun reconnectFailure_reportsError() = runVmTest {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        server.enqueue(MockResponse().setBody(""))
+        server.enqueue(MockResponse().setResponseCode(500).setBody("gone"))
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { vm.error != null }
+        assertTrue(vm.error!!.contains("500"))
+    }
+
+    @Test
+    fun streamFailure_reconnectsAndCompletes() = runVmTest {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        server.enqueue(MockResponse().setResponseCode(500).setBody("broken stream"))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        server.enqueue(events(frame("run.completed", """{"event":"run.completed","output":"recovered"}""")))
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { !vm.busy }
+        assertNull(vm.error)
+        assertTrue(vm.messages.any { it.text == "recovered" })
+    }
+
+    @Test
+    fun corruptSettings_reportsError() = runVmTest {
+        val app = ApplicationProvider.getApplicationContext<Application>() as HermesApp
+        val storeFile = java.io.File(app.filesDir, "datastore/hermes_settings.preferences_pb")
+        try {
+            storeFile.parentFile?.mkdirs()
+            storeFile.writeBytes(byteArrayOf(1, 2, 3, 4))
+            val vm = ChatViewModel(AppContainer(app), null)
+            vm.input = "hi"
+            vm.onSend()
+            awaitCondition { vm.error != null }
+            assertTrue(vm.error!!.isNotBlank())
+        } finally {
+            storeFile.delete()
+            AppContainer(app).settingsStore.save(
+                ClientSettings(baseUrl = "https://example.com", apiKey = "k")
+            )
+        }
     }
 
     @Test

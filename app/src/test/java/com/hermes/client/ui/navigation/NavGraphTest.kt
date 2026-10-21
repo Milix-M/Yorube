@@ -1,12 +1,22 @@
 package com.hermes.client.ui.navigation
 
+import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.test.core.app.ApplicationProvider
+import com.hermes.client.HermesApp
+import com.hermes.client.data.store.ClientSettings
 import com.hermes.client.ui.theme.HermesAppTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import org.junit.After
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -22,16 +32,65 @@ class NavGraphTest {
     @get:Rule
     val compose = createComposeRule()
 
+    private lateinit var server: MockWebServer
+
+    @Before
+    fun setUp() {
+        server = MockWebServer()
+        server.start()
+    }
+
+    @After
+    fun tearDown() {
+        server.shutdown()
+    }
+
+    private fun saveSettings() {
+        val app = ApplicationProvider.getApplicationContext<Application>() as HermesApp
+        kotlinx.coroutines.runBlocking {
+            app.container.settingsStore.save(
+                ClientSettings(
+                    baseUrl = server.url("").toString().removeSuffix("/"),
+                    apiKey = "k",
+                )
+            )
+            val deadline = System.currentTimeMillis() + 10_000
+            while (app.container.settingsStore.current().baseUrl.isEmpty()) {
+                if (System.currentTimeMillis() >= deadline) error("timed out saving settings")
+                withContext(Dispatchers.IO) { Thread.sleep(100) }
+            }
+        }
+    }
+
+    private fun waitFor(text: String) {
+        compose.waitUntil(timeoutMillis = 15_000) {
+            compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
     @Test
-    fun listToSettings_navigates() {
+    fun fullFlow_listToChatToSettingsAndBack() {
+        server.enqueue(MockResponse().setBody("""{"sessions":[{"id":"s1","title":"Hello"}]}"""))
+        server.enqueue(MockResponse().setBody("""{"messages":[]}"""))
+        saveSettings()
         compose.setContent {
             HermesAppTheme {
                 NavGraph(null)
             }
         }
+        waitFor("Hello")
+        // List -> chat via item tap (covers onOpenChat navigation).
+        compose.onNodeWithText("Hello").performClick()
+        compose.onNodeWithTag("chatInput").assertIsDisplayed()
+        // Chat -> settings via gear (covers chat onOpenSettings navigation).
+        compose.onNodeWithText("⚙").performClick()
+        waitFor("Settings")
+        // Settings -> back to chat (covers settings onNavigateBack).
+        compose.onNodeWithText("‹").performClick()
+        compose.onNodeWithTag("chatInput").assertIsDisplayed()
+        // Chat -> back to list (covers chat onNavigateBack).
+        compose.onNodeWithText("‹").performClick()
         compose.onNodeWithText("Hermes").assertIsDisplayed()
-        compose.onAllNodesWithText("⚙")[0].performClick()
-        compose.onNodeWithText("Settings").assertIsDisplayed()
     }
 
     @Test
@@ -41,6 +100,6 @@ class NavGraphTest {
                 NavGraph("s1")
             }
         }
-        compose.onNodeWithTag("chatInput").assertExists()
+        compose.onNodeWithTag("chatInput").assertIsDisplayed()
     }
 }

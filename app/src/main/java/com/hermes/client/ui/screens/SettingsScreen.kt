@@ -60,15 +60,15 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
             SectionTitle(stringResource(R.string.section_server))
             SettingField(stringResource(R.string.base_url), vm.baseUrl, "https://host:port", tag = "baseUrl") { vm.baseUrl = it }
             SettingField(stringResource(R.string.api_key), vm.apiKey, "Bearer", secret = true, tag = "apiKey") { vm.apiKey = it }
-            SettingField(stringResource(R.string.model), vm.model, "hermes-agent") { vm.model = it }
-            SettingField(stringResource(R.string.provider_optional), vm.provider, "openrouter") { vm.provider = it }
+            SettingField(stringResource(R.string.model), vm.model, "hermes-agent", tag = "model") { vm.model = it }
+            SettingField(stringResource(R.string.provider_optional), vm.provider, "openrouter", tag = "provider") { vm.provider = it }
 
             SectionTitle(stringResource(R.string.section_cloudflare))
-            SettingField(stringResource(R.string.cf_id), vm.cfClientId, "") { vm.cfClientId = it }
-            SettingField(stringResource(R.string.cf_secret), vm.cfClientSecret, "", secret = true) { vm.cfClientSecret = it }
+            SettingField(stringResource(R.string.cf_id), vm.cfClientId, "", tag = "cfId") { vm.cfClientId = it }
+            SettingField(stringResource(R.string.cf_secret), vm.cfClientSecret, "", secret = true, tag = "cfSecret") { vm.cfClientSecret = it }
 
             SectionTitle(stringResource(R.string.section_notifications))
-            SettingField(stringResource(R.string.relay_optional), vm.relayUrl, "https://relay:port") { vm.relayUrl = it }
+            SettingField(stringResource(R.string.relay_optional), vm.relayUrl, "https://relay:port", tag = "relayUrl") { vm.relayUrl = it }
             Text(
                 if (vm.fcmToken.isBlank()) stringResource(R.string.fcm_token_none)
                 else stringResource(R.string.fcm_token, vm.fcmToken.take(12)),
@@ -76,10 +76,10 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
             )
 
             SectionTitle(stringResource(R.string.section_firebase))
-            SettingField(stringResource(R.string.fb_project), vm.firebaseProjectId, "") { vm.firebaseProjectId = it }
-            SettingField(stringResource(R.string.fb_app), vm.firebaseAppId, "") { vm.firebaseAppId = it }
-            SettingField(stringResource(R.string.fb_key), vm.firebaseApiKey, "", secret = true) { vm.firebaseApiKey = it }
-            SettingField(stringResource(R.string.fb_sender), vm.firebaseSenderId, "", KeyboardType.Number) {
+            SettingField(stringResource(R.string.fb_project), vm.firebaseProjectId, "", tag = "fbProject") { vm.firebaseProjectId = it }
+            SettingField(stringResource(R.string.fb_app), vm.firebaseAppId, "", tag = "fbApp") { vm.firebaseAppId = it }
+            SettingField(stringResource(R.string.fb_key), vm.firebaseApiKey, "", secret = true, tag = "fbKey") { vm.firebaseApiKey = it }
+            SettingField(stringResource(R.string.fb_sender), vm.firebaseSenderId, "", KeyboardType.Number, tag = "fbSender") {
                 vm.firebaseSenderId = it
             }
 

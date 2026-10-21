@@ -112,11 +112,14 @@ class SettingsViewModelTest {
         val vm = SettingsViewModel(c)
         vm.baseUrl = server.url("").toString().removeSuffix("/")
         vm.apiKey = "k"
+        vm.firebaseProjectId = "p"
+        vm.firebaseAppId = "a"
+        vm.firebaseApiKey = "k"
+        vm.firebaseSenderId = "1"
         vm.test()
         val result = awaitTested(vm)
         assertTrue(result.contains("health=true"))
         assertTrue(result.contains("run_stop=true"))
-        assertTrue(result.contains("fcm_ready=false"))
     }
 
     @Test

@@ -36,6 +36,10 @@ class SettingsScreenTest {
         compose.onNodeWithText("Server").assertIsDisplayed()
         compose.onNodeWithTag("baseUrl").performTextInput("https://example.com:8642")
         compose.onNodeWithTag("apiKey").performTextInput("k")
+        for (tag in listOf("model", "provider", "relayUrl", "fbProject", "fbApp", "fbKey", "fbSender", "cfId", "cfSecret")) {
+            compose.onNodeWithTag(tag).performScrollTo()
+            compose.onNodeWithTag(tag).performTextInput("v")
+        }
         compose.onNodeWithTag("save").performScrollTo()
         compose.onNodeWithTag("save").performClick()
         compose.waitUntil(timeoutMillis = 10_000) {

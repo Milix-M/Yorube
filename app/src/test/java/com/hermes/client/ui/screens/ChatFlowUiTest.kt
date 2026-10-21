@@ -73,6 +73,40 @@ class ChatFlowUiTest {
     }
 
     @Test
+    fun allMessageKinds_render() {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        server.enqueue(
+            events(
+                frame("message.delta", """{"event":"message.delta","delta":"answer"}"""),
+                frame("tool.started", """{"event":"tool.started","tool":"terminal","preview":"ls"}"""),
+                frame(
+                    "tool.completed",
+                    """{"event":"tool.completed","tool":"terminal","duration":1.0,"error":true,"preview":"boom"}""",
+                ),
+                frame("message.interim", """{"event":"message.interim","text":"working","already_streamed":false}"""),
+                frame("subagent.start", """{"event":"subagent.start","goal":"research"}"""),
+                frame("subagent.complete", """{"event":"subagent.complete","status":"ok","summary":"done"}"""),
+                frame("run.completed", """{"event":"run.completed","output":"final"}"""),
+            )
+        )
+        kotlinx.coroutines.runBlocking { saveSettings() }
+
+        compose.setContent {
+            HermesAppTheme {
+                ChatScreen(sessionId = null, onOpenSettings = {}, onNavigateBack = {})
+            }
+        }
+        compose.onNodeWithTag("chatInput").performTextInput("hi")
+        compose.onNodeWithTag("sendButton").performClick()
+        for (text in listOf("answer", "terminal", "boom", "working", "delegating", "child ok", "final")) {
+            compose.waitUntil(timeoutMillis = 15_000) {
+                compose.onAllNodesWithText(text, substring = true).fetchSemanticsNodes().isNotEmpty()
+            }
+        }
+    }
+
+    @Test
     fun approvalDialog_postsDecision() {
         server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
         server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
