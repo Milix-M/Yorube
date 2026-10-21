@@ -391,15 +391,19 @@ class ChatViewModelTest {
         vm.input = "hi"
         vm.onSend()
         awaitCondition { vm.busy }
+        awaitCondition { server.requestCount >= 3 }
         vm.input = "nudge"
         vm.onSteer()
         awaitCondition { vm.error != null }
-        assertTrue(vm.error!!.contains("500"))
+        assertTrue(
+            "error=${vm.error} requests=${drainPaths { true }}",
+            vm.error!!.contains("500"),
+        )
         vm.dismissError()
         assertNull(vm.error)
         vm.onStop()
         awaitCondition { vm.error != null }
-        assertTrue(vm.error!!.contains("500"))
+        assertTrue("error=${vm.error}", vm.error!!.contains("500"))
     }
 
     @Test
