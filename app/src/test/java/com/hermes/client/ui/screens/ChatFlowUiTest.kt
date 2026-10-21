@@ -2,6 +2,7 @@ package com.hermes.client.ui.screens
 
 import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
+import android.os.Looper
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
@@ -24,6 +25,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
@@ -106,10 +108,14 @@ class ChatFlowUiTest {
         while (System.currentTimeMillis() < deadline &&
             bodies.none { it.startsWith("/v1/runs/r1/approval") }
         ) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
             val req = server.takeRequest(1, TimeUnit.SECONDS) ?: continue
             bodies.add((req.path ?: "") + " " + req.body.readUtf8())
         }
-        assertTrue(bodies.any { it.startsWith("/v1/runs/r1/approval") && it.contains("\"choice\":\"once\"") })
+        assertTrue(
+            "bodies=$bodies",
+            bodies.any { it.startsWith("/v1/runs/r1/approval") && it.contains("\"choice\":\"once\"") },
+        )
     }
 
     @Test
@@ -149,9 +155,13 @@ class ChatFlowUiTest {
         while (System.currentTimeMillis() < deadline &&
             bodies.none { it.startsWith("/v1/runs/r1/clarify") }
         ) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
             val req = server.takeRequest(1, TimeUnit.SECONDS) ?: continue
             bodies.add((req.path ?: "") + " " + req.body.readUtf8())
         }
-        assertTrue(bodies.any { it.startsWith("/v1/runs/r1/clarify") && it.contains("\"answer\":\"this one\"") })
+        assertTrue(
+            "bodies=$bodies",
+            bodies.any { it.startsWith("/v1/runs/r1/clarify") && it.contains("\"answer\":\"this one\"") },
+        )
     }
 }

@@ -238,9 +238,9 @@ class ChatViewModelTest {
             val r = server.takeRequest() ?: return@repeat
             paths.add(r.path ?: "")
         }
-        assertTrue(paths.any { it == "/v1/runs" })
-        assertTrue(paths.any { it.endsWith("/steer") })
-        assertTrue(paths.any { it.endsWith("/stop") })
+        assertTrue("paths=$paths", paths.any { it == "/v1/runs" })
+        assertTrue("paths=$paths", paths.any { it.endsWith("/steer") })
+        assertTrue("paths=$paths", paths.any { it.endsWith("/stop") })
     }
 
     @Test
