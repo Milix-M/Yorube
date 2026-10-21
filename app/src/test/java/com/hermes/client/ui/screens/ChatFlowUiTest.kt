@@ -86,7 +86,12 @@ class ChatFlowUiTest {
             )
         )
         server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
-        server.enqueue(events(frame("run.completed", """{"event":"run.completed","output":"done"}""")))
+        val terminalAfterApproval = events(
+            frame("run.completed", """{"event":"run.completed","output":"done"}""")
+        )
+        // Delay the terminal so the approval click lands before the run ends.
+        terminalAfterApproval.setBodyDelay(10, TimeUnit.SECONDS)
+        server.enqueue(terminalAfterApproval)
         kotlinx.coroutines.runBlocking { saveSettings() }
 
         compose.setContent {
@@ -119,7 +124,11 @@ class ChatFlowUiTest {
             )
         )
         server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
-        server.enqueue(events(frame("run.completed", """{"event":"run.completed","output":"ok"}""")))
+        val terminalAfterClarify =
+            events(frame("run.completed", """{"event":"run.completed","output":"ok"}"""))
+        // Delay the terminal so the Send click lands before the run ends.
+        terminalAfterClarify.setBodyDelay(10, TimeUnit.SECONDS)
+        server.enqueue(terminalAfterClarify)
         kotlinx.coroutines.runBlocking { saveSettings() }
 
         compose.setContent {
