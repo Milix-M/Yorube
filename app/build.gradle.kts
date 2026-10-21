@@ -62,4 +62,7 @@ dependencies {
     // manually from Settings (FirebaseConfig), so the build works without
     // google-services.json. See data/fcm/FirebaseInit.kt.
     implementation(libs.firebase.messaging)
+    testImplementation(libs.junit)
+    testImplementation(libs.mockwebserver)
+    testImplementation(libs.coroutines.test)
 }

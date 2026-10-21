@@ -23,6 +23,8 @@ jobs:
           export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
           yes | sdkmanager --licenses > /dev/null
           sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+      - name: Run unit tests (incl. MockWebServer)
+        run: ./gradlew :app:testDebugUnitTest --no-daemon
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
