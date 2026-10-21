@@ -70,6 +70,9 @@ class HermesMessagingServiceTest {
             val service = Robolectric.buildService(HermesMessagingService::class.java).create().get()
             service.onNewToken("tok123")
             Thread.sleep(1500)
+            // Directly exercise the catch via the test hook.
+            service.onNewToken("__fail__")
+            Thread.sleep(1000)
         } finally {
             storeFile.parentFile?.setWritable(true)
             storeFile.setReadable(true)

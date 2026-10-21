@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ChatScreen.kt</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=0;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">debug</a> &gt; <a href="index.source.html" class="el_package">com.hermes.client.ui.screens</a> &gt; <span class="el_source">ChatScreen.kt</span></div><h1>ChatScreen.kt</h1><pre class="source lang-java linenums">package com.hermes.client.ui.screens
+
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.hermes.client.HermesApp
+import com.hermes.client.R
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ChatScreen(
+    sessionId: String?,
+    onOpenSettings: () -&gt; Unit,
+    onNavigateBack: () -&gt; Unit,
+<span class="fc" id="L46">) {</span>
+<span class="fc" id="L47">    val app = LocalContext.current.applicationContext as HermesApp</span>
+<span class="fc" id="L48">    val vm: ChatViewModel = viewModel(</span>
+<span class="fc bfc" id="L49" title="All 2 branches covered.">        key = &quot;chat-${sessionId.orEmpty()}&quot;,</span>
+<span class="fc" id="L50">        factory = object : ViewModelProvider.Factory {</span>
+            @Suppress(&quot;UNCHECKED_CAST&quot;)
+            override fun &lt;T : ViewModel&gt; create(modelClass: Class&lt;T&gt;): T =
+<span class="fc" id="L53">                ChatViewModel(app.container, sessionId) as T</span>
+        }
+    )
+<span class="fc" id="L56">    val snackbar = remember { SnackbarHostState() }</span>
+<span class="fc" id="L57">    val listState = rememberLazyListState()</span>
+<span class="fc" id="L58">    val clarifyAnswer = remember { mutableStateOf(&quot;&quot;) }</span>
+
+<span class="fc" id="L60">    LaunchedEffect(vm.error) {</span>
+<span class="pc bfc" id="L61" title="All 2 branches covered.">        vm.error?.let { snackbar.showSnackbar(it); vm.dismissError() }</span>
+<span class="fc" id="L62">    }</span>
+<span class="fc" id="L63">    LaunchedEffect(vm.messages.size) {</span>
+<span class="fc bfc" id="L64" title="All 4 branches covered.">        if (vm.messages.isNotEmpty()) listState.animateScrollToItem(vm.messages.size - 1)</span>
+<span class="fc" id="L65">    }</span>
+
+<span class="fc" id="L67">    Scaffold(</span>
+<span class="fc" id="L68">        topBar = {</span>
+<span class="fc" id="L69">            TopAppBar(</span>
+<span class="fc bfc" id="L70" title="All 2 branches covered.">                title = { Text(if (vm.sessionId.isBlank()) stringResource(R.string.new_chat) else vm.sessionId.take(20)) },</span>
+<span class="fc" id="L71">                navigationIcon = {</span>
+<span class="fc" id="L72">                    TextButton(onClick = onNavigateBack) { Text(&quot;‹&quot;) }</span>
+                },
+<span class="fc" id="L74">                actions = {</span>
+<span class="fc bfc" id="L75" title="All 2 branches covered.">                    if (vm.busy) {</span>
+<span class="fc" id="L76">                        TextButton(onClick = vm::onStop) { Text(stringResource(R.string.stop)) }</span>
+                    }
+<span class="fc" id="L78">                    TextButton(onClick = onOpenSettings) { Text(&quot;⚙&quot;) }</span>
+                }
+            )
+        },
+<span class="fc" id="L82">        snackbarHost = { SnackbarHost(snackbar) },</span>
+<span class="fc" id="L83">        bottomBar = {</span>
+<span class="fc" id="L84">            Column(Modifier.fillMaxWidth().padding(8.dp)) {</span>
+<span class="fc bfc" id="L85" title="All 4 branches covered.">                if (vm.statusLine.isNotBlank()) {</span>
+<span class="fc" id="L86">                    Text(vm.statusLine, style = MaterialTheme.typography.labelSmall)</span>
+                }
+<span class="fc" id="L88">                Row(Modifier.fillMaxWidth()) {</span>
+<span class="fc" id="L89">                    OutlinedTextField(</span>
+<span class="fc" id="L90">                        value = vm.input,</span>
+<span class="fc" id="L91">                        onValueChange = { vm.input = it },</span>
+<span class="fc" id="L92">                        modifier = Modifier.weight(1f).padding(end = 8.dp).testTag(&quot;chatInput&quot;),</span>
+<span class="fc" id="L93">                        placeholder = {</span>
+<span class="fc" id="L94">                            Text(</span>
+<span class="fc bfc" id="L95" title="All 2 branches covered.">                                if (vm.busy) stringResource(R.string.steer_hint)</span>
+<span class="fc" id="L96">                                else stringResource(R.string.message_hint)</span>
+                            )
+                        },
+<span class="fc" id="L99">                        maxLines = 4,</span>
+                    )
+<span class="fc bfc" id="L101" title="All 2 branches covered.">                    if (vm.busy) {</span>
+<span class="fc" id="L102">                        Button(onClick = vm::onSteer, modifier = Modifier.testTag(&quot;sendButton&quot;)) { Text(&quot;→&quot;) }</span>
+<span class="fc" id="L103">                    } else {</span>
+<span class="fc" id="L104">                        Button(onClick = vm::onSend, modifier = Modifier.testTag(&quot;sendButton&quot;)) { Text(&quot;↑&quot;) }</span>
+                    }
+<span class="fc" id="L106">                }</span>
+<span class="fc" id="L107">            }</span>
+        }
+<span class="fc" id="L109">    ) { padding -&gt;</span>
+<span class="fc" id="L110">        LazyColumn(</span>
+<span class="fc" id="L111">            state = listState,</span>
+<span class="fc" id="L112">            modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 8.dp),</span>
+<span class="fc" id="L113">        ) {</span>
+<span class="fc" id="L114">            items(vm.messages, key = { it.id }) { msg -&gt;</span>
+<span class="fc" id="L115">                MessageCard(msg)</span>
+<span class="fc" id="L116">            }</span>
+<span class="fc" id="L117">        }</span>
+    }
+
+<span class="fc bfc" id="L120" title="All 2 branches covered.">    vm.approval?.let { req -&gt;</span>
+<span class="fc" id="L121">        AlertDialog(</span>
+<span class="pc" id="L122">            onDismissRequest = { /* must choose */ },</span>
+<span class="fc" id="L123">            confirmButton = {},</span>
+<span class="fc" id="L124">            title = { Text(stringResource(R.string.approval_title)) },</span>
+<span class="fc" id="L125">            text = {</span>
+<span class="fc" id="L126">                Column {</span>
+<span class="pc bpc" id="L127" title="1 of 2 branches missed.">                    req.command?.let { Text(it) }</span>
+<span class="pc bpc" id="L128" title="1 of 2 branches missed.">                    req.description?.let { Text(it) }</span>
+<span class="fc" id="L129">                    Row {</span>
+<span class="fc bfc" id="L130" title="All 2 branches covered.">                        for (choice in req.choices) {</span>
+<span class="fc" id="L131">                            OutlinedButton(</span>
+<span class="fc" id="L132">                                onClick = { vm.answerApproval(choice) },</span>
+<span class="fc" id="L133">                                modifier = Modifier.padding(end = 8.dp),</span>
+<span class="fc" id="L134">                            ) { Text(choice) }</span>
+                        }
+<span class="fc" id="L136">                    }</span>
+<span class="fc" id="L137">                }</span>
+            },
+        )
+<span class="fc" id="L140">    }</span>
+
+<span class="fc bfc" id="L142" title="All 2 branches covered.">    vm.clarify?.let { prompt -&gt;</span>
+<span class="fc" id="L143">        AlertDialog(</span>
+<span class="pc" id="L144">            onDismissRequest = { /* must answer */ },</span>
+<span class="fc" id="L145">            confirmButton = {</span>
+<span class="fc" id="L146">                TextButton(onClick = {</span>
+<span class="fc" id="L147">                    vm.answerClarify(clarifyAnswer.value)</span>
+<span class="fc" id="L148">                    clarifyAnswer.value = &quot;&quot;</span>
+<span class="fc" id="L149">                }) { Text(stringResource(R.string.send)) }</span>
+            },
+<span class="fc" id="L151">            title = { Text(stringResource(R.string.question_title)) },</span>
+<span class="fc" id="L152">            text = {</span>
+<span class="fc" id="L153">                Column {</span>
+<span class="fc" id="L154">                    Text(prompt.prompt)</span>
+<span class="fc" id="L155">                    OutlinedTextField(</span>
+<span class="fc" id="L156">                        value = clarifyAnswer.value,</span>
+<span class="fc" id="L157">                        onValueChange = { clarifyAnswer.value = it },</span>
+<span class="fc" id="L158">                        modifier = Modifier.fillMaxWidth().testTag(&quot;clarifyInput&quot;),</span>
+                    )
+<span class="fc" id="L160">                }</span>
+            },
+        )
+<span class="fc" id="L163">    }</span>
+}
+
+@Composable
+<span class="fc" id="L167">private fun MessageCard(msg: UiMessage) {</span>
+<span class="pc bpc" id="L168" title="1 of 5 branches missed.">    val container = when (msg.kind) {</span>
+<span class="fc" id="L169">        MsgKind.USER -&gt; MaterialTheme.colorScheme.primaryContainer</span>
+<span class="fc" id="L170">        MsgKind.ERROR -&gt; MaterialTheme.colorScheme.errorContainer</span>
+<span class="fc" id="L171">        MsgKind.TOOL, MsgKind.STATUS -&gt; MaterialTheme.colorScheme.surfaceVariant</span>
+<span class="fc" id="L172">        MsgKind.ASSISTANT -&gt; MaterialTheme.colorScheme.surface</span>
+    }
+<span class="fc" id="L174">    Card(</span>
+<span class="fc" id="L175">        colors = CardDefaults.cardColors(containerColor = container),</span>
+<span class="fc" id="L176">        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),</span>
+<span class="fc" id="L177">    ) {</span>
+<span class="fc" id="L178">        Text(</span>
+<span class="fc" id="L179">            msg.text,</span>
+<span class="fc bfc" id="L180" title="All 4 branches covered.">            style = if (msg.kind == MsgKind.TOOL || msg.kind == MsgKind.STATUS) {</span>
+<span class="fc" id="L181">                MaterialTheme.typography.labelMedium</span>
+<span class="fc" id="L182">            } else {</span>
+<span class="fc" id="L183">                MaterialTheme.typography.bodyMedium</span>
+            },
+<span class="fc" id="L185">            modifier = Modifier.padding(10.dp),</span>
+        )
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.13.202504020838</span>Generated by the Android Gradle plugin 8.5.2</div></body></html>

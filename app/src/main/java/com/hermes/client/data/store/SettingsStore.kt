@@ -78,9 +78,7 @@ class SettingsStore(private val context: Context) {
             p[Keys.FB_API_KEY] = value.firebaseApiKey.trim()
             p[Keys.FB_SENDER] = value.firebaseSenderId.trim()
             p[Keys.CF_ID] = value.cfClientId.trim()
-            p[Keys.CF_SECRET] = value.cfClientSecret.trim()
-        }
-    }
+            p[Keys.CF_SECRET] = value.cfClientSecret.trim() } }
 
     suspend fun saveFcmToken(token: String) { context.settingsDataStore.edit { p -> p[Keys.FCM_TOKEN] = token } }
 }

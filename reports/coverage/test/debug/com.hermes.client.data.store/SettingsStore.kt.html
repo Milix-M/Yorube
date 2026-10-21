@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SettingsStore.kt</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=0;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">debug</a> &gt; <a href="index.source.html" class="el_package">com.hermes.client.data.store</a> &gt; <span class="el_source">SettingsStore.kt</span></div><h1>SettingsStore.kt</h1><pre class="source lang-java linenums">package com.hermes.client.data.store
+
+import android.content.Context
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+
+<span class="fc" id="L11">private val Context.settingsDataStore by preferencesDataStore(name = &quot;hermes_settings&quot;)</span>
+
+<span class="fc" id="L13">data class ClientSettings(</span>
+<span class="fc" id="L14">    val baseUrl: String = &quot;&quot;,</span>
+<span class="fc" id="L15">    val apiKey: String = &quot;&quot;,</span>
+<span class="fc" id="L16">    val model: String = &quot;hermes-agent&quot;,</span>
+<span class="fc" id="L17">    val provider: String = &quot;&quot;,</span>
+<span class="fc" id="L18">    val relayUrl: String = &quot;&quot;,</span>
+<span class="fc" id="L19">    val fcmToken: String = &quot;&quot;,</span>
+<span class="fc" id="L20">    val firebaseProjectId: String = &quot;&quot;,</span>
+<span class="fc" id="L21">    val firebaseAppId: String = &quot;&quot;,</span>
+<span class="fc" id="L22">    val firebaseApiKey: String = &quot;&quot;,</span>
+<span class="fc" id="L23">    val firebaseSenderId: String = &quot;&quot;,</span>
+<span class="fc" id="L24">    val cfClientId: String = &quot;&quot;,</span>
+<span class="fc" id="L25">    val cfClientSecret: String = &quot;&quot;,</span>
+<span class="fc" id="L26">) {</span>
+<span class="pc bpc" id="L27" title="2 of 8 branches missed.">    val isConfigured: Boolean get() = baseUrl.isNotBlank() &amp;&amp; apiKey.isNotBlank()</span>
+    val firebaseConfigured: Boolean get() =
+<span class="fc bfc" id="L29" title="All 8 branches covered.">        firebaseProjectId.isNotBlank() &amp;&amp; firebaseAppId.isNotBlank() &amp;&amp;</span>
+<span class="pc bpc" id="L30" title="4 of 8 branches missed.">            firebaseApiKey.isNotBlank() &amp;&amp; firebaseSenderId.isNotBlank()</span>
+}
+
+<span class="fc" id="L33">class SettingsStore(private val context: Context) {</span>
+    private object Keys {
+<span class="fc" id="L35">        val BASE_URL = stringPreferencesKey(&quot;base_url&quot;)</span>
+<span class="fc" id="L36">        val API_KEY = stringPreferencesKey(&quot;api_key&quot;)</span>
+<span class="fc" id="L37">        val MODEL = stringPreferencesKey(&quot;model&quot;)</span>
+<span class="fc" id="L38">        val PROVIDER = stringPreferencesKey(&quot;provider&quot;)</span>
+<span class="fc" id="L39">        val RELAY_URL = stringPreferencesKey(&quot;relay_url&quot;)</span>
+<span class="fc" id="L40">        val FCM_TOKEN = stringPreferencesKey(&quot;fcm_token&quot;)</span>
+<span class="fc" id="L41">        val FB_PROJECT = stringPreferencesKey(&quot;fb_project&quot;)</span>
+<span class="fc" id="L42">        val FB_APP_ID = stringPreferencesKey(&quot;fb_app_id&quot;)</span>
+<span class="fc" id="L43">        val FB_API_KEY = stringPreferencesKey(&quot;fb_api_key&quot;)</span>
+<span class="fc" id="L44">        val FB_SENDER = stringPreferencesKey(&quot;fb_sender&quot;)</span>
+<span class="fc" id="L45">        val CF_ID = stringPreferencesKey(&quot;cf_client_id&quot;)</span>
+<span class="fc" id="L46">        val CF_SECRET = stringPreferencesKey(&quot;cf_client_secret&quot;)</span>
+    }
+
+<span class="pc" id="L49">    val settings: Flow&lt;ClientSettings&gt; = context.settingsDataStore.data.map { p -&gt;</span>
+<span class="fc" id="L50">        ClientSettings(</span>
+<span class="fc" id="L51">            baseUrl = p[Keys.BASE_URL] ?: &quot;&quot;,</span>
+<span class="fc" id="L52">            apiKey = p[Keys.API_KEY] ?: &quot;&quot;,</span>
+<span class="fc" id="L53">            model = p[Keys.MODEL] ?: &quot;hermes-agent&quot;,</span>
+<span class="fc" id="L54">            provider = p[Keys.PROVIDER] ?: &quot;&quot;,</span>
+<span class="fc" id="L55">            relayUrl = p[Keys.RELAY_URL] ?: &quot;&quot;,</span>
+<span class="fc" id="L56">            fcmToken = p[Keys.FCM_TOKEN] ?: &quot;&quot;,</span>
+<span class="fc" id="L57">            firebaseProjectId = p[Keys.FB_PROJECT] ?: &quot;&quot;,</span>
+<span class="fc" id="L58">            firebaseAppId = p[Keys.FB_APP_ID] ?: &quot;&quot;,</span>
+<span class="fc" id="L59">            firebaseApiKey = p[Keys.FB_API_KEY] ?: &quot;&quot;,</span>
+<span class="fc" id="L60">            firebaseSenderId = p[Keys.FB_SENDER] ?: &quot;&quot;,</span>
+<span class="fc" id="L61">            cfClientId = p[Keys.CF_ID] ?: &quot;&quot;,</span>
+<span class="fc" id="L62">            cfClientSecret = p[Keys.CF_SECRET] ?: &quot;&quot;,</span>
+<span class="fc" id="L63">        )</span>
+    }
+
+<span class="fc" id="L66">    suspend fun current(): ClientSettings = settings.first()</span>
+
+    suspend fun save(value: ClientSettings) {
+<span class="pc" id="L69">        context.settingsDataStore.edit { p -&gt;</span>
+<span class="fc" id="L70">            p[Keys.BASE_URL] = value.baseUrl.trim().removeSuffix(&quot;/&quot;)</span>
+<span class="fc" id="L71">            p[Keys.API_KEY] = value.apiKey.trim()</span>
+<span class="pc bpc" id="L72" title="1 of 2 branches missed.">            p[Keys.MODEL] = value.model.trim().ifBlank { &quot;hermes-agent&quot; }</span>
+<span class="fc" id="L73">            p[Keys.PROVIDER] = value.provider.trim()</span>
+<span class="fc" id="L74">            p[Keys.RELAY_URL] = value.relayUrl.trim().removeSuffix(&quot;/&quot;)</span>
+<span class="fc" id="L75">            p[Keys.FCM_TOKEN] = value.fcmToken</span>
+<span class="fc" id="L76">            p[Keys.FB_PROJECT] = value.firebaseProjectId.trim()</span>
+<span class="fc" id="L77">            p[Keys.FB_APP_ID] = value.firebaseAppId.trim()</span>
+<span class="fc" id="L78">            p[Keys.FB_API_KEY] = value.firebaseApiKey.trim()</span>
+<span class="fc" id="L79">            p[Keys.FB_SENDER] = value.firebaseSenderId.trim()</span>
+<span class="fc" id="L80">            p[Keys.CF_ID] = value.cfClientId.trim()</span>
+<span class="fc" id="L81">            p[Keys.CF_SECRET] = value.cfClientSecret.trim()</span>
+<span class="fc" id="L82">        }</span>
+<span class="nc" id="L83">    }</span>
+
+<span class="pc" id="L85">    suspend fun saveFcmToken(token: String) { context.settingsDataStore.edit { p -&gt; p[Keys.FCM_TOKEN] = token } }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.13.202504020838</span>Generated by the Android Gradle plugin 8.5.2</div></body></html>

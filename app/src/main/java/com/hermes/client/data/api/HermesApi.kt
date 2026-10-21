@@ -75,7 +75,7 @@ class HermesApi(
         return b.build()
     }
 
-    private fun parseError(status: Int, body: String): Nothing {
+    private fun parseError(status: Int, body: String): HermesApiException {
         var code: String? = null
         var message = body.ifBlank { "empty response" }.take(300)
         try {
@@ -89,13 +89,13 @@ class HermesApi(
             }
         } catch (_: Exception) {
         }
-        throw HermesApiException(status, code, message)
+        return HermesApiException(status, code, message)
     }
 
     private suspend fun execute(request: Request): String = withContext(Dispatchers.IO) {
         client.newCall(request).execute().use { response ->
             val body = response.body?.string() ?: ""
-            if (!response.isSuccessful) parseError(response.code, body)
+            if (!response.isSuccessful) throw parseError(response.code, body)
             body
         }
     }
@@ -132,23 +132,37 @@ class HermesApi(
 
     suspend fun getSkills(): List<SkillInfo> {
         val body = execute(get("/v1/skills"))
-        return parseList(body, "skills")
+        return parseSkills(body)
     }
 
     suspend fun getToolsets(): List<ToolsetInfo> {
         val body = execute(get("/v1/toolsets"))
-        return parseList(body, "toolsets")
+        return parseToolsets(body)
     }
 
-    private inline fun <reified T> parseList(body: String, vararg keys: String): List<T> {
+    private fun parseSkills(body: String): List<SkillInfo> {
         return try {
             val el = HermesJson.parseToJsonElement(body)
             val arr = when {
                 el is JsonArray -> el
-                el is JsonObject -> keys.firstNotNullOfOrNull { el[it] as? JsonArray }
+                el is JsonObject -> el["skills"] as? JsonArray
                 else -> null
             } ?: return emptyList()
-            HermesJson.decodeFromString(arr.toString())
+            HermesJson.decodeFromString<List<SkillInfo>>(arr.toString())
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun parseToolsets(body: String): List<ToolsetInfo> {
+        return try {
+            val el = HermesJson.parseToJsonElement(body)
+            val arr = when {
+                el is JsonArray -> el
+                el is JsonObject -> el["toolsets"] as? JsonArray
+                else -> null
+            } ?: return emptyList()
+            HermesJson.decodeFromString<List<ToolsetInfo>>(arr.toString())
         } catch (_: Exception) {
             emptyList()
         }
@@ -194,7 +208,7 @@ class HermesApi(
             val body = try { response.body?.string() ?: "" } catch (_: Exception) { "" }
             response.close()
             try {
-                parseError(response.code, body)
+                throw parseError(response.code, body)
             } catch (e: HermesApiException) {
                 close(e)
                 return@callbackFlow

@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SettingsScreen.kt</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">app</a> &gt; <a href="index.source.html" class="el_package">com.hermes.client.ui.screens</a> &gt; <span class="el_source">SettingsScreen.kt</span></div><h1>SettingsScreen.kt</h1><pre class="source lang-java linenums">package com.hermes.client.ui.screens
+
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.hermes.client.HermesApp
+import com.hermes.client.R
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+<span class="fc" id="L36">fun SettingsScreen(onNavigateBack: () -&gt; Unit) {</span>
+<span class="fc" id="L37">    val app = LocalContext.current.applicationContext as HermesApp</span>
+<span class="fc" id="L38">    val vm: SettingsViewModel = viewModel(</span>
+<span class="fc" id="L39">        factory = object : ViewModelProvider.Factory {</span>
+            @Suppress(&quot;UNCHECKED_CAST&quot;)
+            override fun &lt;T : ViewModel&gt; create(modelClass: Class&lt;T&gt;): T =
+<span class="fc" id="L42">                SettingsViewModel(app.container) as T</span>
+        }
+    )
+
+<span class="fc" id="L46">    Scaffold(</span>
+<span class="fc" id="L47">        topBar = {</span>
+<span class="fc" id="L48">            TopAppBar(</span>
+<span class="fc" id="L49">                title = { Text(stringResource(R.string.settings)) },</span>
+<span class="fc" id="L50">                navigationIcon = {</span>
+<span class="fc" id="L51">                    TextButton(onClick = onNavigateBack) { Text(&quot;‹&quot;) }</span>
+                })
+        }
+<span class="fc" id="L54">    ) { padding -&gt;</span>
+<span class="fc" id="L55">        Column(</span>
+<span class="fc" id="L56">            Modifier.fillMaxSize().padding(padding).padding(16.dp)</span>
+<span class="fc" id="L57">                .verticalScroll(rememberScrollState())</span>
+        ) {
+<span class="fc" id="L59">            SectionTitle(stringResource(R.string.section_server))</span>
+<span class="fc" id="L60">            SettingField(stringResource(R.string.base_url), vm.baseUrl, &quot;https://host:port&quot;, tag = &quot;baseUrl&quot;) { vm.baseUrl = it }</span>
+<span class="fc" id="L61">            SettingField(stringResource(R.string.api_key), vm.apiKey, &quot;Bearer&quot;, secret = true, tag = &quot;apiKey&quot;) { vm.apiKey = it }</span>
+<span class="fc" id="L62">            SettingField(stringResource(R.string.model), vm.model, &quot;hermes-agent&quot;, tag = &quot;model&quot;) { vm.model = it }</span>
+<span class="fc" id="L63">            SettingField(stringResource(R.string.provider_optional), vm.provider, &quot;openrouter&quot;, tag = &quot;provider&quot;) { vm.provider = it }</span>
+
+<span class="fc" id="L65">            SectionTitle(stringResource(R.string.section_cloudflare))</span>
+<span class="fc" id="L66">            SettingField(stringResource(R.string.cf_id), vm.cfClientId, &quot;&quot;, tag = &quot;cfId&quot;) { vm.cfClientId = it }</span>
+<span class="fc" id="L67">            SettingField(stringResource(R.string.cf_secret), vm.cfClientSecret, &quot;&quot;, secret = true, tag = &quot;cfSecret&quot;) { vm.cfClientSecret = it }</span>
+
+<span class="fc" id="L69">            SectionTitle(stringResource(R.string.section_notifications))</span>
+<span class="fc" id="L70">            SettingField(stringResource(R.string.relay_optional), vm.relayUrl, &quot;https://relay:port&quot;, tag = &quot;relayUrl&quot;) { vm.relayUrl = it }</span>
+<span class="fc" id="L71">            Text(</span>
+<span class="pc bpc" id="L72" title="1 of 2 branches missed.">                if (vm.fcmToken.isBlank()) stringResource(R.string.fcm_token_none)</span>
+<span class="pc" id="L73">                else stringResource(R.string.fcm_token, vm.fcmToken.take(12)),</span>
+<span class="fc" id="L74">                style = MaterialTheme.typography.labelSmall,</span>
+            )
+
+<span class="fc" id="L77">            SectionTitle(stringResource(R.string.section_firebase))</span>
+<span class="fc" id="L78">            SettingField(stringResource(R.string.fb_project), vm.firebaseProjectId, &quot;&quot;, tag = &quot;fbProject&quot;) { vm.firebaseProjectId = it }</span>
+<span class="fc" id="L79">            SettingField(stringResource(R.string.fb_app), vm.firebaseAppId, &quot;&quot;, tag = &quot;fbApp&quot;) { vm.firebaseAppId = it }</span>
+<span class="fc" id="L80">            SettingField(stringResource(R.string.fb_key), vm.firebaseApiKey, &quot;&quot;, secret = true, tag = &quot;fbKey&quot;) { vm.firebaseApiKey = it }</span>
+<span class="fc" id="L81">            SettingField(stringResource(R.string.fb_sender), vm.firebaseSenderId, &quot;&quot;, KeyboardType.Number, tag = &quot;fbSender&quot;) {</span>
+<span class="fc" id="L82">                vm.firebaseSenderId = it</span>
+<span class="fc" id="L83">            }</span>
+
+<span class="fc" id="L85">            Button(</span>
+<span class="fc" id="L86">                onClick = vm::save,</span>
+<span class="fc" id="L87">                modifier = Modifier.fillMaxWidth().padding(top = 12.dp).testTag(&quot;save&quot;),</span>
+<span class="fc" id="L88">            ) {</span>
+<span class="fc bfc" id="L89" title="All 2 branches covered.">                Text(if (vm.saved) stringResource(R.string.saved) else stringResource(R.string.save))</span>
+            }
+<span class="fc" id="L91">            OutlinedButton(</span>
+<span class="fc" id="L92">                onClick = vm::test,</span>
+<span class="pc bpc" id="L93" title="1 of 2 branches missed.">                enabled = !vm.testing,</span>
+<span class="fc" id="L94">                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),</span>
+<span class="fc" id="L95">            ) {</span>
+<span class="pc bpc" id="L96" title="1 of 2 branches missed.">                Text(if (vm.testing) stringResource(R.string.testing) else stringResource(R.string.test))</span>
+            }
+<span class="pc bpc" id="L98" title="2 of 4 branches missed.">            if (vm.testResult.isNotBlank()) {</span>
+<span class="pc" id="L99">                Text(vm.testResult, modifier = Modifier.padding(top = 8.dp))</span>
+            }
+<span class="fc" id="L101">        }</span>
+    }
+}
+
+@Composable
+<span class="fc" id="L106">private fun SectionTitle(text: String) {</span>
+<span class="fc" id="L107">    Text(</span>
+<span class="fc" id="L108">        text,</span>
+<span class="fc" id="L109">        style = MaterialTheme.typography.titleSmall,</span>
+<span class="fc" id="L110">        modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),</span>
+    )
+}
+
+@Composable
+private fun SettingField(
+    label: String,
+    value: String,
+    placeholder: String,
+<span class="fc bfc" id="L119" title="All 2 branches covered.">    keyboardType: KeyboardType = KeyboardType.Text,</span>
+<span class="pc bpc" id="L120" title="1 of 2 branches missed.">    secret: Boolean = false,</span>
+<span class="pc" id="L121">    tag: String = &quot;&quot;,</span>
+    onChange: (String) -&gt; Unit,
+<span class="fc bfc" id="L123" title="All 2 branches covered.">) {</span>
+<span class="fc" id="L124">    OutlinedTextField(</span>
+<span class="fc" id="L125">        value = value,</span>
+<span class="fc" id="L126">        onValueChange = onChange,</span>
+<span class="fc" id="L127">        label = { Text(label) },</span>
+<span class="fc" id="L128">        placeholder = { Text(placeholder) },</span>
+<span class="fc bfc" id="L129" title="All 2 branches covered.">        visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,</span>
+<span class="fc" id="L130">        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),</span>
+<span class="fc" id="L131">        singleLine = true,</span>
+<span class="fc" id="L132">        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).testTag(tag),</span>
+    )
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.13.202504020838</span></div></body></html>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.hermes.client.ui.screens.ChatFlowUiTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-21T14:30:15" hostname="runnervmxehtw" time="0.778">
+  <properties/>
+  <testcase name="clarifyDialog_postsAnswer" classname="com.hermes.client.ui.screens.ChatFlowUiTest" time="0.322"/>
+  <testcase name="approvalDialog_postsDecision" classname="com.hermes.client.ui.screens.ChatFlowUiTest" time="0.234"/>
+  <testcase name="allMessageKinds_render" classname="com.hermes.client.ui.screens.ChatFlowUiTest" time="0.222"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

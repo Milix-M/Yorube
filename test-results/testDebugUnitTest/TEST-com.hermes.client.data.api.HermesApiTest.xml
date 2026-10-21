@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.hermes.client.data.api.HermesApiTest" tests="24" skipped="0" failures="0" errors="0" timestamp="2026-10-21T14:30:05" hostname="runnervmxehtw" time="0.897">
+  <properties/>
+  <testcase name="extraHeaders_areSent" classname="com.hermes.client.data.api.HermesApiTest" time="0.144"/>
+  <testcase name="createRun_sendsInputAndIdempotencyKey" classname="com.hermes.client.data.api.HermesApiTest" time="0.006"/>
+  <testcase name="plainHttp_outsideLoopback_isRejected" classname="com.hermes.client.data.api.HermesApiTest" time="0.002"/>
+  <testcase name="runEvents_serverError_throws" classname="com.hermes.client.data.api.HermesApiTest" time="0.016"/>
+  <testcase name="checkHealth_falseOnError" classname="com.hermes.client.data.api.HermesApiTest" time="0.006"/>
+  <testcase name="runEvents_unreadableBody_throws" classname="com.hermes.client.data.api.HermesApiTest" time="0.004"/>
+  <testcase name="runEvents_parsesDeltaAndTerminal" classname="com.hermes.client.data.api.HermesApiTest" time="0.007"/>
+  <testcase name="deleteAndFork" classname="com.hermes.client.data.api.HermesApiTest" time="0.086"/>
+  <testcase name="getSessionMessages_mixedContent" classname="com.hermes.client.data.api.HermesApiTest" time="0.046"/>
+  <testcase name="getRun_readsSessionId" classname="com.hermes.client.data.api.HermesApiTest" time="0.004"/>
+  <testcase name="runEvents_connectionRefused_throws" classname="com.hermes.client.data.api.HermesApiTest" time="0.007"/>
+  <testcase name="runEvents_midStreamDisconnect_throws" classname="com.hermes.client.data.api.HermesApiTest" time="0.004"/>
+  <testcase name="getModelIds_invalidJson_returnsEmpty" classname="com.hermes.client.data.api.HermesApiTest" time="0.004"/>
+  <testcase name="errorEnvelope_invalidJson_usesRawBody" classname="com.hermes.client.data.api.HermesApiTest" time="0.003"/>
+  <testcase name="runEvents_skipsKeepaliveComments" classname="com.hermes.client.data.api.HermesApiTest" time="0.004"/>
+  <testcase name="errorEnvelope_stringError_usesContent" classname="com.hermes.client.data.api.HermesApiTest" time="0.006"/>
+  <testcase name="discoveryEndpoints_parse" classname="com.hermes.client.data.api.HermesApiTest" time="0.134"/>
+  <testcase name="getSessionMessages_invalidJson_returnsEmpty" classname="com.hermes.client.data.api.HermesApiTest" time="0.047"/>
+  <testcase name="errorEnvelope_mapsCode" classname="com.hermes.client.data.api.HermesApiTest" time="0.012"/>
+  <testcase name="plainHttp_loopback_isAllowed" classname="com.hermes.client.data.api.HermesApiTest" time="0.003"/>
+  <testcase name="checkHealth_trueOnOk" classname="com.hermes.client.data.api.HermesApiTest" time="0.004"/>
+  <testcase name="controls_sendCorrectPathsAndBodies" classname="com.hermes.client.data.api.HermesApiTest" time="0.171"/>
+  <testcase name="listSessions_invalidJson_returnsEmpty" classname="com.hermes.client.data.api.HermesApiTest" time="0.047"/>
+  <testcase name="listSessions_shapes" classname="com.hermes.client.data.api.HermesApiTest" time="0.127"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

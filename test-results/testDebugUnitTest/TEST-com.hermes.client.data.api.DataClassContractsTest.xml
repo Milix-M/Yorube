@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.hermes.client.data.api.DataClassContractsTest" tests="15" skipped="0" failures="0" errors="0" timestamp="2026-10-21T14:30:05" hostname="runnervmxehtw" time="0.063">
+  <properties/>
+  <testcase name="runCreateRequest" classname="com.hermes.client.data.api.DataClassContractsTest" time="0.012"/>
+  <testcase name="sessionMessage" classname="com.hermes.client.data.api.DataClassContractsTest" time="0.003"/>
+  <testcase name="capabilitiesResponse" classname="com.hermes.client.data.api.DataClassContractsTest" time="0.021"/>
+  <testcase name="runRuntime" classname="com.hermes.client.data.api.DataClassContractsTest" time="0.002"/>
+  <testcase name="toolsetInfo" classname="com.hermes.client.data.api.DataClassContractsTest" time="0.003"/>
+  <testcase name="sessionInfo" classname="com.hermes.client.data.api.DataClassContractsTest" time="0.001"/>
+  <testcase name="runEventVariants" classname="com.hermes.client.data.api.DataClassContractsTest" time="0.002"/>
+  <testcase name="historyMessage" classname="com.hermes.client.data.api.DataClassContractsTest" time="0.0"/>
+  <testcase name="runAccepted" classname="com.hermes.client.data.api.DataClassContractsTest" time="0.002"/>
+  <testcase name="runUsage" classname="com.hermes.client.data.api.DataClassContractsTest" time="0.002"/>
+  <testcase name="providerOption" classname="com.hermes.client.data.api.DataClassContractsTest" time="0.001"/>
+  <testcase name="requestBodies" classname="com.hermes.client.data.api.DataClassContractsTest" time="0.005"/>
+  <testcase name="approvalRequest" classname="com.hermes.client.data.api.DataClassContractsTest" time="0.001"/>
+  <testcase name="skillInfo" classname="com.hermes.client.data.api.DataClassContractsTest" time="0.002"/>
+  <testcase name="runStatusResponse" classname="com.hermes.client.data.api.DataClassContractsTest" time="0.004"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

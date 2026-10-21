@@ -276,6 +276,22 @@ class HermesApiTest {
     }
 
     @Test
+    fun skillsAndToolsets_invalidJson_returnsEmpty() = runTest {
+        server.enqueue(MockResponse().setBody("{oops"))
+        assertTrue(api.getSkills().isEmpty())
+        server.enqueue(MockResponse().setBody("123"))
+        assertTrue(api.getSkills().isEmpty())
+        server.enqueue(MockResponse().setBody("""{"nope":1}"""))
+        assertTrue(api.getSkills().isEmpty())
+        server.enqueue(MockResponse().setBody("{oops"))
+        assertTrue(api.getToolsets().isEmpty())
+        server.enqueue(MockResponse().setBody("123"))
+        assertTrue(api.getToolsets().isEmpty())
+        server.enqueue(MockResponse().setBody("""{"nope":1}"""))
+        assertTrue(api.getToolsets().isEmpty())
+    }
+
+    @Test
     fun runEvents_connectionRefused_throws() = runTest {
         val dead = MockWebServer()
         dead.start()

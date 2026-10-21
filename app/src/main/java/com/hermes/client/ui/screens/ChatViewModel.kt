@@ -159,63 +159,65 @@ class ChatViewModel(
         error = null
         statusLine = s(R.string.st_starting)
         assistantIndex = -1
-        viewModelScope.launch {
-            val settings = try {
-                container.settingsStore.current()
-            } catch (e: Exception) {
-                busy = false
-                error = friendlyError(e)
-                return@launch
-            }
-            if (!settings.isConfigured) {
-                busy = false
-                error = s(R.string.err_not_configured)
-                return@launch
-            }
-            val api = try {
-                container.api()
-            } catch (e: Exception) {
-                busy = false
-                error = friendlyError(e)
-                return@launch
-            }
-            val id: String
-            try {
-                val accepted = api.createRun(
-                    RunCreateRequest(
-                        input = text,
-                        sessionId = sessionId.ifBlank { null },
-                        conversationHistory = history,
-                        model = settings.model.ifBlank { null },
-                        provider = settings.provider.ifBlank { null },
-                    ),
-                    idempotencyKey = UUID.randomUUID().toString(),
-                )
-                id = accepted.runId
-                runId = id
-                // Runs responses do not carry the session id. Read it back once.
-                try {
-                    val status = api.getRun(id)
-                    status.sessionId?.ifBlank { null }?.let { sessionId = it }
-                } catch (_: Exception) {
-                }
-                // Best-effort FCM watch so a closed app still gets the finish notice.
-                // registerWatch never throws (returns false on failure), so no
-                // try-catch needed here.
-                container.watchRegistrar.registerWatch(
-                    relayBaseUrl = settings.relayUrl,
-                    runId = id,
-                    sessionId = sessionId,
-                    fcmToken = settings.fcmToken,
-                )
-            } catch (e: Exception) {
-                busy = false
-                statusLine = ""
-                error = friendlyError(e)
-                return@launch
-            }
-            subscribe(id, attempt = 0)
+        viewModelScope.launch { doStartRun(text, history) }
+    }
+
+    private suspend fun doStartRun(text: String, history: List<HistoryMessage>?) {
+        val settings = try {
+            container.settingsStore.current()
+        } catch (e: Exception) {
+            busy = false
+            error = friendlyError(e)
+            return
         }
+        if (!settings.isConfigured) {
+            busy = false
+            error = s(R.string.err_not_configured)
+            return
+        }
+        val api = try {
+            container.api()
+        } catch (e: Exception) {
+            busy = false
+            error = friendlyError(e)
+            return
+        }
+        val id: String
+        try {
+            val accepted = api.createRun(
+                RunCreateRequest(
+                    input = text,
+                    sessionId = sessionId.ifBlank { null },
+                    conversationHistory = history,
+                    model = settings.model.ifBlank { null },
+                    provider = settings.provider.ifBlank { null },
+                ),
+                idempotencyKey = UUID.randomUUID().toString(),
+            )
+            id = accepted.runId
+            runId = id
+            // Runs responses do not carry the session id. Read it back once.
+            try {
+                val status = api.getRun(id)
+                status.sessionId?.ifBlank { null }?.let { sessionId = it }
+            } catch (_: Exception) {
+            }
+            // Best-effort FCM watch so a closed app still gets the finish notice.
+            // registerWatch never throws (returns false on failure), so no
+            // try-catch needed here.
+            container.watchRegistrar.registerWatch(
+                relayBaseUrl = settings.relayUrl,
+                runId = id,
+                sessionId = sessionId,
+                fcmToken = settings.fcmToken,
+            )
+        } catch (e: Exception) {
+            busy = false
+            statusLine = ""
+            error = friendlyError(e)
+            return
+        }
+        subscribe(id, attempt = 0)
     }
 
     private fun subscribe(id: String, attempt: Int) {

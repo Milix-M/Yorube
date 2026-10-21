@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.hermes.client.ui.navigation.NavGraphTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-21T14:30:15" hostname="runnervmxehtw" time="0.659">
+  <properties/>
+  <testcase name="chatRoute_rendersInput" classname="com.hermes.client.ui.navigation.NavGraphTest" time="0.167"/>
+  <testcase name="fullFlow_listToChatToSettingsAndBack" classname="com.hermes.client.ui.navigation.NavGraphTest" time="0.492"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

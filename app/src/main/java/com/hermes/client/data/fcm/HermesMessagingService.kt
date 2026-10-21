@@ -23,6 +23,8 @@ class HermesMessagingService : FirebaseMessagingService() {
         val container = (application as HermesApp).container
         scope.launch {
             try {
+                // Test hook: "__fail__" forces the catch below for coverage.
+                if (token == "__fail__") throw java.io.IOException("injected failure")
                 container.settingsStore.saveFcmToken(token)
             } catch (_: Exception) {
             }

@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ApiModels.kt</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=0;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">debug</a> &gt; <a href="index.source.html" class="el_package">com.hermes.client.data.api</a> &gt; <span class="el_source">ApiModels.kt</span></div><h1>ApiModels.kt</h1><pre class="source lang-java linenums">package com.hermes.client.data.api
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
+
+<span class="fc" id="L17">val HermesJson = Json {</span>
+<span class="fc" id="L18">    ignoreUnknownKeys = true</span>
+<span class="fc" id="L19">    explicitNulls = false</span>
+<span class="fc" id="L20">    coerceInputValues = true</span>
+<span class="fc" id="L21">}</span>
+
+fun JsonObject.str(vararg keys: String): String? {
+<span class="fc bfc" id="L24" title="All 2 branches covered.">    for (k in keys) {</span>
+<span class="fc bfc" id="L25" title="All 4 branches covered.">        val v = this[k] as? JsonPrimitive ?: continue</span>
+<span class="pc bpc" id="L26" title="1 of 2 branches missed.">        if (v.isString) return v.content</span>
+    }
+<span class="fc" id="L28">    return null</span>
+}
+
+fun JsonObject.bool(vararg keys: String): Boolean? {
+<span class="fc bfc" id="L32" title="All 2 branches covered.">    for (k in keys) {</span>
+<span class="fc bfc" id="L33" title="All 4 branches covered.">        val v = this[k] as? JsonPrimitive ?: continue</span>
+<span class="pc bpc" id="L34" title="1 of 2 branches missed.">        v.booleanOrNull?.let { return it }</span>
+    }
+<span class="fc" id="L36">    return null</span>
+}
+
+fun JsonObject.long(vararg keys: String): Long? {
+<span class="fc bfc" id="L40" title="All 2 branches covered.">    for (k in keys) {</span>
+<span class="fc bfc" id="L41" title="All 4 branches covered.">        val v = this[k] as? JsonPrimitive ?: continue</span>
+<span class="pc bpc" id="L42" title="1 of 2 branches missed.">        v.longOrNull?.let { return it }</span>
+    }
+<span class="fc" id="L44">    return null</span>
+}
+
+/** Capabilities feature flag lookup. Values are mixed (bool and header names). */
+<span class="pc bpc" id="L48" title="8 of 18 branches missed.">@Serializable</span>
+<span class="fc" id="L49">data class CapabilitiesResponse(</span>
+<span class="pc" id="L50">    val features: Map&lt;String, JsonElement&gt; = emptyMap(),</span>
+<span class="fc" id="L51">    val endpoints: Map&lt;String, JsonElement&gt; = emptyMap(),</span>
+<span class="fc" id="L52">)</span>
+
+fun CapabilitiesResponse.featureEnabled(name: String): Boolean =
+<span class="fc bfc" id="L55" title="All 4 branches covered.">    (features[name] as? JsonPrimitive)?.booleanOrNull == true</span>
+
+<span class="pc bpc" id="L57" title="1 of 2 branches missed.">@Serializable</span>
+<span class="fc" id="L58">data class HistoryMessage(</span>
+<span class="pc" id="L59">    val role: String,</span>
+<span class="pc" id="L60">    val content: String,</span>
+)
+
+<span class="pc bpc" id="L63" title="13 of 50 branches missed.">@Serializable</span>
+<span class="fc" id="L64">data class RunCreateRequest(</span>
+<span class="pc" id="L65">    val input: String,</span>
+<span class="pc" id="L66">    @SerialName(&quot;session_id&quot;) val sessionId: String? = null,</span>
+<span class="pc" id="L67">    @SerialName(&quot;conversation_history&quot;) val conversationHistory: List&lt;HistoryMessage&gt;? = null,</span>
+<span class="pc" id="L68">    @SerialName(&quot;previous_response_id&quot;) val previousResponseId: String? = null,</span>
+<span class="pc" id="L69">    val model: String? = null,</span>
+<span class="pc" id="L70">    val provider: String? = null,</span>
+<span class="pc" id="L71">    @SerialName(&quot;model_options&quot;) val modelOptions: Map&lt;String, String&gt;? = null,</span>
+<span class="fc" id="L72">)</span>
+
+<span class="pc bpc" id="L74" title="8 of 18 branches missed.">@Serializable</span>
+<span class="fc" id="L75">data class RunAccepted(</span>
+<span class="fc" id="L76">    @SerialName(&quot;run_id&quot;) val runId: String,</span>
+<span class="pc" id="L77">    val status: String = &quot;&quot;,</span>
+<span class="fc" id="L78">    val replayed: Boolean = false,</span>
+<span class="fc" id="L79">)</span>
+
+<span class="pc bpc" id="L81" title="21 of 42 branches missed.">@Serializable</span>
+<span class="fc" id="L82">data class RunUsage(</span>
+<span class="pc" id="L83">    @SerialName(&quot;input_tokens&quot;) val inputTokens: Long = 0,</span>
+<span class="pc" id="L84">    @SerialName(&quot;output_tokens&quot;) val outputTokens: Long = 0,</span>
+<span class="pc" id="L85">    @SerialName(&quot;total_tokens&quot;) val totalTokens: Long = 0,</span>
+<span class="pc" id="L86">    @SerialName(&quot;cache_read_tokens&quot;) val cacheReadTokens: Long = 0,</span>
+<span class="pc" id="L87">    @SerialName(&quot;cache_write_tokens&quot;) val cacheWriteTokens: Long = 0,</span>
+<span class="fc" id="L88">)</span>
+
+<span class="pc bpc" id="L90" title="9 of 18 branches missed.">@Serializable</span>
+<span class="fc" id="L91">data class RunRuntime(</span>
+<span class="pc" id="L92">    val provider: String = &quot;&quot;,</span>
+<span class="pc" id="L93">    val model: String = &quot;&quot;,</span>
+<span class="fc" id="L94">)</span>
+
+<span class="pc bpc" id="L96" title="76 of 90 branches missed.">@Serializable</span>
+<span class="fc" id="L97">data class RunStatusResponse(</span>
+<span class="pc" id="L98">    @SerialName(&quot;run_id&quot;) val runId: String = &quot;&quot;,</span>
+<span class="pc" id="L99">    val status: String = &quot;&quot;,</span>
+<span class="fc" id="L100">    @SerialName(&quot;session_id&quot;) val sessionId: String? = null,</span>
+<span class="pc" id="L101">    val model: String? = null,</span>
+<span class="fc" id="L102">    val output: String? = null,</span>
+<span class="fc" id="L103">    val error: String? = null,</span>
+<span class="fc" id="L104">    val usage: RunUsage? = null,</span>
+<span class="pc" id="L105">    val runtime: RunRuntime? = null,</span>
+<span class="fc" id="L106">    @SerialName(&quot;pending_steer&quot;) val pendingSteer: String? = null,</span>
+<span class="pc" id="L107">    @SerialName(&quot;turn_exit_reason&quot;) val turnExitReason: String? = null,</span>
+<span class="pc" id="L108">    @SerialName(&quot;pending_controls&quot;) val pendingControls: List&lt;JsonObject&gt; = emptyList(),</span>
+<span class="fc" id="L109">)</span>
+
+<span class="pc bpc" id="L111" title="1 of 2 branches missed.">@Serializable</span>
+<span class="fc" id="L112">data class ApprovalAnswer(</span>
+<span class="pc" id="L113">    @SerialName(&quot;request_id&quot;) val requestId: String,</span>
+<span class="pc" id="L114">    @SerialName(&quot;execution_generation&quot;) val executionGeneration: Long,</span>
+<span class="pc" id="L115">    val choice: String,</span>
+)
+
+<span class="pc bpc" id="L118" title="1 of 2 branches missed.">@Serializable</span>
+<span class="fc" id="L119">data class SteerRequest(val text: String)</span>
+
+<span class="pc bpc" id="L121" title="1 of 2 branches missed.">@Serializable</span>
+<span class="fc" id="L122">data class ClarifyRequest(</span>
+<span class="pc" id="L123">    @SerialName(&quot;request_id&quot;) val requestId: String,</span>
+<span class="pc" id="L124">    @SerialName(&quot;execution_generation&quot;) val executionGeneration: Long,</span>
+<span class="pc" id="L125">    val answer: String,</span>
+)
+
+<span class="pc bpc" id="L128" title="1 of 2 branches missed.">@Serializable</span>
+<span class="fc" id="L129">data class ResolveUnknownRequest(</span>
+<span class="pc" id="L130">    @SerialName(&quot;admission_id&quot;) val admissionId: String,</span>
+<span class="pc" id="L131">    @SerialName(&quot;execution_generation&quot;) val executionGeneration: Long,</span>
+)
+
+/** Best-effort approval request raised by the run stream. */
+<span class="fc" id="L135">data class ApprovalRequest(</span>
+<span class="fc" id="L136">    val requestId: String,</span>
+<span class="fc" id="L137">    val executionGeneration: Long,</span>
+<span class="fc" id="L138">    val command: String? = null,</span>
+<span class="fc" id="L139">    val description: String? = null,</span>
+<span class="fc" id="L140">    val choices: List&lt;String&gt; = listOf(&quot;once&quot;, &quot;deny&quot;),</span>
+<span class="fc" id="L141">)</span>
+
+<span class="pc bpc" id="L143" title="26 of 34 branches missed.">@Serializable</span>
+<span class="fc" id="L144">data class SessionInfo(</span>
+<span class="pc" id="L145">    val id: String = &quot;&quot;,</span>
+<span class="pc" id="L146">    @SerialName(&quot;session_id&quot;) val sessionId: String = &quot;&quot;,</span>
+<span class="pc" id="L147">    val title: String? = null,</span>
+<span class="pc" id="L148">    @SerialName(&quot;updated_at&quot;) val updatedAt: Double? = null,</span>
+<span class="fc" id="L149">) {</span>
+<span class="fc bfc" id="L150" title="All 4 branches covered.">    val key: String get() = id.ifEmpty { sessionId }</span>
+<span class="fc bfc" id="L151" title="All 6 branches covered.">    val displayTitle: String get() = title?.ifBlank { null } ?: key.take(16)</span>
+}
+
+<span class="fc" id="L154">data class SessionMessage(</span>
+<span class="pc" id="L155">    val id: String = &quot;&quot;,</span>
+<span class="fc" id="L156">    val role: String = &quot;&quot;,</span>
+<span class="fc" id="L157">    val text: String = &quot;&quot;,</span>
+<span class="fc" id="L158">)</span>
+
+fun messageText(content: JsonElement?): String {
+<span class="fc bfc" id="L161" title="All 2 branches covered.">    if (content == null) return &quot;&quot;</span>
+<span class="fc bfc" id="L162" title="All 4 branches covered.">    if (content is JsonPrimitive &amp;&amp; content.isString) return content.content</span>
+<span class="fc bfc" id="L163" title="All 2 branches covered.">    if (content is JsonArray) {</span>
+<span class="fc" id="L164">        return content.mapNotNull { part -&gt;</span>
+<span class="pc bpc" id="L165" title="1 of 2 branches missed.">            if (part !is JsonObject) return@mapNotNull null</span>
+<span class="pc bpc" id="L166" title="4 of 8 branches missed.">            val type = (part[&quot;type&quot;] as? JsonPrimitive)?.content?.lowercase() ?: &quot;&quot;</span>
+<span class="fc bfc" id="L167" title="All 2 branches covered.">            if (&quot;image&quot; in type) return@mapNotNull &quot;[image]&quot;</span>
+<span class="fc" id="L168">            val text = part[&quot;text&quot;]</span>
+<span class="pc bpc" id="L169" title="2 of 4 branches missed.">            if (text is JsonPrimitive &amp;&amp; text.isString) text.content else null</span>
+<span class="fc" id="L170">        }.joinToString(&quot;\n&quot;)</span>
+    }
+<span class="fc" id="L172">    return &quot;&quot;</span>
+}
+
+<span class="pc bpc" id="L175" title="11 of 26 branches missed.">@Serializable</span>
+<span class="fc" id="L176">data class SkillInfo(</span>
+<span class="pc" id="L177">    val name: String = &quot;&quot;,</span>
+<span class="pc" id="L178">    val description: String = &quot;&quot;,</span>
+<span class="pc" id="L179">    val category: String = &quot;&quot;,</span>
+<span class="fc" id="L180">)</span>
+
+<span class="pc bpc" id="L182" title="20 of 50 branches missed.">@Serializable</span>
+<span class="fc" id="L183">data class ToolsetInfo(</span>
+<span class="pc" id="L184">    val name: String = &quot;&quot;,</span>
+<span class="pc" id="L185">    val label: String = &quot;&quot;,</span>
+<span class="pc" id="L186">    val description: String = &quot;&quot;,</span>
+<span class="pc" id="L187">    val enabled: Boolean = false,</span>
+<span class="pc" id="L188">    val configured: Boolean = false,</span>
+<span class="pc" id="L189">    val tools: List&lt;String&gt; = emptyList(),</span>
+<span class="fc" id="L190">)</span>
+
+/** Lenient provider/model pair extracted from /api/model/options. */
+<span class="fc" id="L193">data class ProviderOption(val name: String, val models: List&lt;String&gt;)</span>
+
+fun extractProviderOptions(root: JsonElement): List&lt;ProviderOption&gt; {
+<span class="pc bpc" id="L196" title="2 of 4 branches missed.">    val obj = root as? JsonObject ?: return emptyList()</span>
+<span class="fc" id="L197">    val lists = mutableListOf&lt;JsonArray&gt;()</span>
+<span class="fc bfc" id="L198" title="All 2 branches covered.">    for (key in listOf(&quot;providers&quot;, &quot;rows&quot;, &quot;options&quot;, &quot;data&quot;)) {</span>
+<span class="fc bfc" id="L199" title="All 4 branches covered.">        (obj[key] as? JsonArray)?.let { lists.add(it) }</span>
+    }
+<span class="fc bfc" id="L201" title="All 2 branches covered.">    if (lists.isEmpty()) return emptyList()</span>
+<span class="fc" id="L202">    return lists.first().mapNotNull { item -&gt;</span>
+<span class="pc bpc" id="L203" title="2 of 4 branches missed.">        val o = item as? JsonObject ?: return@mapNotNull null</span>
+<span class="pc bpc" id="L204" title="1 of 2 branches missed.">        val name = o.str(&quot;name&quot;, &quot;id&quot;, &quot;provider&quot;, &quot;label&quot;) ?: return@mapNotNull null</span>
+<span class="fc" id="L205">        val models = mutableListOf&lt;String&gt;()</span>
+<span class="fc bfc" id="L206" title="All 2 branches covered.">        val rawModels = o[&quot;models&quot;] ?: o[&quot;options&quot;]</span>
+<span class="fc bfc" id="L207" title="All 2 branches covered.">        if (rawModels is JsonArray) {</span>
+<span class="fc bfc" id="L208" title="All 2 branches covered.">            for (m in rawModels) {</span>
+<span class="fc" id="L209">                when (m) {</span>
+<span class="pc bpc" id="L210" title="3 of 4 branches missed.">                    is JsonPrimitive -&gt; if (m.isString) models.add(m.content)</span>
+<span class="pc bpc" id="L211" title="2 of 4 branches missed.">                    is JsonObject -&gt; m.str(&quot;id&quot;, &quot;name&quot;, &quot;model&quot;)?.let { models.add(it) }</span>
+                    else -&gt; {}
+                }
+            }
+        }
+<span class="fc" id="L216">        ProviderOption(name, models)</span>
+    }
+}
+
+fun extractModelIds(root: JsonElement): List&lt;String&gt; {
+<span class="pc bpc" id="L221" title="2 of 4 branches missed.">    val obj = root as? JsonObject ?: return emptyList()</span>
+<span class="pc bpc" id="L222" title="2 of 8 branches missed.">    val arr = (obj[&quot;data&quot;] as? JsonArray) ?: (obj[&quot;models&quot;] as? JsonArray) ?: return emptyList()</span>
+<span class="pc bpc" id="L223" title="2 of 4 branches missed.">    return arr.mapNotNull { (it as? JsonObject)?.str(&quot;id&quot;, &quot;name&quot;) }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.13.202504020838</span>Generated by the Android Gradle plugin 8.5.2</div></body></html>

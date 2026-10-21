@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.hermes.client.ui.screens.SettingsViewModelTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-21T14:30:54" hostname="runnervmxehtw" time="2.27">
+  <properties/>
+  <testcase name="save_persistsAllFields" classname="com.hermes.client.ui.screens.SettingsViewModelTest" time="0.573"/>
+  <testcase name="test_notConfigured" classname="com.hermes.client.ui.screens.SettingsViewModelTest" time="0.021"/>
+  <testcase name="test_apiThrows" classname="com.hermes.client.ui.screens.SettingsViewModelTest" time="0.525"/>
+  <testcase name="test_capabilitiesFailure" classname="com.hermes.client.ui.screens.SettingsViewModelTest" time="0.573"/>
+  <testcase name="test_success" classname="com.hermes.client.ui.screens.SettingsViewModelTest" time="0.578"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

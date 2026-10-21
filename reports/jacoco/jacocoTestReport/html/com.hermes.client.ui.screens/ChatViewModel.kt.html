@@ -1,0 +1,362 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ChatViewModel.kt</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">app</a> &gt; <a href="index.source.html" class="el_package">com.hermes.client.ui.screens</a> &gt; <span class="el_source">ChatViewModel.kt</span></div><h1>ChatViewModel.kt</h1><pre class="source lang-java linenums">package com.hermes.client.ui.screens
+
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.hermes.client.AppContainer
+import com.hermes.client.R
+import com.hermes.client.data.api.ApprovalAnswer
+import com.hermes.client.data.api.ApprovalRequest
+import com.hermes.client.data.api.ClarifyRequest
+import com.hermes.client.data.api.HermesApiException
+import com.hermes.client.data.api.HistoryMessage
+import com.hermes.client.data.api.RunCreateRequest
+import com.hermes.client.data.api.RunEvent
+import java.util.UUID
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+
+<span class="fc" id="L22">enum class MsgKind { USER, ASSISTANT, TOOL, STATUS, ERROR }</span>
+
+<span class="fc" id="L24">data class UiMessage(</span>
+<span class="fc" id="L25">    val id: Long,</span>
+<span class="fc" id="L26">    val kind: MsgKind,</span>
+<span class="fc" id="L27">    val text: String,</span>
+)
+
+<span class="fc" id="L30">data class ClarifyPrompt(</span>
+<span class="fc" id="L31">    val runId: String,</span>
+<span class="fc" id="L32">    val requestId: String,</span>
+<span class="fc" id="L33">    val executionGeneration: Long,</span>
+<span class="fc" id="L34">    val prompt: String,</span>
+)
+
+<span class="fc" id="L37">class ChatViewModel(</span>
+<span class="fc" id="L38">    private val container: AppContainer,</span>
+    initialSessionId: String?,
+<span class="fc" id="L40">) : ViewModel() {</span>
+
+<span class="fc" id="L42">    val messages = mutableStateListOf&lt;UiMessage&gt;()</span>
+<span class="fc" id="L43">    var input by mutableStateOf(&quot;&quot;)</span>
+<span class="fc" id="L44">    var busy by mutableStateOf(false)</span>
+        private set
+<span class="fc" id="L46">    var statusLine by mutableStateOf(&quot;&quot;)</span>
+        private set
+<span class="fc" id="L48">    var approval by mutableStateOf&lt;ApprovalRequest?&gt;(null)</span>
+        private set
+<span class="fc" id="L50">    var clarify by mutableStateOf&lt;ClarifyPrompt?&gt;(null)</span>
+        private set
+<span class="fc" id="L52">    var error by mutableStateOf&lt;String?&gt;(null)</span>
+        private set
+<span class="fc bfc" id="L54" title="All 2 branches covered.">    var sessionId by mutableStateOf(initialSessionId.orEmpty())</span>
+        private set
+
+    private var runId: String? = null
+    private var eventsJob: Job? = null
+<span class="fc" id="L59">    private var assistantIndex: Int = -1</span>
+    private var idSeq = 0L
+
+    private fun s(id: Int, vararg args: Any): String =
+<span class="fc" id="L63">        container.appContext.getString(id, *args)</span>
+
+<span class="fc" id="L65">    init {</span>
+<span class="fc bfc" id="L66" title="All 4 branches covered.">        if (sessionId.isNotBlank()) loadHistory(sessionId)</span>
+<span class="fc" id="L67">    }</span>
+
+    fun loadHistory(id: String) {
+<span class="fc" id="L70">        viewModelScope.launch {</span>
+<span class="fc" id="L71">            statusLine = s(R.string.st_loading)</span>
+<span class="fc" id="L72">            try {</span>
+<span class="fc" id="L73">                val api = container.api()</span>
+<span class="fc" id="L74">                val history = api.getSessionMessages(id)</span>
+<span class="fc" id="L75">                messages.clear()</span>
+<span class="fc bfc" id="L76" title="All 2 branches covered.">                for (m in history) {</span>
+<span class="fc bfc" id="L77" title="All 2 branches covered.">                    val kind = if (m.role == &quot;user&quot;) MsgKind.USER else MsgKind.ASSISTANT</span>
+<span class="pc bpc" id="L78" title="2 of 4 branches missed.">                    if (m.text.isNotBlank()) messages.add(UiMessage(idSeq++, kind, m.text))</span>
+                }
+<span class="fc" id="L80">                statusLine = &quot;&quot;</span>
+<span class="fc" id="L81">            } catch (e: Exception) {</span>
+<span class="fc" id="L82">                statusLine = &quot;&quot;</span>
+<span class="fc" id="L83">                error = friendlyError(e)</span>
+            }
+<span class="fc" id="L85">        }</span>
+<span class="fc" id="L86">    }</span>
+
+    fun onSend() {
+<span class="fc" id="L89">        val text = input.trim()</span>
+<span class="pc bpc" id="L90" title="1 of 6 branches missed.">        if (text.isEmpty() || busy) return</span>
+<span class="fc" id="L91">        input = &quot;&quot;</span>
+<span class="fc" id="L92">        messages.add(UiMessage(idSeq++, MsgKind.USER, text))</span>
+<span class="fc" id="L93">        startRun(text, history = null)</span>
+<span class="fc" id="L94">    }</span>
+
+    fun onSteer() {
+<span class="fc" id="L97">        val text = input.trim()</span>
+<span class="fc" id="L98">        val id = runId</span>
+<span class="pc bpc" id="L99" title="2 of 8 branches missed.">        if (text.isEmpty() || id == null || !busy) return</span>
+<span class="fc" id="L100">        input = &quot;&quot;</span>
+<span class="fc" id="L101">        viewModelScope.launch {</span>
+<span class="fc" id="L102">            try {</span>
+<span class="fc" id="L103">                container.api().steerRun(id, text)</span>
+<span class="fc" id="L104">                statusLine = s(R.string.st_steered)</span>
+<span class="fc" id="L105">            } catch (e: Exception) {</span>
+<span class="fc" id="L106">                error = friendlyError(e)</span>
+            }
+<span class="fc" id="L108">        }</span>
+<span class="fc" id="L109">    }</span>
+
+    fun onStop() {
+<span class="fc bfc" id="L112" title="All 2 branches covered.">        val id = runId ?: return</span>
+<span class="fc" id="L113">        viewModelScope.launch {</span>
+<span class="fc" id="L114">            try {</span>
+<span class="fc" id="L115">                container.api().stopRun(id)</span>
+<span class="fc" id="L116">                statusLine = s(R.string.st_stopping)</span>
+<span class="fc" id="L117">            } catch (e: Exception) {</span>
+<span class="fc" id="L118">                error = friendlyError(e)</span>
+            }
+<span class="fc" id="L120">        }</span>
+<span class="fc" id="L121">    }</span>
+
+    fun answerApproval(choice: String) {
+<span class="fc bfc" id="L124" title="All 2 branches covered.">        val req = approval ?: return</span>
+<span class="pc bpc" id="L125" title="1 of 2 branches missed.">        val id = runId ?: return</span>
+<span class="fc" id="L126">        approval = null</span>
+<span class="fc" id="L127">        viewModelScope.launch {</span>
+<span class="fc" id="L128">            try {</span>
+<span class="fc" id="L129">                container.api().answerApproval(id, ApprovalAnswer(req.requestId, req.executionGeneration, choice))</span>
+<span class="fc" id="L130">                statusLine = s(R.string.st_approved, choice)</span>
+<span class="fc" id="L131">            } catch (e: Exception) {</span>
+<span class="fc" id="L132">                error = friendlyError(e)</span>
+            }
+<span class="fc" id="L134">        }</span>
+<span class="fc" id="L135">    }</span>
+
+    fun answerClarify(answer: String) {
+<span class="fc bfc" id="L138" title="All 2 branches covered.">        val prompt = clarify ?: return</span>
+<span class="fc" id="L139">        clarify = null</span>
+<span class="fc" id="L140">        viewModelScope.launch {</span>
+<span class="fc" id="L141">            try {</span>
+<span class="fc" id="L142">                container.api().answerClarify(</span>
+<span class="fc" id="L143">                    prompt.runId,</span>
+<span class="fc" id="L144">                    ClarifyRequest(prompt.requestId, prompt.executionGeneration, answer),</span>
+                )
+<span class="fc" id="L146">                statusLine = s(R.string.st_answered)</span>
+<span class="fc" id="L147">            } catch (e: Exception) {</span>
+<span class="fc" id="L148">                error = friendlyError(e)</span>
+            }
+<span class="fc" id="L150">        }</span>
+<span class="fc" id="L151">    }</span>
+
+    fun dismissError() {
+<span class="fc" id="L154">        error = null</span>
+<span class="fc" id="L155">    }</span>
+
+    private fun startRun(text: String, history: List&lt;HistoryMessage&gt;?) {
+<span class="fc" id="L158">        busy = true</span>
+<span class="fc" id="L159">        error = null</span>
+<span class="fc" id="L160">        statusLine = s(R.string.st_starting)</span>
+<span class="fc" id="L161">        assistantIndex = -1</span>
+<span class="fc" id="L162">        viewModelScope.launch {</span>
+<span class="fc" id="L163">            val settings = try {</span>
+<span class="fc" id="L164">                container.settingsStore.current()</span>
+<span class="nc" id="L165">            } catch (e: Exception) {</span>
+<span class="nc" id="L166">                busy = false</span>
+<span class="nc" id="L167">                error = friendlyError(e)</span>
+<span class="nc" id="L168">                return@launch</span>
+            }
+<span class="fc bfc" id="L170" title="All 2 branches covered.">            if (!settings.isConfigured) {</span>
+<span class="fc" id="L171">                busy = false</span>
+<span class="fc" id="L172">                error = s(R.string.err_not_configured)</span>
+<span class="fc" id="L173">                return@launch</span>
+            }
+<span class="fc" id="L175">            val api = try {</span>
+<span class="fc" id="L176">                container.api()</span>
+<span class="fc" id="L177">            } catch (e: Exception) {</span>
+<span class="fc" id="L178">                busy = false</span>
+<span class="fc" id="L179">                error = friendlyError(e)</span>
+<span class="fc" id="L180">                return@launch</span>
+            }
+<span class="fc" id="L182">            val id: String</span>
+<span class="fc" id="L183">            try {</span>
+<span class="fc" id="L184">                val accepted = api.createRun(</span>
+<span class="fc" id="L185">                    RunCreateRequest(</span>
+<span class="fc" id="L186">                        input = text,</span>
+<span class="pc bpc" id="L187" title="1 of 2 branches missed.">                        sessionId = sessionId.ifBlank { null },</span>
+<span class="fc" id="L188">                        conversationHistory = history,</span>
+<span class="pc bpc" id="L189" title="1 of 2 branches missed.">                        model = settings.model.ifBlank { null },</span>
+<span class="pc bpc" id="L190" title="1 of 2 branches missed.">                        provider = settings.provider.ifBlank { null },</span>
+                    ),
+<span class="fc" id="L192">                    idempotencyKey = UUID.randomUUID().toString(),</span>
+                )
+<span class="fc" id="L194">                id = accepted.runId</span>
+<span class="fc" id="L195">                runId = id</span>
+                // Runs responses do not carry the session id. Read it back once.
+<span class="fc" id="L197">                try {</span>
+<span class="fc" id="L198">                    val status = api.getRun(id)</span>
+<span class="pc bpc" id="L199" title="1 of 6 branches missed.">                    status.sessionId?.ifBlank { null }?.let { sessionId = it }</span>
+<span class="fc" id="L200">                } catch (_: Exception) {</span>
+                }
+                // Best-effort FCM watch so a closed app still gets the finish notice.
+                // registerWatch never throws (returns false on failure), so no
+                // try-catch needed here.
+<span class="fc" id="L205">                container.watchRegistrar.registerWatch(</span>
+<span class="fc" id="L206">                    relayBaseUrl = settings.relayUrl,</span>
+<span class="fc" id="L207">                    runId = id,</span>
+<span class="fc" id="L208">                    sessionId = sessionId,</span>
+<span class="fc" id="L209">                    fcmToken = settings.fcmToken,</span>
+                )
+<span class="fc" id="L211">            } catch (e: Exception) {</span>
+<span class="fc" id="L212">                busy = false</span>
+<span class="fc" id="L213">                statusLine = &quot;&quot;</span>
+<span class="fc" id="L214">                error = friendlyError(e)</span>
+<span class="fc" id="L215">                return@launch</span>
+            }
+<span class="fc" id="L217">            subscribe(id, attempt = 0)</span>
+<span class="fc" id="L218">        }</span>
+<span class="fc" id="L219">    }</span>
+
+    private fun subscribe(id: String, attempt: Int) {
+<span class="fc bfc" id="L222" title="All 2 branches covered.">        eventsJob?.cancel()</span>
+<span class="fc" id="L223">        eventsJob = viewModelScope.launch {</span>
+<span class="fc" id="L224">            try {</span>
+<span class="fc" id="L225">                val api = container.api()</span>
+<span class="fc" id="L226">                var terminalSeen = false</span>
+<span class="fc bfc" id="L227" title="All 2 branches covered.">                api.runEvents(id).collect { event -&gt; if (handleEvent(id, event)) terminalSeen = true }</span>
+<span class="fc bfc" id="L228" title="All 2 branches covered.">                if (!terminalSeen) reconnectOrFinish(id, attempt)</span>
+<span class="fc" id="L229">            } catch (e: Exception) {</span>
+<span class="fc" id="L230">                reconnectOrFinish(id, attempt, cause = e)</span>
+            }
+<span class="fc" id="L232">        }</span>
+<span class="fc" id="L233">    }</span>
+
+    /** Returns true when a terminal event arrived. */
+    private suspend fun handleEvent(id: String, event: RunEvent): Boolean {
+<span class="fc" id="L237">        when (event) {</span>
+<span class="fc bfc" id="L238" title="All 2 branches covered.">            is RunEvent.Delta -&gt; {</span>
+<span class="pc bpc" id="L239" title="2 of 4 branches missed.">                if (event.text.isEmpty()) return false</span>
+<span class="fc bfc" id="L240" title="All 2 branches covered.">                if (assistantIndex &lt; 0) {</span>
+<span class="fc" id="L241">                    assistantIndex = messages.size</span>
+<span class="fc" id="L242">                    messages.add(UiMessage(idSeq++, MsgKind.ASSISTANT, event.text))</span>
+                } else {
+<span class="fc" id="L244">                    val cur = messages[assistantIndex]</span>
+<span class="fc" id="L245">                    messages[assistantIndex] = cur.copy(text = cur.text + event.text)</span>
+                }
+<span class="fc" id="L247">                statusLine = s(R.string.st_writing)</span>
+            }
+<span class="fc bfc" id="L249" title="All 2 branches covered.">            is RunEvent.Interim -&gt; {</span>
+<span class="pc bpc" id="L250" title="2 of 6 branches missed.">                if (!event.alreadyStreamed &amp;&amp; event.text.isNotBlank()) {</span>
+<span class="fc" id="L251">                    messages.add(UiMessage(idSeq++, MsgKind.STATUS, event.text))</span>
+                }
+            }
+<span class="fc bfc" id="L254" title="All 2 branches covered.">            is RunEvent.ToolStarted -&gt;</span>
+<span class="fc" id="L255">                messages.add(UiMessage(idSeq++, MsgKind.TOOL, s(R.string.tool_started, event.tool, event.preview).trim()))</span>
+<span class="fc bfc" id="L256" title="All 2 branches covered.">            is RunEvent.ToolCompleted -&gt;</span>
+<span class="fc" id="L257">                messages.add(</span>
+<span class="fc" id="L258">                    UiMessage(</span>
+<span class="fc" id="L259">                        idSeq++,</span>
+<span class="pc bpc" id="L260" title="1 of 2 branches missed.">                        if (event.isError) MsgKind.ERROR else MsgKind.TOOL,</span>
+<span class="fc" id="L261">                        s(R.string.tool_finished, event.tool, event.durationSeconds.toString(), event.preview).trim(),</span>
+                    )
+                )
+<span class="fc bfc" id="L264" title="All 2 branches covered.">            is RunEvent.SubagentStarted -&gt;</span>
+<span class="fc" id="L265">                messages.add(UiMessage(idSeq++, MsgKind.STATUS, s(R.string.delegating, event.summary)))</span>
+<span class="fc bfc" id="L266" title="All 2 branches covered.">            is RunEvent.SubagentCompleted -&gt;</span>
+<span class="fc" id="L267">                messages.add(UiMessage(idSeq++, MsgKind.STATUS, s(R.string.child_done, event.status, event.summary)))</span>
+<span class="fc bfc" id="L268" title="All 2 branches covered.">            is RunEvent.ApprovalRequested -&gt; {</span>
+<span class="fc" id="L269">                approval = event.request</span>
+<span class="fc" id="L270">                statusLine = s(R.string.st_waiting_approval)</span>
+            }
+<span class="fc bfc" id="L272" title="All 2 branches covered.">            is RunEvent.ClarifyRequested -&gt; {</span>
+<span class="fc" id="L273">                clarify = ClarifyPrompt(id, event.requestId, event.executionGeneration, event.prompt)</span>
+<span class="fc" id="L274">                statusLine = s(R.string.st_question)</span>
+            }
+<span class="fc bfc" id="L276" title="All 2 branches covered.">            is RunEvent.Terminal -&gt; {</span>
+<span class="fc" id="L277">                finishTerminal(event)</span>
+<span class="fc" id="L278">                return true</span>
+            }
+<span class="fc" id="L280">            is RunEvent.Unknown -&gt; {</span>
+<span class="fc" id="L281">                statusLine = event.name</span>
+            }
+        }
+<span class="fc" id="L284">        return false</span>
+    }
+
+    private fun finishTerminal(event: RunEvent.Terminal) {
+<span class="fc" id="L288">        busy = false</span>
+<span class="fc" id="L289">        runId = null</span>
+<span class="fc bfc" id="L290" title="All 4 branches covered.">        statusLine = when (event.status) {</span>
+<span class="fc" id="L291">            &quot;completed&quot; -&gt; &quot;&quot;</span>
+<span class="fc" id="L292">            &quot;cancelled&quot; -&gt; s(R.string.st_cancelled)</span>
+<span class="fc" id="L293">            &quot;failed&quot; -&gt; s(R.string.st_failed)</span>
+<span class="fc" id="L294">            else -&gt; event.status</span>
+        }
+<span class="pc bpc" id="L296" title="1 of 8 branches missed.">        if (assistantIndex &lt; 0 &amp;&amp; !event.output.isNullOrBlank()) {</span>
+<span class="fc" id="L297">            messages.add(UiMessage(idSeq++, MsgKind.ASSISTANT, event.output))</span>
+        }
+<span class="pc bpc" id="L299" title="2 of 8 branches missed.">        if (!event.error.isNullOrBlank() &amp;&amp; event.status != &quot;completed&quot;) {</span>
+<span class="fc" id="L300">            messages.add(UiMessage(idSeq++, MsgKind.ERROR, event.error))</span>
+        }
+<span class="pc bpc" id="L302" title="1 of 6 branches missed.">        event.pendingSteer?.ifBlank { null }?.let {</span>
+<span class="fc" id="L303">            messages.add(UiMessage(idSeq++, MsgKind.STATUS, s(R.string.st_undelivered, it)))</span>
+        }
+<span class="fc" id="L305">    }</span>
+
+<span class="fc" id="L307">    private suspend fun reconnectOrFinish(id: String, attempt: Int, cause: Exception? = null) {</span>
+<span class="fc bfc" id="L308" title="All 2 branches covered.">        if (attempt &gt;= 3) {</span>
+<span class="fc" id="L309">            busy = false</span>
+<span class="fc" id="L310">            runId = null</span>
+<span class="fc" id="L311">            statusLine = &quot;&quot;</span>
+<span class="pc bpc" id="L312" title="3 of 4 branches missed.">            error = cause?.let { friendlyError(it) } ?: s(R.string.st_stream_ended)</span>
+<span class="fc" id="L313">            return</span>
+        }
+<span class="fc" id="L315">        statusLine = s(R.string.st_reconnecting)</span>
+<span class="fc" id="L316">        try {</span>
+<span class="fc" id="L317">            val status = container.api().getRun(id)</span>
+<span class="fc bfc" id="L318" title="All 3 branches covered.">            when (status.status) {</span>
+                &quot;completed&quot;, &quot;failed&quot;, &quot;cancelled&quot;, &quot;interrupted&quot; -&gt; {
+<span class="fc" id="L320">                    finishTerminal(</span>
+<span class="fc" id="L321">                        RunEvent.Terminal(status.status, status.output, status.error, status.pendingSteer)</span>
+                    )
+<span class="fc" id="L323">                    return</span>
+                }
+                &quot;unknown&quot; -&gt; {
+<span class="fc" id="L326">                    busy = false</span>
+<span class="fc" id="L327">                    runId = null</span>
+<span class="fc" id="L328">                    statusLine = &quot;&quot;</span>
+<span class="fc" id="L329">                    error = s(R.string.st_unknown_restart)</span>
+<span class="fc" id="L330">                    return</span>
+                }
+            }
+<span class="pc bpc" id="L333" title="4 of 6 branches missed.">            status.sessionId?.ifBlank { null }?.let { sessionId = it }</span>
+<span class="fc" id="L334">        } catch (e: Exception) {</span>
+<span class="fc" id="L335">            busy = false</span>
+<span class="fc" id="L336">            runId = null</span>
+<span class="fc" id="L337">            statusLine = &quot;&quot;</span>
+<span class="pc bpc" id="L338" title="1 of 2 branches missed.">            error = friendlyError(cause ?: e)</span>
+<span class="fc" id="L339">            return</span>
+        }
+<span class="fc" id="L341">        subscribe(id, attempt = attempt + 1)</span>
+<span class="fc" id="L342">    }</span>
+
+    private fun friendlyError(e: Exception): String {
+<span class="fc bfc" id="L345" title="All 2 branches covered.">        if (e is HermesApiException) {</span>
+<span class="fc bfc" id="L346" title="All 5 branches covered.">            return when (e.code) {</span>
+                &quot;admission_conflict&quot;, &quot;idempotency_key_conflict&quot; -&gt;
+<span class="fc" id="L348">                    s(R.string.err_conflict, e.status)</span>
+                &quot;unknown_execution&quot; -&gt;
+<span class="fc" id="L350">                    s(R.string.err_unknown_exec)</span>
+                &quot;permission_denied&quot;, &quot;not_found&quot; -&gt;
+<span class="fc" id="L352">                    s(R.string.err_foreign, e.status)</span>
+                &quot;runtime_draining&quot;, &quot;storage_unavailable&quot; -&gt;
+<span class="fc" id="L354">                    s(R.string.err_draining, e.status)</span>
+<span class="fc" id="L355">                else -&gt; s(R.string.err_server, e.status, e.message.take(200))</span>
+            }
+        }
+<span class="pc bpc" id="L358" title="1 of 4 branches missed.">        if (e is IllegalArgumentException) return e.message ?: &quot;Bad settings.&quot;</span>
+<span class="pc bpc" id="L359" title="1 of 2 branches missed.">        return (e.message ?: e.javaClass.simpleName).take(200)</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.13.202504020838</span></div></body></html>

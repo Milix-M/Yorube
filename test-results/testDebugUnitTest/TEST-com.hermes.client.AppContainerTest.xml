@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.hermes.client.AppContainerTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-21T14:29:53" hostname="runnervmxehtw" time="6.829">
+  <properties/>
+  <testcase name="api_omitsCloudflareHeadersWhenBlank" classname="com.hermes.client.AppContainerTest" time="6.731"/>
+  <testcase name="api_sendsCloudflareHeadersWhenConfigured" classname="com.hermes.client.AppContainerTest" time="0.098"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

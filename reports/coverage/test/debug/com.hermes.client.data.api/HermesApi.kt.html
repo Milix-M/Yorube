@@ -1,0 +1,319 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>HermesApi.kt</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=0;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">debug</a> &gt; <a href="index.source.html" class="el_package">com.hermes.client.data.api</a> &gt; <span class="el_source">HermesApi.kt</span></div><h1>HermesApi.kt</h1><pre class="source lang-java linenums">package com.hermes.client.data.api
+
+import java.io.IOException
+import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+
+<span class="fc" id="L20">class HermesApiException(</span>
+<span class="fc" id="L21">    val status: Int,</span>
+<span class="fc" id="L22">    val code: String?,</span>
+<span class="fc" id="L23">    override val message: String,</span>
+<span class="pc bpc" id="L24" title="1 of 4 branches missed.">) : IOException(&quot;HTTP $status${code?.let { &quot; [$it]&quot; } ?: &quot;&quot;}: $message&quot;)</span>
+
+<span class="fc" id="L26">private val JSON_MEDIA = &quot;application/json; charset=utf-8&quot;.toMediaType()</span>
+private const val IDEMPOTENCY_HEADER = &quot;Idempotency-Key&quot;
+
+/**
+ * HTTP client for the Hermes API Server (gateway/platforms/api_server.py).
+ * Base URL looks like https://host:port, paths start with /v1/ and /api/.
+ */
+<span class="fc" id="L33">class HermesApi(</span>
+    baseUrl: String,
+<span class="fc" id="L35">    private val apiKey: String,</span>
+<span class="fc" id="L36">    private val extraHeaders: Map&lt;String, String&gt; = emptyMap(),</span>
+<span class="fc" id="L37">    private val client: OkHttpClient = defaultClient(),</span>
+<span class="fc" id="L38">) {</span>
+<span class="fc" id="L39">    private val base = baseUrl.trim().removeSuffix(&quot;/&quot;)</span>
+
+<span class="fc" id="L41">    init {</span>
+<span class="fc" id="L42">        val host = base.substringAfter(&quot;://&quot;).substringBefore(&quot;/&quot;).substringBefore(&quot;:&quot;)</span>
+<span class="fc" id="L43">        val isHttps = base.startsWith(&quot;https://&quot;)</span>
+        // Loopback never crosses a network, so plain http stays allowed there
+        // in every build type. Anything else must be https.
+<span class="fc bfc" id="L46" title="All 6 branches covered.">        val local = host == &quot;10.0.2.2&quot; || host == &quot;localhost&quot; || host == &quot;127.0.0.1&quot;</span>
+<span class="pc bpc" id="L47" title="1 of 4 branches missed.">        if (!isHttps &amp;&amp; !local) {</span>
+<span class="fc" id="L48">            throw IllegalArgumentException(&quot;Base URL must be https (http is only for loopback)&quot;)</span>
+        }
+<span class="fc" id="L50">    }</span>
+
+    // -- low level --
+
+<span class="fc" id="L54">    private fun get(path: String, extra: Map&lt;String, String&gt; = emptyMap()): Request {</span>
+<span class="fc" id="L55">        val b = Request.Builder().url(base + path).get()</span>
+<span class="fc" id="L56">        b.header(&quot;Authorization&quot;, &quot;Bearer $apiKey&quot;)</span>
+<span class="pc bpc" id="L57" title="2 of 6 branches missed.">        for ((k, v) in extraHeaders) if (v.isNotBlank()) b.header(k, v)</span>
+<span class="pc bpc" id="L58" title="1 of 2 branches missed.">        for ((k, v) in extra) b.header(k, v)</span>
+<span class="fc" id="L59">        return b.build()</span>
+    }
+
+<span class="fc" id="L62">    private fun post(path: String, body: String?, extra: Map&lt;String, String&gt; = emptyMap()): Request {</span>
+<span class="fc" id="L63">        val b = Request.Builder().url(base + path)</span>
+<span class="pc bpc" id="L64" title="1 of 2 branches missed.">            .post((body ?: &quot;&quot;).toRequestBody(JSON_MEDIA))</span>
+<span class="fc" id="L65">        b.header(&quot;Authorization&quot;, &quot;Bearer $apiKey&quot;)</span>
+<span class="pc bpc" id="L66" title="5 of 6 branches missed.">        for ((k, v) in extraHeaders) if (v.isNotBlank()) b.header(k, v)</span>
+<span class="fc bfc" id="L67" title="All 2 branches covered.">        for ((k, v) in extra) b.header(k, v)</span>
+<span class="fc" id="L68">        return b.build()</span>
+    }
+
+    private fun delete(path: String): Request {
+<span class="fc" id="L72">        val b = Request.Builder().url(base + path).delete()</span>
+<span class="fc" id="L73">        b.header(&quot;Authorization&quot;, &quot;Bearer $apiKey&quot;)</span>
+<span class="pc bpc" id="L74" title="5 of 6 branches missed.">        for ((k, v) in extraHeaders) if (v.isNotBlank()) b.header(k, v)</span>
+<span class="fc" id="L75">        return b.build()</span>
+    }
+
+    private fun parseError(status: Int, body: String): Nothing {
+<span class="fc" id="L79">        var code: String? = null</span>
+<span class="fc bfc" id="L80" title="All 2 branches covered.">        var message = body.ifBlank { &quot;empty response&quot; }.take(300)</span>
+<span class="fc" id="L81">        try {</span>
+<span class="fc" id="L82">            val root = HermesJson.parseToJsonElement(body)</span>
+<span class="fc bfc" id="L83" title="All 2 branches covered.">            val err = if (root is JsonObject) root[&quot;error&quot;] else root</span>
+<span class="fc bfc" id="L84" title="All 2 branches covered.">            if (err is JsonObject) {</span>
+<span class="fc" id="L85">                code = err.str(&quot;code&quot;)</span>
+<span class="pc bpc" id="L86" title="1 of 2 branches missed.">                err.str(&quot;message&quot;)?.let { message = it }</span>
+<span class="pc bpc" id="L87" title="1 of 4 branches missed.">            } else if (err is kotlinx.serialization.json.JsonPrimitive &amp;&amp; err.isString) {</span>
+<span class="fc" id="L88">                message = err.content</span>
+            }
+<span class="fc" id="L90">        } catch (_: Exception) {</span>
+        }
+<span class="fc" id="L92">        throw HermesApiException(status, code, message)</span>
+    }
+
+<span class="fc" id="L95">    private suspend fun execute(request: Request): String = withContext(Dispatchers.IO) {</span>
+<span class="fc" id="L96">        client.newCall(request).execute().use { response -&gt;</span>
+<span class="pc bpc" id="L97" title="2 of 4 branches missed.">            val body = response.body?.string() ?: &quot;&quot;</span>
+<span class="pc bpc" id="L98" title="1 of 2 branches missed.">            if (!response.isSuccessful) parseError(response.code, body)</span>
+<span class="fc" id="L99">            body</span>
+<span class="fc" id="L100">        }</span>
+<span class="fc" id="L101">    }</span>
+
+    // -- M0: connection --
+
+<span class="fc" id="L105">    suspend fun checkHealth(): Boolean {</span>
+<span class="fc" id="L106">        return try {</span>
+<span class="fc" id="L107">            val body = execute(get(&quot;/health&quot;))</span>
+<span class="fc" id="L108">            body.contains(&quot;\&quot;ok\&quot;&quot;)</span>
+<span class="fc" id="L109">        } catch (_: Exception) {</span>
+<span class="fc bfc" id="L110" title="All 2 branches covered.">            false</span>
+        }
+    }
+
+<span class="fc" id="L114">    suspend fun getCapabilities(): CapabilitiesResponse {</span>
+<span class="fc" id="L115">        val body = execute(get(&quot;/v1/capabilities&quot;))</span>
+<span class="fc" id="L116">        return HermesJson.decodeFromString(body)</span>
+    }
+
+<span class="fc" id="L119">    suspend fun getModelIds(): List&lt;String&gt; {</span>
+<span class="fc" id="L120">        val body = execute(get(&quot;/v1/models&quot;))</span>
+<span class="fc" id="L121">        return try {</span>
+<span class="fc" id="L122">            extractModelIds(HermesJson.parseToJsonElement(body))</span>
+<span class="fc" id="L123">        } catch (_: Exception) {</span>
+<span class="fc" id="L124">            emptyList()</span>
+        }
+    }
+
+<span class="fc" id="L128">    suspend fun getModelOptions(refresh: Boolean = false): String {</span>
+<span class="pc bpc" id="L129" title="1 of 2 branches missed.">        val path = if (refresh) &quot;/api/model/options?refresh=1&quot; else &quot;/api/model/options&quot;</span>
+<span class="fc" id="L130">        return execute(get(path))</span>
+    }
+
+<span class="fc" id="L133">    suspend fun getSkills(): List&lt;SkillInfo&gt; {</span>
+<span class="fc" id="L134">        val body = execute(get(&quot;/v1/skills&quot;))</span>
+<span class="fc" id="L135">        return parseList(body, &quot;skills&quot;)</span>
+    }
+
+<span class="fc" id="L138">    suspend fun getToolsets(): List&lt;ToolsetInfo&gt; {</span>
+<span class="fc" id="L139">        val body = execute(get(&quot;/v1/toolsets&quot;))</span>
+<span class="fc" id="L140">        return parseList(body, &quot;toolsets&quot;)</span>
+    }
+
+    private inline fun &lt;reified T&gt; parseList(body: String, vararg keys: String): List&lt;T&gt; {
+<span class="fc" id="L144">        return try {</span>
+<span class="fc" id="L145">            val el = HermesJson.parseToJsonElement(body)</span>
+<span class="fc" id="L146">            val arr = when {</span>
+<span class="fc" id="L147">                el is JsonArray -&gt; el</span>
+<span class="fc" id="L148">                el is JsonObject -&gt; keys.firstNotNullOfOrNull { el[it] as? JsonArray }</span>
+<span class="nc" id="L149">                else -&gt; null</span>
+<span class="nc" id="L150">            } ?: return emptyList()</span>
+<span class="fc" id="L151">            HermesJson.decodeFromString(arr.toString())</span>
+<span class="nc" id="L152">        } catch (_: Exception) {</span>
+<span class="fc" id="L153">            emptyList()</span>
+        }
+    }
+
+    // -- M1: runs --
+
+<span class="fc" id="L159">    suspend fun createRun(request: RunCreateRequest, idempotencyKey: String): RunAccepted {</span>
+<span class="fc" id="L160">        val body = execute(</span>
+<span class="fc" id="L161">            post(&quot;/v1/runs&quot;, HermesJson.encodeToString(request), mapOf(IDEMPOTENCY_HEADER to idempotencyKey))</span>
+        )
+<span class="fc" id="L163">        return HermesJson.decodeFromString(body)</span>
+    }
+
+<span class="fc" id="L166">    suspend fun getRun(runId: String): RunStatusResponse {</span>
+<span class="fc" id="L167">        val body = execute(get(&quot;/v1/runs/$runId&quot;))</span>
+<span class="fc" id="L168">        return HermesJson.decodeFromString(body)</span>
+    }
+
+<span class="pc" id="L171">    suspend fun stopRun(runId: String) { execute(post(&quot;/v1/runs/$runId/stop&quot;, &quot;{}&quot;)) }</span>
+
+<span class="pc" id="L173">    suspend fun steerRun(runId: String, text: String) { execute(post(&quot;/v1/runs/$runId/steer&quot;, HermesJson.encodeToString(SteerRequest(text)))) }</span>
+
+<span class="pc" id="L175">    suspend fun answerApproval(runId: String, answer: ApprovalAnswer) { execute(post(&quot;/v1/runs/$runId/approval&quot;, HermesJson.encodeToString(answer))) }</span>
+
+<span class="pc" id="L177">    suspend fun answerClarify(runId: String, request: ClarifyRequest) { execute(post(&quot;/v1/runs/$runId/clarify&quot;, HermesJson.encodeToString(request))) }</span>
+
+<span class="pc" id="L179">    suspend fun resolveUnknown(runId: String, request: ResolveUnknownRequest) { execute(post(&quot;/v1/runs/$runId/resolve-unknown&quot;, HermesJson.encodeToString(request))) }</span>
+
+    /**
+     * SSE stream of run events. Skips keepalive comment lines.
+     * Ends after a terminal run.* event or when the collector cancels.
+     */
+<span class="fc" id="L185">    fun runEvents(runId: String): Flow&lt;RunEvent&gt; = callbackFlow {</span>
+<span class="fc" id="L186">        val call = client.newCall(get(&quot;/v1/runs/$runId/events&quot;))</span>
+<span class="fc" id="L187">        val response = try {</span>
+<span class="fc" id="L188">            call.execute()</span>
+<span class="fc" id="L189">        } catch (e: Exception) {</span>
+<span class="fc" id="L190">            close(e)</span>
+<span class="fc" id="L191">            return@callbackFlow</span>
+        }
+<span class="fc bfc" id="L193" title="All 2 branches covered.">        if (!response.isSuccessful) {</span>
+<span class="pc bpc" id="L194" title="2 of 4 branches missed.">            val body = try { response.body?.string() ?: &quot;&quot; } catch (_: Exception) { &quot;&quot; }</span>
+<span class="fc" id="L195">            response.close()</span>
+<span class="fc" id="L196">            try {</span>
+<span class="nc" id="L197">                parseError(response.code, body)</span>
+<span class="fc" id="L198">            } catch (e: HermesApiException) {</span>
+<span class="fc" id="L199">                close(e)</span>
+<span class="fc" id="L200">                return@callbackFlow</span>
+            }
+        }
+<span class="fc" id="L203">        try {</span>
+            // OkHttp always delivers a body here, even when empty.
+<span class="pc bpc" id="L205" title="1 of 2 branches missed.">            val responseBody = response.body ?: throw IOException(&quot;empty response&quot;)</span>
+<span class="pc bpc" id="L206" title="1 of 2 branches missed.">            val reader = responseBody.charStream().buffered()</span>
+<span class="fc" id="L207">            var eventName = &quot;message&quot;</span>
+<span class="fc" id="L208">            val dataLines = StringBuilder()</span>
+<span class="fc" id="L209">            var terminated = false</span>
+            fun dispatch() {
+<span class="fc" id="L211">                val data = parseSseData(dataLines.toString())</span>
+<span class="fc" id="L212">                dataLines.clear()</span>
+<span class="fc bfc" id="L213" title="All 2 branches covered.">                if (data == null) {</span>
+<span class="fc" id="L214">                    eventName = &quot;message&quot;</span>
+<span class="fc" id="L215">                    return</span>
+                }
+<span class="pc bpc" id="L217" title="4 of 8 branches missed.">                val name = data.str(&quot;event&quot;)?.takeIf { it.isNotBlank() } ?: eventName</span>
+<span class="fc" id="L218">                trySend(parseRunEvent(name, data))</span>
+<span class="pc bpc" id="L219" title="1 of 6 branches missed.">                if (data.str(&quot;event&quot;)?.startsWith(&quot;run.&quot;) == true) {</span>
+<span class="fc" id="L220">                    terminated = true</span>
+<span class="fc" id="L221">                    close()</span>
+<span class="fc" id="L222">                    return</span>
+                }
+<span class="fc" id="L224">                eventName = &quot;message&quot;</span>
+<span class="fc" id="L225">            }</span>
+<span class="fc" id="L226">            reader.useLines { lines -&gt;</span>
+<span class="fc bfc" id="L227" title="All 2 branches covered.">                for (line in lines) {</span>
+<span class="fc" id="L228">                    when {</span>
+<span class="fc bfc" id="L229" title="All 4 branches covered.">                        line.isEmpty() -&gt; dispatch()</span>
+<span class="fc bfc" id="L230" title="All 2 branches covered.">                        line.startsWith(&quot;:&quot;) -&gt; { /* keepalive comment, skip */ }</span>
+<span class="fc bfc" id="L231" title="All 2 branches covered.">                        line.startsWith(&quot;event:&quot;) -&gt; eventName = line.removePrefix(&quot;event:&quot;).trim()</span>
+<span class="pc bpc" id="L232" title="1 of 2 branches missed.">                        line.startsWith(&quot;data:&quot;) -&gt; dataLines.append(line.removePrefix(&quot;data:&quot;).trim()).append('\n')</span>
+                    }
+<span class="pc bpc" id="L234" title="1 of 4 branches missed.">                    if (terminated || isClosedForSend) break</span>
+                }
+<span class="pc bpc" id="L236" title="2 of 4 branches missed.">                if (dataLines.isNotBlank()) dispatch()</span>
+<span class="fc" id="L237">            }</span>
+            // A clean EOF without a terminal event ends the stream: close so the
+            // collector can poll the run status and re-subscribe instead of hanging.
+<span class="fc bfc" id="L240" title="All 2 branches covered.">            if (!terminated) close()</span>
+<span class="fc" id="L241">        } catch (e: Exception) {</span>
+<span class="fc" id="L242">            close(e)</span>
+        } finally {
+<span class="pc" id="L244">            try { response.close() } catch (_: Exception) { }</span>
+        }
+<span class="fc" id="L246">        awaitClose { call.cancel() }</span>
+<span class="fc" id="L247">    }</span>
+
+    // -- sessions (list and history display) --
+
+<span class="fc" id="L251">    suspend fun listSessions(limit: Int = 50, offset: Int = 0): List&lt;SessionInfo&gt; {</span>
+<span class="fc" id="L252">        val body = execute(get(&quot;/api/sessions?limit=$limit&amp;offset=$offset&quot;))</span>
+<span class="fc" id="L253">        return try {</span>
+<span class="fc" id="L254">            val el = HermesJson.parseToJsonElement(body)</span>
+<span class="fc bfc" id="L255" title="All 2 branches covered.">            val arr = when {</span>
+<span class="fc bfc" id="L256" title="All 2 branches covered.">                el is JsonArray -&gt; el</span>
+<span class="fc bfc" id="L257" title="All 2 branches covered.">                el is JsonObject -&gt;</span>
+<span class="pc bpc" id="L258" title="1 of 6 branches missed.">                    (el[&quot;sessions&quot;] as? JsonArray) ?: (el[&quot;data&quot;] as? JsonArray)</span>
+<span class="fc" id="L259">                else -&gt; null</span>
+<span class="fc" id="L260">            } ?: return emptyList()</span>
+<span class="fc" id="L261">            HermesJson.decodeFromString&lt;List&lt;SessionInfo&gt;&gt;(arr.toString())</span>
+<span class="fc" id="L262">        } catch (_: Exception) {</span>
+<span class="fc" id="L263">            emptyList()</span>
+        }
+    }
+
+<span class="fc" id="L267">    suspend fun getSessionMessages(sessionId: String): List&lt;SessionMessage&gt; {</span>
+<span class="fc" id="L268">        val body = execute(get(&quot;/api/sessions/$sessionId/messages&quot;))</span>
+<span class="fc" id="L269">        return try {</span>
+<span class="fc" id="L270">            val el = HermesJson.parseToJsonElement(body)</span>
+<span class="fc bfc" id="L271" title="All 2 branches covered.">            val arr = when {</span>
+<span class="fc bfc" id="L272" title="All 2 branches covered.">                el is JsonArray -&gt; el</span>
+<span class="fc bfc" id="L273" title="All 2 branches covered.">                el is JsonObject -&gt;</span>
+<span class="pc bpc" id="L274" title="4 of 6 branches missed.">                    (el[&quot;messages&quot;] as? JsonArray) ?: (el[&quot;data&quot;] as? JsonArray)</span>
+<span class="fc" id="L275">                else -&gt; null</span>
+<span class="fc" id="L276">            } ?: return emptyList()</span>
+<span class="fc" id="L277">            arr.mapNotNull { item -&gt;</span>
+<span class="fc bfc" id="L278" title="All 4 branches covered.">                val o = item as? JsonObject ?: return@mapNotNull null</span>
+<span class="fc bfc" id="L279" title="All 2 branches covered.">                val text = messageText(o[&quot;content&quot;]).ifBlank {</span>
+<span class="pc bpc" id="L280" title="1 of 2 branches missed.">                    o.str(&quot;text&quot;, &quot;output&quot;) ?: &quot;&quot;</span>
+                }
+<span class="fc bfc" id="L282" title="All 2 branches covered.">                if (text.isBlank()) return@mapNotNull null</span>
+<span class="fc" id="L283">                SessionMessage(</span>
+<span class="pc bpc" id="L284" title="1 of 2 branches missed.">                    id = o.str(&quot;id&quot;, &quot;row_id&quot;) ?: &quot;&quot;,</span>
+<span class="pc bpc" id="L285" title="1 of 2 branches missed.">                    role = o.str(&quot;role&quot;) ?: &quot;assistant&quot;,</span>
+<span class="fc" id="L286">                    text = text,</span>
+<span class="fc" id="L287">                )</span>
+            }
+<span class="fc" id="L289">        } catch (_: Exception) {</span>
+<span class="fc" id="L290">            emptyList()</span>
+        }
+    }
+
+<span class="pc" id="L294">    suspend fun deleteSession(sessionId: String) { execute(delete(&quot;/api/sessions/$sessionId&quot;)) }</span>
+
+<span class="fc" id="L296">    suspend fun forkSession(sessionId: String, title: String? = null): String? {</span>
+<span class="fc bfc" id="L297" title="All 2 branches covered.">        val payload = if (title != null) &quot;{\&quot;title\&quot;:${title.jsonQuote()}}&quot; else &quot;{}&quot;</span>
+<span class="fc" id="L298">        return try {</span>
+<span class="fc" id="L299">            val body = execute(post(&quot;/api/sessions/$sessionId/fork&quot;, payload))</span>
+<span class="pc bpc" id="L300" title="1 of 2 branches missed.">            val o = HermesJson.parseToJsonElement(body) as? JsonObject</span>
+<span class="pc bpc" id="L301" title="1 of 2 branches missed.">            o?.str(&quot;session_id&quot;, &quot;id&quot;)</span>
+<span class="fc" id="L302">        } catch (_: Exception) {</span>
+<span class="fc" id="L303">            null</span>
+        }
+    }
+
+    companion object {
+<span class="fc" id="L308">        fun defaultClient(): OkHttpClient = OkHttpClient.Builder()</span>
+<span class="fc" id="L309">            .connectTimeout(15, TimeUnit.SECONDS)</span>
+<span class="fc" id="L310">            .readTimeout(0, TimeUnit.SECONDS) // SSE streams stay open</span>
+<span class="fc" id="L311">            .writeTimeout(30, TimeUnit.SECONDS)</span>
+<span class="fc" id="L312">            .retryOnConnectionFailure(true)</span>
+<span class="fc" id="L313">            .build()</span>
+
+        private fun String.jsonQuote(): String =
+<span class="fc" id="L316">            &quot;\&quot;&quot; + replace(&quot;\\&quot;, &quot;\\\\&quot;).replace(&quot;\&quot;&quot;, &quot;\\\&quot;&quot;) + &quot;\&quot;&quot;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.13.202504020838</span>Generated by the Android Gradle plugin 8.5.2</div></body></html>

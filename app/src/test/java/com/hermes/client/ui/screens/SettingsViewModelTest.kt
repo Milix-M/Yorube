@@ -134,6 +134,26 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun test_success_withoutFirebase() = runVmTest {
+        val url = server.url("").toString().removeSuffix("/")
+        val c = container()
+        c.settingsStore.save(ClientSettings(baseUrl = url, apiKey = "k"))
+        awaitStored(c, url)
+        server.enqueue(MockResponse().setBody("""{"status":"ok"}"""))
+        server.enqueue(
+            MockResponse().setBody("""{"features":{"run_stop":true},"endpoints":{}}""")
+        )
+        val vm = SettingsViewModel(c)
+        vm.baseUrl = server.url("").toString().removeSuffix("/")
+        vm.apiKey = "k"
+        // No firebase fields: covers the false branch of firebaseConfigured.
+        vm.test()
+        val result = awaitTested(vm)
+        assertTrue(result.contains("health=true"))
+        assertTrue(result.contains("fcm_ready=false"))
+    }
+
+    @Test
     fun test_capabilitiesFailure() = runVmTest {
         val url = server.url("").toString().removeSuffix("/")
         val c = container()
