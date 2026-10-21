@@ -395,8 +395,9 @@ class ChatViewModelTest {
         vm.input = "nudge"
         vm.onSteer()
         awaitCondition { vm.error != null }
+        val seen = pollPaths { it.endsWith("/steer") }
         assertTrue(
-            "error=${vm.error} requests=${drainPaths { true }}",
+            "error=${vm.error} requests=$seen",
             vm.error!!.contains("500"),
         )
         vm.dismissError()
