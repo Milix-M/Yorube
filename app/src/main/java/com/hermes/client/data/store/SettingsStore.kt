@@ -82,7 +82,5 @@ class SettingsStore(private val context: Context) {
         }
     }
 
-    suspend fun saveFcmToken(token: String) {
-        context.settingsDataStore.edit { p -> p[Keys.FCM_TOKEN] = token }
-    }
+    suspend fun saveFcmToken(token: String) { context.settingsDataStore.edit { p -> p[Keys.FCM_TOKEN] = token } }
 }

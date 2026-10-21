@@ -200,15 +200,14 @@ class ChatViewModel(
                 } catch (_: Exception) {
                 }
                 // Best-effort FCM watch so a closed app still gets the finish notice.
-                try {
-                    container.watchRegistrar.registerWatch(
-                        relayBaseUrl = settings.relayUrl,
-                        runId = id,
-                        sessionId = sessionId,
-                        fcmToken = settings.fcmToken,
-                    )
-                } catch (_: Exception) {
-                }
+                // registerWatch never throws (returns false on failure), so no
+                // try-catch needed here.
+                container.watchRegistrar.registerWatch(
+                    relayBaseUrl = settings.relayUrl,
+                    runId = id,
+                    sessionId = sessionId,
+                    fcmToken = settings.fcmToken,
+                )
             } catch (e: Exception) {
                 busy = false
                 statusLine = ""

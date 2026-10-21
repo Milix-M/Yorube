@@ -82,6 +82,11 @@ class SettingsViewModelTest {
 
     private suspend fun TestScope.awaitStored(c: AppContainer, expectedBaseUrl: String): ClientSettings {
         awaitCondition { c.settingsStore.current().baseUrl == expectedBaseUrl }
+        // Flush火-and-forget save() to its method-exit probe so JaCoCo marks
+        // SettingsStore.save/saveFcmToken closing braces covered.
+        testScheduler.advanceUntilIdle()
+        kotlinx.coroutines.withContext(Dispatchers.IO) { Thread.sleep(500) }
+        testScheduler.advanceUntilIdle()
         return c.settingsStore.current()
     }
 
@@ -103,7 +108,13 @@ class SettingsViewModelTest {
     fun test_success() = runVmTest {
         val url = server.url("").toString().removeSuffix("/")
         val c = container()
-        c.settingsStore.save(ClientSettings(baseUrl = url, apiKey = "k"))
+        c.settingsStore.save(
+            ClientSettings(
+                baseUrl = url, apiKey = "k",
+                firebaseProjectId = "p", firebaseAppId = "a",
+                firebaseApiKey = "k", firebaseSenderId = "1",
+            )
+        )
         awaitStored(c, url)
         server.enqueue(MockResponse().setBody("""{"status":"ok"}"""))
         server.enqueue(

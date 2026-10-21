@@ -258,6 +258,24 @@ class HermesApiTest {
     }
 
     @Test
+    fun errorEnvelope_stringError_usesContent() = runTest {
+        server.enqueue(MockResponse().setResponseCode(400).setBody("""{"error":"oops"}"""))
+        try {
+            api.getRun("r")
+            fail("expected HermesApiException")
+        } catch (e: HermesApiException) {
+            assertEquals(400, e.status)
+            assertEquals("oops", e.message)
+        }
+    }
+
+    @Test
+    fun getModelIds_invalidJson_returnsEmpty() = runTest {
+        server.enqueue(MockResponse().setBody("{oops"))
+        assertTrue(api.getModelIds().isEmpty())
+    }
+
+    @Test
     fun runEvents_connectionRefused_throws() = runTest {
         val dead = MockWebServer()
         dead.start()

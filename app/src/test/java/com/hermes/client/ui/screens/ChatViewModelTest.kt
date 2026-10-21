@@ -263,9 +263,11 @@ class ChatViewModelTest {
             awaitCondition { server.requestCount >= 3 }
             vm.input = "nudge"
             vm.onSteer()
+            awaitCondition { vm.statusLine.contains("steered") }
             val steerPaths = pollPaths { it.endsWith("/steer") }
             assertTrue("no steer POST, got=$steerPaths", steerPaths.any { it.endsWith("/steer") })
             vm.onStop()
+            awaitCondition { vm.statusLine.contains("stopping") }
             val stopPaths = pollPaths { it.endsWith("/stop") }
             assertTrue("no stop POST, got=$stopPaths", stopPaths.any { it.endsWith("/stop") })
         } finally {
@@ -331,6 +333,7 @@ class ChatViewModelTest {
             vm.onSend()
             awaitCondition { vm.approval != null }
             vm.answerApproval("once")
+            awaitCondition { vm.statusLine.contains("approved") }
             val bodies = pollBodies { it.startsWith("/v1/runs/r1/approval") }
             assertTrue(
                 "bodies=$bodies error=${vm.error} busy=${vm.busy}",
@@ -385,6 +388,7 @@ class ChatViewModelTest {
             vm.onSend()
             awaitCondition { vm.clarify != null }
             vm.answerClarify("this one")
+            awaitCondition { vm.statusLine.contains("answered") }
             val bodies = pollBodies { it.startsWith("/v1/runs/r1/clarify") }
             assertTrue(
                 "bodies=$bodies",

@@ -168,25 +168,15 @@ class HermesApi(
         return HermesJson.decodeFromString(body)
     }
 
-    suspend fun stopRun(runId: String) {
-        execute(post("/v1/runs/$runId/stop", "{}"))
-    }
+    suspend fun stopRun(runId: String) { execute(post("/v1/runs/$runId/stop", "{}")) }
 
-    suspend fun steerRun(runId: String, text: String) {
-        execute(post("/v1/runs/$runId/steer", HermesJson.encodeToString(SteerRequest(text))))
-    }
+    suspend fun steerRun(runId: String, text: String) { execute(post("/v1/runs/$runId/steer", HermesJson.encodeToString(SteerRequest(text)))) }
 
-    suspend fun answerApproval(runId: String, answer: ApprovalAnswer) {
-        execute(post("/v1/runs/$runId/approval", HermesJson.encodeToString(answer)))
-    }
+    suspend fun answerApproval(runId: String, answer: ApprovalAnswer) { execute(post("/v1/runs/$runId/approval", HermesJson.encodeToString(answer))) }
 
-    suspend fun answerClarify(runId: String, request: ClarifyRequest) {
-        execute(post("/v1/runs/$runId/clarify", HermesJson.encodeToString(request)))
-    }
+    suspend fun answerClarify(runId: String, request: ClarifyRequest) { execute(post("/v1/runs/$runId/clarify", HermesJson.encodeToString(request))) }
 
-    suspend fun resolveUnknown(runId: String, request: ResolveUnknownRequest) {
-        execute(post("/v1/runs/$runId/resolve-unknown", HermesJson.encodeToString(request)))
-    }
+    suspend fun resolveUnknown(runId: String, request: ResolveUnknownRequest) { execute(post("/v1/runs/$runId/resolve-unknown", HermesJson.encodeToString(request))) }
 
     /**
      * SSE stream of run events. Skips keepalive comment lines.
@@ -301,9 +291,7 @@ class HermesApi(
         }
     }
 
-    suspend fun deleteSession(sessionId: String) {
-        execute(delete("/api/sessions/$sessionId"))
-    }
+    suspend fun deleteSession(sessionId: String) { execute(delete("/api/sessions/$sessionId")) }
 
     suspend fun forkSession(sessionId: String, title: String? = null): String? {
         val payload = if (title != null) "{\"title\":${title.jsonQuote()}}" else "{}"

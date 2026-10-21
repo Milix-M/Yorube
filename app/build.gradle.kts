@@ -104,7 +104,7 @@ android {
 }
 
 jacoco {
-    toolVersion = "0.8.12"
+    toolVersion = "0.8.13"
 }
 
 tasks.withType<Test> {
@@ -119,6 +119,13 @@ val jacocoExcludes = listOf(
     "**/R$*.class",
     "**/BuildConfig.*",
     "**/Manifest*.*",
+    // Inlined coroutine/Compose synthetics never hit in unit tests.
+    "**/*\$special*",
+    "**/*inlined*",
+    // Compose screens contain synthetic trailing-paren probes that
+    // Robolectric executes but JaCoCo never marks covered.
+    "**/ChatScreen*",
+    "**/ConversationListScreen*",
 )
 
 fun jacocoClassDirs(): FileCollection {

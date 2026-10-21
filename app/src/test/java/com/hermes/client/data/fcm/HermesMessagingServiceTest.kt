@@ -36,6 +36,8 @@ class HermesMessagingServiceTest {
         service.onNewToken("tok123")
         val stored = kotlinx.coroutines.runBlocking {
             awaitToken(service)
+            // Let saveFcmToken() resume to its exit probe before test ends.
+            withContext(Dispatchers.IO) { Thread.sleep(500) }
             app().container.settingsStore.current().fcmToken
         }
         assertEquals("tok123", stored)
@@ -62,10 +64,15 @@ class HermesMessagingServiceTest {
         try {
             storeFile.parentFile?.mkdirs()
             storeFile.writeBytes(byteArrayOf(0xFF.toByte(), 0xFF.toByte()))
+            // Make the datastore unreadable so saveFcmToken throws and hits the catch.
+            storeFile.setReadable(false)
+            storeFile.parentFile?.setWritable(false)
             val service = Robolectric.buildService(HermesMessagingService::class.java).create().get()
             service.onNewToken("tok123")
-            Thread.sleep(1000)
+            Thread.sleep(1500)
         } finally {
+            storeFile.parentFile?.setWritable(true)
+            storeFile.setReadable(true)
             storeFile.delete()
         }
     }
