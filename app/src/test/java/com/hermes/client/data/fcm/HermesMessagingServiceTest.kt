@@ -49,7 +49,9 @@ class HermesMessagingServiceTest {
             .build()
         service.onMessageReceived(msg)
         val nm = app().getSystemService(NotificationManager::class.java)
-        assertEquals(1, Shadows.shadowOf(nm).size())
-        assertEquals("T", Shadows.shadowOf(nm).getNotification(0).extras.getString("android.title"))
+        val shadow = Shadows.shadowOf(nm)
+        assertEquals(1, shadow.size())
+        val posted = shadow.getNotification("s1".hashCode())
+        assertEquals("T", posted.extras.getString("android.title"))
     }
 }

@@ -4,14 +4,12 @@ import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import com.hermes.client.AppContainer
 import com.hermes.client.data.store.ClientSettings
+import com.hermes.client.testutil.awaitCondition
+import com.hermes.client.testutil.runVmTest
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.test.StandardTestDispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.SocketPolicy
@@ -37,34 +35,20 @@ class ChatViewModelTest {
     fun setUp() {
         server = MockWebServer()
         server.start()
-        Dispatchers.setMain(UnconfinedTestDispatcher())
     }
 
     @After
     fun tearDown() {
         server.shutdown()
-        Dispatchers.resetMain()
     }
 
     private suspend fun containerWithSettings(): AppContainer {
+        val url = server.url("").toString().removeSuffix("/")
         val app = ApplicationProvider.getApplicationContext<Application>()
         val c = AppContainer(app)
-        c.settingsStore.save(
-            ClientSettings(
-                baseUrl = server.url("").toString().removeSuffix("/"),
-                apiKey = "k",
-            )
-        )
-        awaitCondition { c.settingsStore.current().baseUrl.isNotEmpty() }
+        c.settingsStore.save(ClientSettings(baseUrl = url, apiKey = "k"))
+        awaitCondition { c.settingsStore.current().baseUrl == url }
         return c
-    }
-
-    private suspend fun awaitCondition(timeoutMs: Long = 15_000, cond: suspend () -> Boolean) {
-        val deadline = System.currentTimeMillis() + timeoutMs
-        while (!cond()) {
-            if (System.currentTimeMillis() >= deadline) error("timed out waiting")
-            withContext(Dispatchers.IO) { Thread.sleep(100) }
-        }
     }
 
     private fun events(vararg frames: String): MockResponse {
@@ -75,7 +59,7 @@ class ChatViewModelTest {
     private fun frame(event: String, data: String) = "event: $event\ndata: $data"
 
     @Test
-    fun happyPath_streamsAndCompletes() = runTest {
+    fun happyPath_streamsAndCompletes() = runVmTest {
         server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
         server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running","session_id":"api-x"}"""))
         server.enqueue(
@@ -103,7 +87,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun terminalOnlyRun_setsOutput() = runTest {
+    fun terminalOnlyRun_setsOutput() = runVmTest {
         server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
         server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
         server.enqueue(
@@ -123,7 +107,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun allEventKinds_areHandled() = runTest {
+    fun allEventKinds_areHandled() = runVmTest {
         server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
         server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
         server.enqueue(
@@ -143,7 +127,11 @@ class ChatViewModelTest {
         vm.onSend()
         awaitCondition { !vm.busy }
         assertEquals("cancelled", vm.statusLine)
-        assertEquals("mystery.event", lastStatus(vm))
+        assertEquals("child ok: s", lastStatus(vm))
+        assertEquals(
+            listOf("mid", "delegating: g", "child ok: s"),
+            vm.messages.filter { it.kind == MsgKind.STATUS }.map { it.text },
+        )
         assertTrue(vm.messages.any { it.kind == MsgKind.ERROR && it.text.contains("bad") })
     }
 
@@ -151,7 +139,7 @@ class ChatViewModelTest {
         vm.messages.lastOrNull { it.kind == MsgKind.STATUS }?.text ?: ""
 
     @Test
-    fun createConflict_reportsFriendlyError() = runTest {
+    fun createConflict_reportsFriendlyError() = runVmTest {
         server.enqueue(
             MockResponse().setResponseCode(409)
                 .setBody("""{"error":{"message":"x","code":"admission_conflict"}}""")
@@ -165,7 +153,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun createUnknownExecution_suggestsNewChat() = runTest {
+    fun createUnknownExecution_suggestsNewChat() = runVmTest {
         server.enqueue(
             MockResponse().setResponseCode(409)
                 .setBody("""{"error":{"message":"x","code":"unknown_execution"}}""")
@@ -179,7 +167,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun createDenied_reportsForeignSession() = runTest {
+    fun createDenied_reportsForeignSession() = runVmTest {
         server.enqueue(
             MockResponse().setResponseCode(409)
                 .setBody("""{"error":{"message":"x","code":"permission_denied"}}""")
@@ -193,7 +181,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun createDraining_asksToWait() = runTest {
+    fun createDraining_asksToWait() = runVmTest {
         server.enqueue(
             MockResponse().setResponseCode(503)
                 .setBody("""{"error":{"message":"x","code":"runtime_draining"}}""")
@@ -207,7 +195,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun createServerError_reportsStatus() = runTest {
+    fun createServerError_reportsStatus() = runVmTest {
         server.enqueue(MockResponse().setResponseCode(500).setBody("kaput"))
         val c = containerWithSettings()
         val vm = ChatViewModel(c, null)
@@ -218,7 +206,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun invalidBaseUrl_reportsSettingsError() = runTest {
+    fun invalidBaseUrl_reportsSettingsError() = runVmTest {
         val app = ApplicationProvider.getApplicationContext<Application>()
         val c = AppContainer(app)
         val vm = ChatViewModel(c, null)
@@ -231,7 +219,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun stopAndSteer_postControls() = runTest {
+    fun stopAndSteer_postControls() = runVmTest {
         server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
         server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
         server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.KEEP_OPEN))
@@ -240,6 +228,7 @@ class ChatViewModelTest {
         vm.input = "hi"
         vm.onSend()
         awaitCondition { vm.busy }
+        awaitCondition { server.requestCount >= 3 }
         vm.input = "nudge"
         vm.onSteer()
         vm.onStop()
@@ -254,7 +243,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun nullRunIdControls_areNoOps() = runTest {
+    fun nullRunIdControls_areNoOps() = runVmTest {
         val c = containerWithSettings()
         val vm = ChatViewModel(c, null)
         vm.onStop()
@@ -267,7 +256,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun loadHistory_mapsMessages() = runTest {
+    fun loadHistory_mapsMessages() = runVmTest {
         server.enqueue(
             MockResponse().setBody(
                 """{"messages":[{"role":"user","content":"q"},{"role":"assistant","content":"a"}]}"""
@@ -281,7 +270,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun loadHistory_errorWithoutSettings() = runTest {
+    fun loadHistory_errorWithoutSettings() = runVmTest {
         val app = ApplicationProvider.getApplicationContext<Application>()
         val vm = ChatViewModel(AppContainer(app), "s1")
         awaitCondition { vm.error != null }
@@ -289,7 +278,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun unknownRestart_suggestsNewChat() = runTest {
+    fun unknownRestart_suggestsNewChat() = runVmTest {
         server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
         server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
         server.enqueue(MockResponse().setBody(""))
@@ -303,7 +292,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun retriesExhausted_reportsStreamEnd() = runTest {
+    fun retriesExhausted_reportsStreamEnd() = runVmTest {
         server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
         repeat(4) {
             server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))

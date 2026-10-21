@@ -7,10 +7,6 @@ import com.hermes.client.data.api.SessionInfo
 import com.hermes.client.data.store.ClientSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -35,13 +31,11 @@ class ConversationListViewModelTest {
     fun setUp() {
         server = MockWebServer()
         server.start()
-        Dispatchers.setMain(UnconfinedTestDispatcher())
     }
 
     @After
     fun tearDown() {
         server.shutdown()
-        Dispatchers.resetMain()
     }
 
     private suspend fun containerWithSettings(): AppContainer {
@@ -66,7 +60,7 @@ class ConversationListViewModelTest {
     }
 
     @Test
-    fun refresh_listsSessions() = runTest {
+    fun refresh_listsSessions() = runVmTest {
         server.enqueue(MockResponse().setBody("""{"sessions":[{"id":"s1","title":"t"}]}"""))
         val vm = ConversationListViewModel(containerWithSettings())
         vm.refresh()
@@ -77,7 +71,7 @@ class ConversationListViewModelTest {
     }
 
     @Test
-    fun refresh_errorWithoutSettings() = runTest {
+    fun refresh_errorWithoutSettings() = runVmTest {
         val app = ApplicationProvider.getApplicationContext<Application>()
         val vm = ConversationListViewModel(AppContainer(app))
         vm.refresh()
@@ -88,7 +82,7 @@ class ConversationListViewModelTest {
     }
 
     @Test
-    fun delete_removesSession() = runTest {
+    fun delete_removesSession() = runVmTest {
         server.enqueue(MockResponse().setBody("""{"sessions":[{"id":"s1"}]}"""))
         server.enqueue(MockResponse().setBody("{}"))
         val vm = ConversationListViewModel(containerWithSettings())
@@ -99,7 +93,7 @@ class ConversationListViewModelTest {
     }
 
     @Test
-    fun delete_errorKeepsList() = runTest {
+    fun delete_errorKeepsList() = runVmTest {
         server.enqueue(MockResponse().setBody("""{"sessions":[{"id":"s1"}]}"""))
         server.enqueue(MockResponse().setResponseCode(500).setBody("x"))
         val vm = ConversationListViewModel(containerWithSettings())

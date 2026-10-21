@@ -214,6 +214,7 @@ class HermesApi(
                 ?: run { close(IOException("empty stream")); return@callbackFlow }
             var eventName = "message"
             val dataLines = StringBuilder()
+            var terminated = false
             fun dispatch() {
                 val data = parseSseData(dataLines.toString())
                 dataLines.clear()
@@ -224,6 +225,7 @@ class HermesApi(
                 val name = data.str("event")?.takeIf { it.isNotBlank() } ?: eventName
                 trySend(parseRunEvent(name, data))
                 if (data.str("event")?.startsWith("run.") == true) {
+                    terminated = true
                     close()
                     return
                 }
@@ -237,10 +239,13 @@ class HermesApi(
                         line.startsWith("event:") -> eventName = line.removePrefix("event:").trim()
                         line.startsWith("data:") -> dataLines.append(line.removePrefix("data:").trim()).append('\n')
                     }
-                    if (isClosedForSend) break
+                    if (terminated || isClosedForSend) break
                 }
                 if (dataLines.isNotBlank()) dispatch()
             }
+            // A clean EOF without a terminal event ends the stream: close so the
+            // collector can poll the run status and re-subscribe instead of hanging.
+            if (!terminated) close()
         } catch (e: Exception) {
             close(e)
         } finally {
@@ -282,7 +287,7 @@ class HermesApi(
                 val text = messageText(o["content"]).ifBlank {
                     o.str("text", "output") ?: ""
                 }
-                if (text.isBlank() && o.str("role") == null) return@mapNotNull null
+                if (text.isBlank()) return@mapNotNull null
                 SessionMessage(
                     id = o.str("id", "row_id") ?: "",
                     role = o.str("role") ?: "assistant",

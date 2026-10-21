@@ -3,12 +3,10 @@ package com.hermes.client
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import com.hermes.client.data.store.ClientSettings
+import com.hermes.client.testutil.awaitCondition
+import com.hermes.client.testutil.runVmTest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -32,36 +30,31 @@ class AppContainerTest {
     fun setUp() {
         server = MockWebServer()
         server.start()
-        Dispatchers.setMain(UnconfinedTestDispatcher())
     }
 
     @After
     fun tearDown() {
         server.shutdown()
-        Dispatchers.resetMain()
     }
 
-    private suspend fun awaitStored(c: AppContainer) {
-        val deadline = System.currentTimeMillis() + 10_000
-        while (c.settingsStore.current().baseUrl.isEmpty()) {
-            if (System.currentTimeMillis() >= deadline) error("timed out waiting")
-            withContext(Dispatchers.IO) { Thread.sleep(100) }
-        }
+    private suspend fun awaitStored(c: AppContainer, expectedBaseUrl: String) {
+        awaitCondition { c.settingsStore.current().baseUrl == expectedBaseUrl }
     }
 
     @Test
-    fun api_sendsCloudflareHeadersWhenConfigured() = runTest {
+    fun api_sendsCloudflareHeadersWhenConfigured() = runVmTest {
+        val url = server.url("").toString().removeSuffix("/")
         val app = ApplicationProvider.getApplicationContext<Application>()
         val c = AppContainer(app)
         c.settingsStore.save(
             ClientSettings(
-                baseUrl = server.url("").toString().removeSuffix("/"),
+                baseUrl = url,
                 apiKey = "k",
                 cfClientId = "id",
                 cfClientSecret = "s",
             )
         )
-        awaitStored(c)
+        awaitStored(c, url)
         server.enqueue(MockResponse().setBody("""{"status":"ok"}"""))
         c.api().checkHealth()
         val req = server.takeRequest()
@@ -71,16 +64,12 @@ class AppContainerTest {
     }
 
     @Test
-    fun api_omitsCloudflareHeadersWhenBlank() = runTest {
+    fun api_omitsCloudflareHeadersWhenBlank() = runVmTest {
+        val url = server.url("").toString().removeSuffix("/")
         val app = ApplicationProvider.getApplicationContext<Application>()
         val c = AppContainer(app)
-        c.settingsStore.save(
-            ClientSettings(
-                baseUrl = server.url("").toString().removeSuffix("/"),
-                apiKey = "k",
-            )
-        )
-        awaitStored(c)
+        c.settingsStore.save(ClientSettings(baseUrl = url, apiKey = "k"))
+        awaitStored(c, url)
         server.enqueue(MockResponse().setBody("""{"status":"ok"}"""))
         c.api().checkHealth()
         val req = server.takeRequest()
