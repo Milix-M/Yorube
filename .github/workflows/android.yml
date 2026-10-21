@@ -26,7 +26,7 @@ jobs:
           yes | sdkmanager --licenses > /dev/null
           sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
       - name: Run tests with 100% line coverage gate
-        run: ./gradlew :app:jacocoCoverageVerification --no-daemon --stacktrace
+        run: ./gradlew :app:jacocoTestReport :app:jacocoCoverageVerification --no-daemon --stacktrace
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4

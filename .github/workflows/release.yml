@@ -25,7 +25,7 @@ jobs:
           yes | sdkmanager --licenses > /dev/null
           sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
       - name: Run tests with 100% line coverage gate
-        run: ./gradlew :app:jacocoCoverageVerification --no-daemon
+        run: ./gradlew :app:jacocoTestReport :app:jacocoCoverageVerification --no-daemon
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --no-daemon
       - name: Publish APK to Release
