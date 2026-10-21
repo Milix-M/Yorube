@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.JsonArray
@@ -254,7 +255,7 @@ class HermesApi(
             try { response.close() } catch (_: Exception) { }
         }
         awaitClose { call.cancel() }
-    }
+    }.flowOn(Dispatchers.IO)
 
     // -- sessions (list and history display) --
 

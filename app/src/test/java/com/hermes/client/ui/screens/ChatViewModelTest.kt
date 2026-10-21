@@ -2,11 +2,13 @@ package com.hermes.client.ui.screens
 
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
+import androidx.lifecycle.viewModelScope
 import com.hermes.client.AppContainer
 import com.hermes.client.HermesApp
 import com.hermes.client.data.store.ClientSettings
 import com.hermes.client.testutil.awaitCondition
 import com.hermes.client.testutil.runVmTest
+import kotlinx.coroutines.cancel
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -378,7 +380,9 @@ class ChatViewModelTest {
                         MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
                     request.path == "/v1/runs/r1/events" ->
                         // Hold the stream open: no reconnect runs, so nothing
-                        // overwrites the error under test.
+                        // overwrites the error under test. With runEvents on
+                        // Dispatchers.IO this blocks only an IO thread, not the
+                        // test thread, and is cancelled in finally below.
                         MockResponse().setHeadersDelay(60, TimeUnit.SECONDS)
                     request.path == "/v1/runs/r1/steer" ->
                         MockResponse().setResponseCode(500).setBody("nope")
@@ -390,23 +394,28 @@ class ChatViewModelTest {
         }
         val c = containerWithSettings()
         val vm = ChatViewModel(c, null)
-        vm.input = "hi"
-        vm.onSend()
-        awaitCondition { vm.busy }
-        awaitCondition { server.requestCount >= 3 }
-        vm.input = "nudge"
-        vm.onSteer()
-        awaitCondition { vm.error != null }
-        val seen = pollPaths { it.endsWith("/steer") }
-        assertTrue(
-            "error=${vm.error} requests=$seen",
-            vm.error!!.contains("500"),
-        )
-        vm.dismissError()
-        assertNull(vm.error)
-        vm.onStop()
-        awaitCondition { vm.error != null }
-        assertTrue("error=${vm.error}", vm.error!!.contains("500"))
+        try {
+            vm.input = "hi"
+            vm.onSend()
+            awaitCondition { vm.busy }
+            awaitCondition { server.requestCount >= 3 }
+            vm.input = "nudge"
+            vm.onSteer()
+            awaitCondition { vm.error != null }
+            val seen = pollPaths { it.endsWith("/steer") }
+            assertTrue(
+                "error=${vm.error} requests=$seen",
+                vm.error!!.contains("500"),
+            )
+            vm.dismissError()
+            assertNull(vm.error)
+            vm.onStop()
+            awaitCondition { vm.error != null }
+            assertTrue("error=${vm.error}", vm.error!!.contains("500"))
+        } finally {
+            vm.viewModelScope.cancel()
+            testScheduler.advanceUntilIdle()
+        }
     }
 
     @Test
