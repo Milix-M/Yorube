@@ -76,6 +76,8 @@ class ChatFlowUiTest {
     fun approvalDialog_postsDecision() {
         server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
         server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        // No further responses: the reconnect stalls at getRun, so no terminal
+        // can clear runId before the click. Deterministic by construction.
         server.enqueue(
             events(
                 frame("message.delta", """{"event":"message.delta","delta":"part"}"""),
@@ -85,13 +87,6 @@ class ChatFlowUiTest {
                 ),
             )
         )
-        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
-        val terminalAfterApproval = events(
-            frame("run.completed", """{"event":"run.completed","output":"done"}""")
-        )
-        // Delay the terminal so the approval click lands before the run ends.
-        terminalAfterApproval.setBodyDelay(10, TimeUnit.SECONDS)
-        server.enqueue(terminalAfterApproval)
         kotlinx.coroutines.runBlocking { saveSettings() }
 
         compose.setContent {
@@ -115,6 +110,8 @@ class ChatFlowUiTest {
     fun clarifyDialog_postsAnswer() {
         server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
         server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        // No further responses: the reconnect stalls at getRun, so no terminal
+        // can clear runId before the Send click. Deterministic by construction.
         server.enqueue(
             events(
                 frame(
@@ -123,12 +120,6 @@ class ChatFlowUiTest {
                 ),
             )
         )
-        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
-        val terminalAfterClarify =
-            events(frame("run.completed", """{"event":"run.completed","output":"ok"}"""))
-        // Delay the terminal so the Send click lands before the run ends.
-        terminalAfterClarify.setBodyDelay(10, TimeUnit.SECONDS)
-        server.enqueue(terminalAfterClarify)
         kotlinx.coroutines.runBlocking { saveSettings() }
 
         compose.setContent {
