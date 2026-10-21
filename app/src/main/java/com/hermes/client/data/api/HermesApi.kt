@@ -211,8 +211,9 @@ class HermesApi(
             }
         }
         try {
-            // OkHttp always delivers a non-null body, even when empty.
-            val reader = response.body.charStream().buffered()
+            // OkHttp always delivers a body here, even when empty.
+            val responseBody = response.body ?: throw IOException("empty response")
+            val reader = responseBody.charStream().buffered()
             var eventName = "message"
             val dataLines = StringBuilder()
             var terminated = false

@@ -49,8 +49,7 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
                 title = { Text(stringResource(R.string.settings)) },
                 navigationIcon = {
                     TextButton(onClick = onNavigateBack) { Text("‹") }
-                }
-            )
+                })
         }
     ) { padding ->
         Column(
