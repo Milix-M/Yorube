@@ -48,14 +48,10 @@ class NavGraphTest {
     private fun saveSettings() {
         val app = ApplicationProvider.getApplicationContext<Application>() as HermesApp
         kotlinx.coroutines.runBlocking {
-            app.container.settingsStore.save(
-                ClientSettings(
-                    baseUrl = server.url("").toString().removeSuffix("/"),
-                    apiKey = "k",
-                )
-            )
+            val want = server.url("").toString().removeSuffix("/")
+            app.container.settingsStore.save(ClientSettings(baseUrl = want, apiKey = "k"))
             val deadline = System.currentTimeMillis() + 10_000
-            while (app.container.settingsStore.current().baseUrl.isEmpty()) {
+            while (app.container.settingsStore.current().baseUrl != want) {
                 if (System.currentTimeMillis() >= deadline) error("timed out saving settings")
                 withContext(Dispatchers.IO) { Thread.sleep(100) }
             }

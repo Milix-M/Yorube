@@ -56,14 +56,10 @@ class ConversationListDeleteUiTest {
         server.enqueue(MockResponse().setBody("{}"))
         kotlinx.coroutines.runBlocking {
             val app = ApplicationProvider.getApplicationContext<Application>() as HermesApp
-            app.container.settingsStore.save(
-                ClientSettings(
-                    baseUrl = server.url("").toString().removeSuffix("/"),
-                    apiKey = "k",
-                )
-            )
+            val want = server.url("").toString().removeSuffix("/")
+            app.container.settingsStore.save(ClientSettings(baseUrl = want, apiKey = "k"))
             val deadline = System.currentTimeMillis() + 10_000
-            while (app.container.settingsStore.current().baseUrl.isEmpty()) {
+            while (app.container.settingsStore.current().baseUrl != want) {
                 if (System.currentTimeMillis() >= deadline) error("timed out saving settings")
                 withContext(Dispatchers.IO) { Thread.sleep(100) }
             }
