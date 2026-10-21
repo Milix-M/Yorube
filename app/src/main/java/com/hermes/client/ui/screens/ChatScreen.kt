@@ -31,6 +31,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -471,7 +472,7 @@ private fun ThinkingRow() {
 private fun MessageRow(msg: UiMessage, showCursor: Boolean) {
     when (msg.kind) {
         MsgKind.USER -> {
-            Box(Modifier.fillMaxWidth().padding(start = 48.dp, vertical = 4.dp), contentAlignment = Alignment.CenterEnd) {
+            Box(Modifier.fillMaxWidth().padding(start = 48.dp, top = 4.dp, bottom = 4.dp), contentAlignment = Alignment.CenterEnd) {
                 Surface(
                     color = MaterialTheme.colorScheme.secondaryContainer,
                     shape = RoundedCornerShape(18.dp),
@@ -511,7 +512,7 @@ private fun MessageRow(msg: UiMessage, showCursor: Boolean) {
                     },
                 ) {
                     Icon(
-                        if (copied) Icons.Filled.Add else Icons.Filled.ContentCopy,
+                        if (copied) Icons.Filled.Check else Icons.Filled.ContentCopy,
                         contentDescription = stringResource(if (copied) R.string.copied else R.string.copy),
                         modifier = Modifier.size(18.dp),
                     )
