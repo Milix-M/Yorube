@@ -377,7 +377,9 @@ class ChatViewModelTest {
                     request.path == "/v1/runs/r1" ->
                         MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
                     request.path == "/v1/runs/r1/events" ->
-                        MockResponse().setBody("").setHeader("Content-Type", "text/event-stream")
+                        // Hold the stream open: no reconnect runs, so nothing
+                        // overwrites the error under test.
+                        MockResponse().setHeadersDelay(60, TimeUnit.SECONDS)
                     request.path == "/v1/runs/r1/steer" ->
                         MockResponse().setResponseCode(500).setBody("nope")
                     request.path == "/v1/runs/r1/stop" ->
