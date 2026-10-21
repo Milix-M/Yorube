@@ -33,7 +33,6 @@ private const val IDEMPOTENCY_HEADER = "Idempotency-Key"
 class HermesApi(
     baseUrl: String,
     private val apiKey: String,
-    private val allowInsecureHosts: Boolean = false,
     private val extraHeaders: Map<String, String> = emptyMap(),
     private val client: OkHttpClient = defaultClient(),
 ) {
@@ -42,9 +41,11 @@ class HermesApi(
     init {
         val host = base.substringAfter("://").substringBefore("/").substringBefore(":")
         val isHttps = base.startsWith("https://")
+        // Loopback never crosses a network, so plain http stays allowed there
+        // in every build type. Anything else must be https.
         val local = host == "10.0.2.2" || host == "localhost" || host == "127.0.0.1"
-        if (!isHttps && !(allowInsecureHosts && local)) {
-            throw IllegalArgumentException("Base URL must be https (http only for emulator loopback in debug)")
+        if (!isHttps && !local) {
+            throw IllegalArgumentException("Base URL must be https (http is only for loopback)")
         }
     }
 

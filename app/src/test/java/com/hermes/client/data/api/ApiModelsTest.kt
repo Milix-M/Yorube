@@ -62,4 +62,28 @@ class ApiModelsTest {
         assertEquals("s1", withId.key)
         assertEquals("s2", withSessionId.key)
     }
+
+    @Test
+    fun messageText_edgeCases() {
+        assertEquals("", messageText(null))
+        assertEquals("", messageText(JsonPrimitive(3)))
+        assertEquals("", messageText(JsonPrimitive(false)))
+    }
+
+    @Test
+    fun sessionInfo_displayTitle() {
+        val titled = HermesJson.decodeFromString<SessionInfo>("""{"id":"s1","title":"hello"}""")
+        assertEquals("hello", titled.displayTitle)
+        val blank = HermesJson.decodeFromString<SessionInfo>("""{"id":"s1","title":""}""")
+        assertEquals("s1", blank.displayTitle)
+        val missing = HermesJson.decodeFromString<SessionInfo>("""{"id":"s1"}""")
+        assertEquals("s1", missing.displayTitle)
+    }
+
+    @Test
+    fun extractProviderOptions_emptyWhenNoLists() {
+        assertTrue(extractProviderOptions(HermesJson.parseToJsonElement("""{"x":1}""")).isEmpty())
+        assertEquals(emptyList<String>(), extractModelIds(HermesJson.parseToJsonElement("""{"x":1}""")))
+        assertTrue(extractModelIds(HermesJson.parseToJsonElement("""{"data":[]}""")).isEmpty())
+    }
 }

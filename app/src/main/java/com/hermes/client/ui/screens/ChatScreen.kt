@@ -155,7 +155,7 @@ fun ChatScreen(
                     OutlinedTextField(
                         value = clarifyAnswer.value,
                         onValueChange = { clarifyAnswer.value = it },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().testTag("clarifyInput"),
                     )
                 }
             },

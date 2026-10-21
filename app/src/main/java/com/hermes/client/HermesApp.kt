@@ -21,7 +21,6 @@ class AppContainer(val appContext: android.content.Context) {
         return HermesApi(
             baseUrl = s.baseUrl,
             apiKey = s.apiKey,
-            allowInsecureHosts = BuildConfig.DEBUG,
             extraHeaders = extra,
         )
     }

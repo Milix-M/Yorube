@@ -23,7 +23,6 @@ class HermesApiTest {
         api = HermesApi(
             baseUrl = server.url("").toString().removeSuffix("/"),
             apiKey = "test-key",
-            allowInsecureHosts = true,
         )
     }
 
@@ -112,7 +111,6 @@ class HermesApiTest {
         val withCf = HermesApi(
             baseUrl = server.url("").toString().removeSuffix("/"),
             apiKey = "k",
-            allowInsecureHosts = true,
             extraHeaders = mapOf("CF-Access-Client-Id" to "id", "CF-Access-Client-Secret" to "s"),
         )
         withCf.checkHealth()
@@ -128,6 +126,126 @@ class HermesApiTest {
             fail("expected IllegalArgumentException")
         } catch (e: IllegalArgumentException) {
             assertTrue(e.message!!.contains("https"))
+        }
+    }
+
+    @Test
+    fun plainHttp_loopback_isAllowed() {
+        HermesApi("http://localhost:8642", "k")
+        HermesApi("http://127.0.0.1:8642/", "k")
+        HermesApi("http://10.0.2.2:8642", "k")
+    }
+
+    @Test
+    fun controls_sendCorrectPathsAndBodies() = runTest {
+        repeat(5) { server.enqueue(MockResponse().setBody("{}")) }
+        api.stopRun("run_1")
+        api.steerRun("run_1", "go on")
+        api.answerApproval("run_1", ApprovalAnswer("r1", 3L, "once"))
+        api.answerClarify("run_1", ClarifyRequest("c1", 2L, "yes"))
+        api.resolveUnknown("run_1", ResolveUnknownRequest("adm_1", 7L))
+
+        assertEquals("/v1/runs/run_1/stop", server.takeRequest().path)
+        var req = server.takeRequest()
+        assertEquals("/v1/runs/run_1/steer", req.path)
+        assertTrue(req.body.readUtf8().contains("go on"))
+        req = server.takeRequest()
+        assertEquals("/v1/runs/run_1/approval", req.path)
+        val approval = req.body.readUtf8()
+        assertTrue(approval.contains("\"request_id\":\"r1\"") && approval.contains("\"choice\":\"once\""))
+        req = server.takeRequest()
+        assertEquals("/v1/runs/run_1/clarify", req.path)
+        assertTrue(req.body.readUtf8().contains("\"answer\":\"yes\""))
+        req = server.takeRequest()
+        assertEquals("/v1/runs/run_1/resolve-unknown", req.path)
+        assertTrue(req.body.readUtf8().contains("\"admission_id\":\"adm_1\""))
+    }
+
+    @Test
+    fun listSessions_shapes() = runTest {
+        server.enqueue(MockResponse().setBody("""{"sessions":[{"id":"s1","title":"t"}]}"""))
+        assertEquals(listOf("s1"), api.listSessions().map { it.key })
+        server.enqueue(MockResponse().setBody("""[{"session_id":"s2"}]"""))
+        assertEquals(listOf("s2"), api.listSessions().map { it.key })
+        server.enqueue(MockResponse().setBody("""{"nope":1}"""))
+        assertTrue(api.listSessions().isEmpty())
+        server.enqueue(MockResponse().setResponseCode(500).setBody("x"))
+        assertTrue(api.listSessions().isEmpty())
+    }
+
+    @Test
+    fun getSessionMessages_mixedContent() = runTest {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"messages":[
+                    {"role":"user","content":"hi"},
+                    {"role":"assistant","content":[{"type":"text","text":"see"},{"type":"image_url"}]},
+                    {"role":"assistant","content":""},
+                    {"nope":true}
+                ]}"""
+            )
+        )
+        val messages = api.getSessionMessages("s1")
+        assertEquals(2, messages.size)
+        assertEquals("hi", messages[0].text)
+        assertEquals("see\n[image]", messages[1].text)
+        server.enqueue(MockResponse().setBody("broken"))
+        assertTrue(api.getSessionMessages("s1").isEmpty())
+    }
+
+    @Test
+    fun deleteAndFork() = runTest {
+        server.enqueue(MockResponse().setBody("{}"))
+        api.deleteSession("s1")
+        assertEquals("/api/sessions/s1", server.takeRequest().path)
+
+        server.enqueue(MockResponse().setBody("""{"session_id":"s9"}"""))
+        assertEquals("s9", api.forkSession("s1", "alt"))
+        server.enqueue(MockResponse().setResponseCode(500).setBody("x"))
+        assertEquals(null, api.forkSession("s1"))
+    }
+
+    @Test
+    fun discoveryEndpoints_parse() = runTest {
+        server.enqueue(MockResponse().setBody("""{"data":[{"id":"m1"}]}"""))
+        assertEquals(listOf("m1"), api.getModelIds())
+        server.enqueue(MockResponse().setBody("""{"providers":[{"name":"p"}]}"""))
+        assertTrue(api.getModelOptions().contains("providers"))
+        server.enqueue(MockResponse().setBody("""{"skills":[{"name":"s"}]}"""))
+        assertEquals("s", api.getSkills().first().name)
+        server.enqueue(MockResponse().setBody("""{"toolsets":[{"name":"t"}]}"""))
+        assertEquals("t", api.getToolsets().first().name)
+    }
+
+    @Test
+    fun checkHealth_falseOnError() = runTest {
+        server.enqueue(MockResponse().setResponseCode(500).setBody("x"))
+        assertEquals(false, api.checkHealth())
+    }
+
+    @Test
+    fun runEvents_serverError_throws() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(403)
+                .setBody("""{"error":{"message":"denied","code":"forbidden"}}""")
+        )
+        try {
+            api.runEvents("run_1").toList()
+            fail("expected HermesApiException")
+        } catch (e: HermesApiException) {
+            assertEquals(403, e.status)
+            assertEquals("forbidden", e.code)
+        }
+    }
+
+    @Test
+    fun errorEnvelope_plainBody() = runTest {
+        server.enqueue(MockResponse().setResponseCode(400).setBody("boom"))
+        try {
+            api.getRun("r")
+            fail("expected HermesApiException")
+        } catch (e: HermesApiException) {
+            assertEquals("boom", e.message)
         }
     }
 }

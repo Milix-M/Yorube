@@ -1,5 +1,6 @@
 package com.hermes.client.ui
 
+import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -40,5 +41,17 @@ class SettingsScreenTest {
         compose.waitUntil(timeoutMillis = 10_000) {
             compose.onAllNodesWithText("Saved ✓").fetchSemanticsNodes().isNotEmpty()
         }
+    }
+
+    @Test
+    fun cloudflareSection_isShown() {
+        compose.setContent {
+            HermesAppTheme {
+                SettingsScreen(onNavigateBack = {})
+            }
+        }
+        compose.onNodeWithText("Client ID").assertExists()
+        compose.onNodeWithText("Client Secret").assertExists()
+        compose.onNodeWithText("Firebase manual setup (optional)").assertExists()
     }
 }

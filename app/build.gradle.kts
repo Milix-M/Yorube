@@ -1,8 +1,15 @@
+import org.gradle.api.file.FileCollection
+import org.gradle.api.tasks.testing.Test
+import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
+import org.gradle.testing.jacoco.tasks.JacocoCoverageVerification
+import org.gradle.testing.jacoco.tasks.JacocoReport
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
+    jacoco
 }
 
 android {
@@ -90,4 +97,64 @@ android {
             isIncludeAndroidResources = true
         }
     }
+}
+
+jacoco {
+    toolVersion = "0.8.12"
+}
+
+tasks.withType<Test> {
+    configure<JacocoTaskExtension> {
+        isIncludeNoLocationClasses = true
+        excludes = listOf("jdk.internal.*")
+    }
+}
+
+val jacocoExcludes = listOf(
+    "**/R.class",
+    "**/R$*.class",
+    "**/BuildConfig.*",
+    "**/Manifest*.*",
+)
+
+fun jacocoClassDirs(): FileCollection {
+    val buildDir = layout.buildDirectory.get().asFile
+    return files(
+        fileTree("$buildDir/intermediates/javac/debug/classes") {
+            exclude(jacocoExcludes)
+        },
+        fileTree("$buildDir/tmp/kotlin-classes/debug") {
+            exclude(jacocoExcludes)
+        },
+    )
+}
+
+fun jacocoExec(): FileCollection =
+    files(layout.buildDirectory.dir("jacoco/testDebugUnitTest.exec").get().asFile)
+
+tasks.register<JacocoReport>("jacocoTestReport") {
+    dependsOn("testDebugUnitTest")
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
+    classDirectories.setFrom(jacocoClassDirs())
+    sourceDirectories.setFrom(files("src/main/java"))
+    executionData.setFrom(jacocoExec())
+}
+
+tasks.register<JacocoCoverageVerification>("jacocoCoverageVerification") {
+    dependsOn("testDebugUnitTest")
+    violationRules {
+        rule {
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = "1.0".toBigDecimal()
+            }
+        }
+    }
+    classDirectories.setFrom(jacocoClassDirs())
+    sourceDirectories.setFrom(files("src/main/java"))
+    executionData.setFrom(jacocoExec())
 }
