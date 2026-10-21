@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Hermes Client</string>
+
+    <string name="empty_conversations">No conversations yet. Tap + to start.</string>
+    <string name="delete_title">Delete conversation?</string>
+    <string name="delete">Delete</string>
+    <string name="cancel">Cancel</string>
+
+    <string name="new_chat">New chat</string>
+    <string name="stop">Stop</string>
+    <string name="message_hint">Message…</string>
+    <string name="steer_hint">Steer the run…</string>
+    <string name="approval_title">Approval needed</string>
+    <string name="question_title">Question</string>
+    <string name="send">Send</string>
+
+    <string name="settings">Settings</string>
+    <string name="section_server">Server</string>
+    <string name="section_cloudflare">Cloudflare Access (optional)</string>
+    <string name="cf_id">Client ID</string>
+    <string name="cf_secret">Client Secret</string>
+    <string name="base_url">Base URL</string>
+    <string name="api_key">API key</string>
+    <string name="model">Model</string>
+    <string name="provider_optional">Provider (optional)</string>
+    <string name="section_notifications">Notifications (M3)</string>
+    <string name="relay_optional">Relay URL (optional)</string>
+    <string name="fcm_token">FCM token: %1$s…</string>
+    <string name="fcm_token_none">FCM token: (none yet)</string>
+    <string name="section_firebase">Firebase manual setup (optional)</string>
+    <string name="fb_project">Project ID</string>
+    <string name="fb_app">App ID</string>
+    <string name="fb_key">API key</string>
+    <string name="fb_sender">Sender ID</string>
+    <string name="save">Save</string>
+    <string name="saved">Saved ✓</string>
+    <string name="test">Test connection</string>
+    <string name="testing">Checking…</string>
+
+    <string name="st_loading">loading history</string>
+    <string name="st_starting">starting</string>
+    <string name="st_writing">writing</string>
+    <string name="st_reconnecting">reconnecting</string>
+    <string name="st_stopping">stopping</string>
+    <string name="st_steered">steered</string>
+    <string name="st_approved">approved: %1$s</string>
+    <string name="st_answered">answered</string>
+    <string name="st_waiting_approval">waiting for approval</string>
+    <string name="st_question">question waiting</string>
+    <string name="st_cancelled">cancelled</string>
+    <string name="st_failed">failed</string>
+    <string name="st_stream_ended">stream ended</string>
+    <string name="st_unknown_restart">Run state is unknown after a restart. Start a new conversation.</string>
+    <string name="st_undelivered">undelivered steer kept: %1$s</string>
+
+    <string name="err_not_configured">Base URL and API key are not set. Open Settings.</string>
+    <string name="err_conflict">Conflict with an earlier request (%1$d). State reloaded.</string>
+    <string name="err_unknown_exec">Run outcome is unknown. Start a new conversation instead of resending.</string>
+    <string name="err_foreign">This session belongs to another surface (%1$d).</string>
+    <string name="err_draining">Server is busy or draining (%1$d). Wait and retry.</string>
+    <string name="err_server">Server error %1$d: %2$s</string>
+    <string name="err_health_key">Base URL and API key are required.</string>
+    <string name="err_checking">checking</string>
+    <string name="err_health_caps">health=%1$s, capabilities failed: %2$s</string>
+
+    <string name="tool_started">▶ %1$s %2$s</string>
+    <string name="tool_finished">■ %1$s (%2$s s) %3$s</string>
+    <string name="delegating">delegating: %1$s</string>
+    <string name="child_done">child %1$s: %2$s</string>
+</resources>
