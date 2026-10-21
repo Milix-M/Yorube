@@ -18,6 +18,18 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        getByName("debug") {
+            // Fixed key for all CI builds so updates install over older ones.
+            // Debug-only key: never use for store releases.
+            storeFile = rootProject.file("keystore/debug.p12")
+            storePassword = "android"
+            storeType = "PKCS12"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
