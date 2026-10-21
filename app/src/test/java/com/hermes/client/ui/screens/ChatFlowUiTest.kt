@@ -95,7 +95,9 @@ class ChatFlowUiTest {
         }
         compose.onNodeWithTag("chatInput").performTextInput("hi")
         compose.onNodeWithTag("sendButton").performClick()
-        for (text in listOf("answer", "terminal", "boom", "working", "delegating", "child ok", "final")) {
+        // Note: the terminal "final" is not rendered on its own — the streamed
+        // "answer" already holds the reply. Waiting for it would time out.
+        for (text in listOf("answer", "terminal", "boom", "working", "delegating", "child ok")) {
             compose.waitUntil(timeoutMillis = 15_000) {
                 compose.onAllNodesWithText(text, substring = true).fetchSemanticsNodes().isNotEmpty()
             }
