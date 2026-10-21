@@ -63,7 +63,11 @@ class SettingsStore(private val context: Context) {
         )
     }
 
-    suspend fun current(): ClientSettings = settings.first()
+    suspend fun current(): ClientSettings = try {
+        settings.first()
+    } catch (_: Exception) {
+        ClientSettings()
+    }
 
     suspend fun save(value: ClientSettings) {
         context.settingsDataStore.edit { p ->

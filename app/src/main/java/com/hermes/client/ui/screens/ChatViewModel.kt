@@ -163,13 +163,7 @@ class ChatViewModel(
     }
 
     private suspend fun doStartRun(text: String, history: List<HistoryMessage>?) {
-        val settings = try {
-            container.settingsStore.current()
-        } catch (e: Exception) {
-            busy = false
-            error = friendlyError(e)
-            return
-        }
+        val settings = container.settingsStore.current()
         if (!settings.isConfigured) {
             busy = false
             error = s(R.string.err_not_configured)

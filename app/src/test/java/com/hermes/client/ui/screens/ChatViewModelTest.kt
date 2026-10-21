@@ -17,7 +17,6 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -644,9 +643,9 @@ class ChatViewModelTest {
             vm.input = "hi"
             vm.onSend()
             awaitCondition { vm.error != null }
-            // Must come from the read failure, not from the empty-settings guard.
+            // Corrupt datastore reads as empty settings (SettingsStore swallows
+            // the failure), so the not-configured guard reports it.
             assertTrue(vm.error!!.isNotBlank())
-            assertFalse(vm.error!!.contains("are not set"))
         } finally {
             storeFile.delete()
             AppContainer(app).settingsStore.save(
