@@ -267,7 +267,6 @@ class ChatViewModelTest {
                 ),
             )
         )
-        server.enqueue(MockResponse().setBody("{}"))
         // Hold any reconnect open: headers never arrive, so no terminal
         // can clear runId before the answer is posted.
         server.enqueue(MockResponse().setHeadersDelay(60, TimeUnit.SECONDS))
@@ -296,7 +295,6 @@ class ChatViewModelTest {
                 ),
             )
         )
-        server.enqueue(MockResponse().setBody("{}"))
         // Hold any reconnect open: headers never arrive, so no terminal
         // can clear runId before the answer is posted.
         server.enqueue(MockResponse().setHeadersDelay(60, TimeUnit.SECONDS))
