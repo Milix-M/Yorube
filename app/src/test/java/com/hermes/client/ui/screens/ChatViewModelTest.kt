@@ -379,11 +379,11 @@ class ChatViewModelTest {
                     request.path == "/v1/runs/r1" ->
                         MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
                     request.path == "/v1/runs/r1/events" ->
-                        // Hold the stream open: no reconnect runs, so nothing
-                        // overwrites the error under test. With runEvents on
-                        // Dispatchers.IO this blocks only an IO thread, not the
-                        // test thread, and is cancelled in finally below.
-                        MockResponse().setHeadersDelay(60, TimeUnit.SECONDS)
+                        // Hold the stream open briefly: no reconnect runs while
+                        // the steer/stop errors are asserted, so nothing
+                        // overwrites them. Short delay (not 60s) to avoid
+                        // runTest timeout and MockWebServer shutdown timeout.
+                        MockResponse().setHeadersDelay(5, TimeUnit.SECONDS)
                     request.path == "/v1/runs/r1/steer" ->
                         MockResponse().setResponseCode(500).setBody("nope")
                     request.path == "/v1/runs/r1/stop" ->
