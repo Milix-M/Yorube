@@ -70,6 +70,8 @@ class SettingsViewModel(
                     firebaseAppId = firebaseAppId,
                     firebaseApiKey = firebaseApiKey,
                     firebaseSenderId = firebaseSenderId,
+                    cfClientId = cfClientId,
+                    cfClientSecret = cfClientSecret,
                 )
             )
             saved = true
