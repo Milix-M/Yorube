@@ -146,5 +146,9 @@ class SettingsScreenTest {
         compose.waitUntil(timeoutMillis = 15_000) {
             compose.onAllNodesWithText("health=true", substring = true).fetchSemanticsNodes().isNotEmpty()
         }
+        compose.onNodeWithText("Close").performClick()
+        compose.waitUntil(timeoutMillis = 10_000) {
+            compose.onAllNodesWithText("health=true", substring = true).fetchSemanticsNodes().isEmpty()
+        }
     }
 }

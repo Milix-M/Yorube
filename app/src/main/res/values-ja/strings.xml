@@ -17,26 +17,32 @@
 
     <string name="settings">設定</string>
     <string name="section_server">サーバー</string>
-    <string name="section_cloudflare">Cloudflare Access (任意)</string>
+    <string name="section_cloudflare">Cloudflare Access (オプション)</string>
     <string name="cf_id">クライアントID</string>
     <string name="cf_secret">クライアントシークレット</string>
     <string name="base_url">Base URL</string>
     <string name="api_key">APIキー</string>
     <string name="model">モデル</string>
-    <string name="provider_optional">プロバイダ (任意)</string>
+    <string name="model_help">サーバー側のモデル名 (例: hermes-agent)。</string>
+    <string name="provider_optional">プロバイダ (オプション)</string>
+    <string name="provider_help">確実に切り替えるにはプロバイダ (例: openrouter) を添えます。モデル名だけでは無視される場合があります。</string>
     <string name="section_notifications">通知 (M3)</string>
-    <string name="relay_optional">中継URL (任意)</string>
+    <string name="relay_optional">中継URL (オプション)</string>
     <string name="fcm_token">FCMトークン: %1$s…</string>
     <string name="fcm_token_none">FCMトークン: (まだなし)</string>
-    <string name="section_firebase">Firebase手動設定 (任意)</string>
+    <string name="section_firebase">Firebase手動設定 (オプション)</string>
     <string name="fb_project">プロジェクトID</string>
     <string name="fb_app">アプリID</string>
     <string name="fb_key">APIキー</string>
     <string name="fb_sender">送信者ID</string>
-    <string name="save">保存</string>
+    <string name="save">設定を保存</string>
     <string name="saved">保存済み ✓</string>
     <string name="test">接続試験</string>
     <string name="testing">確認中…</string>
+    <string name="test_result_title">接続結果</string>
+    <string name="close">閉じる</string>
+    <string name="show">表示</string>
+    <string name="hide">隠す</string>
 
     <string name="st_loading">履歴を読込中</string>
     <string name="st_starting">開始中</string>

@@ -67,7 +67,7 @@ class ConversationListDeleteUiTest {
         var opened: String? = null
         compose.setContent {
             HermesAppTheme {
-                ConversationListScreen(onOpenChat = { opened = it }, onOpenSettings = {})
+                ConversationListScreen(onOpenChat = { id, _ -> opened = id }, onOpenSettings = {})
             }
         }
         compose.waitUntil(timeoutMillis = 10_000) {

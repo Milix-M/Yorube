@@ -23,20 +23,25 @@
     <string name="base_url">Base URL</string>
     <string name="api_key">API key</string>
     <string name="model">Model</string>
+    <string name="model_help">Model name on the server (e.g. hermes-agent).</string>
     <string name="provider_optional">Provider (optional)</string>
+    <string name="provider_help">Add a provider (e.g. openrouter) to switch models reliably. A model name alone is sometimes ignored.</string>
     <string name="section_notifications">Notifications (M3)</string>
-    <string name="relay_optional">Relay URL (optional)</string>
-    <string name="fcm_token">FCM token: %1$s…</string>
+    <string name="relay_optional">Relay URL (optional)</string>    <string name="fcm_token">FCM token: %1$s…</string>
     <string name="fcm_token_none">FCM token: (none yet)</string>
     <string name="section_firebase">Firebase manual setup (optional)</string>
     <string name="fb_project">Project ID</string>
     <string name="fb_app">App ID</string>
     <string name="fb_key">API key</string>
     <string name="fb_sender">Sender ID</string>
-    <string name="save">Save</string>
+    <string name="save">Save settings</string>
     <string name="saved">Saved ✓</string>
     <string name="test">Test connection</string>
     <string name="testing">Checking…</string>
+    <string name="test_result_title">Connection result</string>
+    <string name="close">Close</string>
+    <string name="show">Show</string>
+    <string name="hide">Hide</string>
 
     <string name="st_loading">loading history</string>
     <string name="st_starting">starting</string>

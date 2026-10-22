@@ -5,14 +5,18 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -22,10 +26,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,6 +60,10 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
                 SettingsViewModel(app.container) as T
         }
     )
+    var showResult by remember { mutableStateOf(false) }
+    LaunchedEffect(vm.testResult) {
+        if (vm.testResult.isNotBlank()) showResult = true
+    }
 
     Scaffold(
         topBar = {
@@ -81,8 +90,22 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
             SettingsCard(title = stringResource(R.string.section_server)) {
                 SettingField(stringResource(R.string.base_url), vm.baseUrl, "https://host:port", tag = "baseUrl") { vm.baseUrl = it }
                 SettingField(stringResource(R.string.api_key), vm.apiKey, "Bearer", secret = true, tag = "apiKey") { vm.apiKey = it }
-                SettingField(stringResource(R.string.model), vm.model, "hermes-agent", tag = "model") { vm.model = it }
-                SettingField(stringResource(R.string.provider_optional), vm.provider, "openrouter", tag = "provider") { vm.provider = it }
+                SettingField(
+                    label = stringResource(R.string.model),
+                    value = vm.model,
+                    placeholder = "hermes-agent",
+                    tag = "model",
+                    help = stringResource(R.string.model_help),
+                    onChange = { vm.model = it },
+                )
+                SettingField(
+                    label = stringResource(R.string.provider_optional),
+                    value = vm.provider,
+                    placeholder = "openrouter",
+                    tag = "provider",
+                    help = stringResource(R.string.provider_help),
+                    onChange = { vm.provider = it },
+                )
             }
 
             SettingsCard(title = stringResource(R.string.section_cloudflare)) {
@@ -112,8 +135,18 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
             Button(
                 onClick = vm::save,
                 modifier = Modifier.fillMaxWidth().testTag("save"),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 14.dp),
             ) {
-                Text(if (vm.saved) stringResource(R.string.saved) else stringResource(R.string.save))
+                Icon(
+                    Icons.Filled.Save,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                )
+                Text(
+                    if (vm.saved) stringResource(R.string.saved) else stringResource(R.string.save),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(start = 8.dp),
+                )
             }
             OutlinedButton(
                 onClick = vm::test,
@@ -122,16 +155,22 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
             ) {
                 Text(if (vm.testing) stringResource(R.string.testing) else stringResource(R.string.test))
             }
-            if (vm.testResult.isNotBlank()) {
-                Surface(
-                    tonalElevation = 1.dp,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(vm.testResult, modifier = Modifier.padding(12.dp))
-                }
-            }
         }
+    }
+
+    if (showResult && vm.testResult.isNotBlank()) {
+        AlertDialog(
+            onDismissRequest = { showResult = false },
+            confirmButton = {
+                TextButton(onClick = { showResult = false }) { Text(stringResource(R.string.close)) }
+            },
+            title = { Text(stringResource(R.string.test_result_title)) },
+            text = {
+                SelectionContainer {
+                    Text(vm.testResult)
+                }
+            },
+        )
     }
 }
 
@@ -153,6 +192,7 @@ private fun SettingField(
     keyboardType: KeyboardType = KeyboardType.Text,
     secret: Boolean = false,
     tag: String = "",
+    help: String? = null,
     onChange: (String) -> Unit,
 ) {
     var visible by remember(tag) { mutableStateOf(false) }
@@ -168,8 +208,8 @@ private fun SettingField(
             {
                 IconButton(onClick = { visible = !visible }, modifier = Modifier.testTag("visibility-$tag")) {
                     Icon(
-                        if (visible) Icons.Filled.Close else Icons.Filled.Search,
-                        contentDescription = null,
+                        if (visible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                        contentDescription = if (visible) stringResource(R.string.hide) else stringResource(R.string.show),
                     )
                 }
             }
@@ -177,4 +217,12 @@ private fun SettingField(
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).testTag(tag),
     )
+    help?.let {
+        Text(
+            it,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+        )
+    }
 }

@@ -35,8 +35,8 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
@@ -51,7 +51,6 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -63,11 +62,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -94,7 +91,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.hermes.client.HermesApp
 import com.hermes.client.R
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -103,6 +99,7 @@ fun ChatScreen(
     onOpenSettings: () -> Unit,
     onNavigateBack: () -> Unit,
     onOpenDrawer: (() -> Unit)? = null,
+    title: String? = null,
 ) {
     val app = LocalContext.current.applicationContext as HermesApp
     val vm: ChatViewModel = viewModel(
@@ -115,18 +112,14 @@ fun ChatScreen(
     )
     val snackbar = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
     val clarifyAnswer = remember { mutableStateOf("") }
 
     LaunchedEffect(vm.error) {
         vm.error?.let { snackbar.showSnackbar(it); vm.dismissError() }
     }
     // ChatGPT-like: follow the stream only while the user stays at the bottom.
-    val canScrollForward by remember { derivedStateOf { listState.canScrollForward } }
     LaunchedEffect(vm.messages.size) {
-        if (vm.messages.isNotEmpty() && !listState.canScrollForward) {
-            listState.animateScrollToItem(vm.messages.size - 1)
-        } else if (vm.messages.isNotEmpty() && listState.firstVisibleItemIndex == 0 && vm.messages.size <= 2) {
+        if (vm.messages.isNotEmpty()) {
             listState.animateScrollToItem(vm.messages.size - 1)
         }
     }
@@ -136,8 +129,7 @@ fun ChatScreen(
             TopAppBar(
                 title = {
                     Text(
-                        if (vm.sessionId.isBlank()) stringResource(R.string.new_chat)
-                        else vm.sessionId.take(24),
+                        title?.ifBlank { null } ?: stringResource(R.string.new_chat),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -218,21 +210,6 @@ fun ChatScreen(
                     if (vm.busy && vm.messages.none { it.kind == MsgKind.ASSISTANT }) {
                         item(key = "thinking") { ThinkingRow() }
                     }
-                }
-            }
-            if (canScrollForward && vm.messages.isNotEmpty()) {
-                SmallFloatingActionButton(
-                    onClick = { scope.launch { listState.animateScrollToItem(vm.messages.size - 1) } },
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 8.dp)
-                        .testTag("scrollBottom"),
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                ) {
-                    Icon(
-                        Icons.Filled.KeyboardArrowDown,
-                        contentDescription = stringResource(R.string.scroll_to_bottom),
-                    )
                 }
             }
         }
@@ -514,21 +491,27 @@ private fun MessageRow(msg: UiMessage, showCursor: Boolean) {
                     codeBlock = { ChatGptCodeFence(it) },
                 )
             }
-            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-                Column(Modifier.weight(1f)) {
-                    if (msg.text.isNotBlank()) {
-                        Markdown(
-                            content = closeUnclosedFences(msg.text),
-                            components = components,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                    if (showCursor) {
-                        Text(
-                            "▍",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+            Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp)) {
+                Surface(
+                    color = assistantBubbleColor(),
+                    shape = RoundedCornerShape(18.dp),
+                    modifier = Modifier.weight(1f, fill = false),
+                ) {
+                    Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                        if (msg.text.isNotBlank()) {
+                            Markdown(
+                                content = closeUnclosedFences(msg.text),
+                                components = components,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                        if (showCursor) {
+                            Text(
+                                "▍",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
                 IconButton(
@@ -546,16 +529,21 @@ private fun MessageRow(msg: UiMessage, showCursor: Boolean) {
             }
         }
         MsgKind.TOOL, MsgKind.STATUS -> {
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
             ) {
+                Icon(
+                    Icons.Filled.PlayArrow,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(14.dp),
+                )
                 Text(
                     msg.text,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(start = 6.dp),
                 )
             }
         }
@@ -592,6 +580,11 @@ private fun userBubbleColor(): Color =
 @Composable
 private fun userBubbleTextColor(): Color =
     if (isSystemInDarkTheme()) Color(0xFFEDEDED) else Color(0xFF0D0D0D)
+
+/** LINE-like peer bubble: white / dark gray. Markdown uses theme text colors. */
+@Composable
+private fun assistantBubbleColor(): Color =
+    if (isSystemInDarkTheme()) Color(0xFF242424) else Color.White
 
 /** ChatGPT-like solid send button: black circle / white circle. */
 @Composable
@@ -647,7 +640,7 @@ private fun ChatGptCodeBlock(language: String, code: String) {
         }
     }
     Surface(
-        color = Color(0xFF1E1E1E),
+        color = Color.Black,
         contentColor = Color(0xFFE8E8E8),
         shape = RoundedCornerShape(12.dp),
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),

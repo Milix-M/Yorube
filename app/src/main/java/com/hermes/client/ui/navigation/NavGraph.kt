@@ -1,5 +1,10 @@
 package com.hermes.client.ui.navigation
 
+import android.net.Uri
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
@@ -21,9 +26,16 @@ object Routes {
     const val CHAT = "chat"
     const val SETTINGS = "settings"
 
-    fun chat(sessionId: String?): String =
-        if (sessionId.isNullOrBlank()) CHAT else "$CHAT?sessionId=$sessionId"
+    fun chat(sessionId: String?, title: String? = null): String {
+        val params = listOfNotNull(
+            sessionId?.ifBlank { null }?.let { "sessionId=$it" },
+            title?.ifBlank { null }?.let { "title=${Uri.encode(it)}" },
+        )
+        return if (params.isEmpty()) CHAT else "$CHAT?${params.joinToString("&")}"
+    }
 }
+
+private const val SlideOffset = 4
 
 @Composable
 fun NavGraph(startSessionId: String?) {
@@ -35,24 +47,34 @@ fun NavGraph(startSessionId: String?) {
         } else {
             Routes.LIST
         },
+        enterTransition = { slideInHorizontally(initialOffsetX = { it / SlideOffset }) + fadeIn() },
+        exitTransition = { slideOutHorizontally(targetOffsetX = { -it / SlideOffset }) + fadeOut() },
+        popEnterTransition = { slideInHorizontally(initialOffsetX = { -it / SlideOffset }) + fadeIn() },
+        popExitTransition = { slideOutHorizontally(targetOffsetX = { it / SlideOffset }) + fadeOut() },
     ) {
         composable(Routes.LIST) {
             ConversationListScreen(
-                onOpenChat = { sessionId -> navController.navigate(Routes.chat(sessionId)) },
+                onOpenChat = { sessionId, title -> navController.navigate(Routes.chat(sessionId, title)) },
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
             )
         }
         composable(
-            route = "${Routes.CHAT}?sessionId={sessionId}",
+            route = "${Routes.CHAT}?sessionId={sessionId}&title={title}",
             arguments = listOf(
                 navArgument("sessionId") {
                     type = NavType.StringType
                     nullable = true
                     defaultValue = null
-                }
+                },
+                navArgument("title") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
             ),
         ) { entry ->
             val sessionId = entry.arguments?.getString("sessionId")
+            val title = entry.arguments?.getString("title")
             val drawerState = rememberDrawerState(DrawerValue.Closed)
             val scope = rememberCoroutineScope()
             ModalNavigationDrawer(
@@ -60,9 +82,9 @@ fun NavGraph(startSessionId: String?) {
                 drawerContent = {
                     ConversationDrawerContent(
                         selectedSessionId = sessionId,
-                        onOpenChat = { id ->
+                        onOpenChat = { id, chatTitle ->
                             scope.launch { drawerState.close() }
-                            navController.navigate(Routes.chat(id)) {
+                            navController.navigate(Routes.chat(id, chatTitle)) {
                                 popUpTo(Routes.LIST) { inclusive = false }
                             }
                         },
@@ -73,6 +95,7 @@ fun NavGraph(startSessionId: String?) {
             ) {
                 ChatScreen(
                     sessionId = sessionId,
+                    title = title,
                     onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                     onNavigateBack = { navController.popBackStack() },
                     onOpenDrawer = { scope.launch { drawerState.open() } },

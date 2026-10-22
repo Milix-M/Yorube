@@ -41,6 +41,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,8 +56,11 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.hermes.client.HermesApp
 import com.hermes.client.R
@@ -65,7 +69,7 @@ import com.hermes.client.data.api.SessionInfo
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ConversationListScreen(
-    onOpenChat: (String?) -> Unit,
+    onOpenChat: (String?, String?) -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     val app = LocalContext.current.applicationContext as HermesApp
@@ -81,6 +85,15 @@ fun ConversationListScreen(
     var query by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) { vm.refresh() }
+    // Auto-update the list whenever returning to this screen.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) vm.refresh()
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
     LaunchedEffect(vm.error) {
         vm.error?.let { snackbar.showSnackbar(it); vm.dismissError() }
     }
@@ -114,7 +127,7 @@ fun ConversationListScreen(
         snackbarHost = { SnackbarHost(snackbar) },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { onOpenChat(null) },
+                onClick = { onOpenChat(null, null) },
                 modifier = Modifier.testTag("newChat"),
             ) { Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.new_chat)) }
         },
@@ -142,7 +155,7 @@ fun ConversationListScreen(
 @Composable
 fun ConversationDrawerContent(
     selectedSessionId: String?,
-    onOpenChat: (String?) -> Unit,
+    onOpenChat: (String?, String?) -> Unit,
     onOpenSettings: () -> Unit,
     onCloseDrawer: () -> Unit,
 ) {
@@ -176,7 +189,7 @@ fun ConversationDrawerContent(
                 }
             }
             FilledTonalButton(
-                onClick = { onOpenChat(null) },
+                onClick = { onOpenChat(null, null) },
                 modifier = Modifier.fillMaxWidth().testTag("drawerNewChat"),
             ) {
                 Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -226,7 +239,7 @@ private fun SearchField(query: String, onQuery: (String) -> Unit, modifier: Modi
 private fun ConversationListBody(
     loading: Boolean,
     sessions: List<SessionInfo>,
-    onOpenChat: (String?) -> Unit,
+    onOpenChat: (String?, String?) -> Unit,
     onAskDelete: (String) -> Unit,
     selectedKey: String? = null,
     compact: Boolean = false,
@@ -280,7 +293,7 @@ private fun ConversationListBody(
                             .padding(horizontal = if (compact) 0.dp else 4.dp, vertical = 1.dp)
                             .clip(RoundedCornerShape(12.dp))
                             .combinedClickable(
-                                onClick = { onOpenChat(s.key) },
+                                onClick = { onOpenChat(s.key, s.displayTitle) },
                                 onLongClick = { onAskDelete(s.key) },
                             ),
                     ) {
