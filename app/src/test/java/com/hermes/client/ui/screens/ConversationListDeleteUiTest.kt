@@ -52,8 +52,18 @@ class ConversationListDeleteUiTest {
 
     @Test
     fun openAndDelete_flow() {
-        server.enqueue(MockResponse().setBody("""{"sessions":[{"id":"s1","title":"Hello"}]}"""))
-        server.enqueue(MockResponse().setBody("{}"))
+        // Dispatcher (not a fixed queue): the list auto-refreshes on resume,
+        // so the number of GETs is not fixed. DELETE must still go through.
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                return when {
+                    request.method == "DELETE" -> MockResponse().setBody("{}")
+                    (request.path ?: "").startsWith("/api/sessions") ->
+                        MockResponse().setBody("""{"sessions":[{"id":"s1","title":"Hello"}]}""")
+                    else -> MockResponse().setBody("{}")
+                }
+            }
+        }
         kotlinx.coroutines.runBlocking {
             val app = ApplicationProvider.getApplicationContext<Application>() as HermesApp
             val want = server.url("").toString().removeSuffix("/")

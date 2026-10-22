@@ -49,7 +49,7 @@ class ConversationListScreenTest {
     fun showsTitleAndNewChatButton() {
         compose.setContent {
             HermesAppTheme {
-                ConversationListScreen(onOpenChat = {}, onOpenSettings = {})
+                ConversationListScreen(onOpenChat = { _, _ -> }, onOpenSettings = {})
             }
         }
         compose.onNodeWithText("Hermes").assertIsDisplayed()
@@ -76,7 +76,7 @@ class ConversationListScreenTest {
         }
         compose.setContent {
             HermesAppTheme {
-                ConversationListScreen(onOpenChat = {}, onOpenSettings = {})
+                ConversationListScreen(onOpenChat = { _, _ -> }, onOpenSettings = {})
             }
         }
         compose.waitUntil(timeoutMillis = 10_000) {
