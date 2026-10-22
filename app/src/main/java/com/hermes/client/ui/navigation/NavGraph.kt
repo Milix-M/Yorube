@@ -86,7 +86,8 @@ fun NavGraph(startSessionId: String?) {
                     sessionId = sessionId,
                     title = title,
                     onOpenSettings = { navController.navigate(Routes.SETTINGS) },
-                    onNavigateBack = { navController.popBackStack() },
+                    // At the home root there is nothing to pop: stay instead of a blank screen.
+                    onNavigateBack = { if (navController.previousBackStackEntry != null) navController.popBackStack() },
                     onOpenDrawer = { scope.launch { drawerState.open() } },
                 )
             }

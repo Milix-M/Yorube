@@ -6,6 +6,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,7 +23,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -34,8 +37,6 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
@@ -44,11 +45,9 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -70,6 +69,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -204,16 +205,13 @@ fun ChatScreen(
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
-                    val rows = groupRows(vm.messages.toList())
-                    items(rows.size, key = { i -> rows[i].key }) { i ->
-                        when (val row = rows[i]) {
-                            is ChatRow.Single -> MessageRow(
-                                msg = row.message,
-                                showCursor = i == rows.size - 1 && vm.busy &&
-                                    row.message.kind == MsgKind.ASSISTANT,
-                            )
-                            is ChatRow.Activity -> ActivityCard(messages = row.messages)
-                        }
+                    itemsIndexed(vm.messages, key = { _, m -> m.id }) { index, msg ->
+                        MessageRow(
+                            msg = msg,
+                            showCursor = index == vm.messages.size - 1 && vm.busy &&
+                                msg.kind == MsgKind.ASSISTANT,
+                            modifier = Modifier.animateItem(),
+                        )
                     }
                     if (vm.busy && vm.messages.none { it.kind == MsgKind.ASSISTANT }) {
                         item(key = "thinking") { ThinkingRow() }
@@ -336,8 +334,8 @@ private fun ChatInputBar(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Row(
-                verticalAlignment = Alignment.Bottom,
-                modifier = Modifier.padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
             ) {
                 TextField(
                     value = input,
@@ -370,28 +368,17 @@ private fun ChatInputBar(
                     ) {
                         Icon(Icons.Filled.Stop, contentDescription = stringResource(R.string.stop))
                     }
-                    FilledIconButton(
-                        onClick = onSteer,
-                        colors = sendButtonColors(),
-                        modifier = Modifier.testTag("sendButton"),
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.Send,
-                            contentDescription = stringResource(R.string.send),
-                        )
-                    }
-                } else {
-                    FilledIconButton(
-                        onClick = onSend,
+                    GradientSendButton(
                         enabled = input.isNotBlank(),
-                        colors = sendButtonColors(),
+                        onClick = onSteer,
                         modifier = Modifier.testTag("sendButton"),
-                    ) {
-                        Icon(
-                            Icons.Filled.ArrowUpward,
-                            contentDescription = stringResource(R.string.send),
-                        )
-                    }
+                    )
+                } else {
+                    GradientSendButton(
+                        enabled = input.isNotBlank(),
+                        onClick = onSend,
+                        modifier = Modifier.testTag("sendButton"),
+                    )
                 }
             }
         }
@@ -407,7 +394,11 @@ private fun ChatEmptyState(onSuggest: (String) -> Unit, modifier: Modifier = Mod
     ) {
         Text(
             stringResource(R.string.empty_chat_title),
-            style = MaterialTheme.typography.headlineSmall,
+            style = MaterialTheme.typography.headlineSmall.copy(
+                brush = Brush.horizontalGradient(
+                    listOf(Color(0xFF4285F4), Color(0xFF9B72CB), Color(0xFFD96570))
+                )
+            ),
         )
         Spacer(Modifier.height(8.dp))
         Text(
@@ -462,99 +453,11 @@ private fun ThinkingRow() {
     }
 }
 
-/**
- * Tool calls, thinking notes and other system rows are folded into one
- * collapsible activity card, so the chat stays readable. The texts stay
- * the same — only the presentation folds.
- */
-private sealed interface ChatRow {
-    val key: String
-
-    data class Single(val message: UiMessage) : ChatRow {
-        override val key: String get() = "msg-${message.id}"
-    }
-
-    data class Activity(val messages: List<UiMessage>) : ChatRow {
-        override val key: String get() = "act-${messages.first().id}-${messages.last().id}"
-    }
-}
-
-private fun groupRows(messages: List<UiMessage>): List<ChatRow> {
-    val rows = mutableListOf<ChatRow>()
-    var activity = mutableListOf<UiMessage>()
-    fun flush() {
-        if (activity.isNotEmpty()) {
-            rows.add(ChatRow.Activity(activity))
-            activity = mutableListOf()
-        }
-    }
-    for (m in messages) {
-        if (m.kind == MsgKind.TOOL || m.kind == MsgKind.STATUS) {
-            activity.add(m)
-        } else {
-            flush()
-            rows.add(ChatRow.Single(m))
-        }
-    }
-    flush()
-    return rows
-}
-
 @Composable
-private fun ActivityCard(messages: List<UiMessage>) {
-    var expanded by remember(messages.first().id) { mutableStateOf(false) }
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-    ) {
-        Column {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
-            ) {
-                Icon(
-                    Icons.Filled.PlayArrow,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(14.dp),
-                )
-                Text(
-                    stringResource(R.string.activity_title, messages.size),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f).padding(start = 6.dp),
-                )
-                IconButton(
-                    onClick = { expanded = !expanded },
-                    modifier = Modifier.testTag("activityToggle"),
-                ) {
-                    Icon(
-                        if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-            }
-            if (expanded) {
-                messages.forEach { m ->
-                    Text(
-                        m.text,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp),
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MessageRow(msg: UiMessage, showCursor: Boolean) {
+private fun MessageRow(msg: UiMessage, showCursor: Boolean, modifier: Modifier = Modifier) {
     when (msg.kind) {
         MsgKind.USER -> {
-            Box(Modifier.fillMaxWidth().padding(start = 48.dp, top = 4.dp, bottom = 4.dp), contentAlignment = Alignment.CenterEnd) {
+            Box(modifier.fillMaxWidth().padding(start = 48.dp, top = 4.dp, bottom = 4.dp), contentAlignment = Alignment.CenterEnd) {
                 Surface(
                     color = userBubbleColor(),
                     contentColor = userBubbleTextColor(),
@@ -587,7 +490,7 @@ private fun MessageRow(msg: UiMessage, showCursor: Boolean) {
                     codeBlock = { ChatGptCodeFence(it) },
                 )
             }
-            Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp)) {
+            Row(modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp)) {
                 Surface(
                     color = assistantBubbleColor(),
                     shape = RoundedCornerShape(18.dp),
@@ -627,7 +530,7 @@ private fun MessageRow(msg: UiMessage, showCursor: Boolean) {
         MsgKind.TOOL, MsgKind.STATUS -> {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                modifier = modifier.fillMaxWidth().padding(vertical = 3.dp),
             ) {
                 Icon(
                     Icons.Filled.PlayArrow,
@@ -647,7 +550,7 @@ private fun MessageRow(msg: UiMessage, showCursor: Boolean) {
             Surface(
                 color = MaterialTheme.colorScheme.errorContainer,
                 shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                modifier = modifier.fillMaxWidth().padding(vertical = 4.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(10.dp)) {
                     Icon(
@@ -682,24 +585,31 @@ private fun userBubbleTextColor(): Color =
 private fun assistantBubbleColor(): Color =
     if (isSystemInDarkTheme()) Color(0xFF242424) else Color.White
 
-/** ChatGPT-like solid send button: black circle / white circle. */
+/** Gemini-like gradient send button: blue to purple circle. */
 @Composable
-private fun sendButtonColors() =
-    if (isSystemInDarkTheme()) {
-        IconButtonDefaults.filledIconButtonColors(
-            containerColor = Color.White,
-            contentColor = Color.Black,
-            disabledContainerColor = Color(0xFF3A3A3A),
-            disabledContentColor = Color(0xFF8E8E8E),
-        )
+private fun GradientSendButton(enabled: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val background = if (enabled) {
+        Brush.horizontalGradient(listOf(Color(0xFF4285F4), Color(0xFF9B72CB)))
     } else {
-        IconButtonDefaults.filledIconButtonColors(
-            containerColor = Color.Black,
-            contentColor = Color.White,
-            disabledContainerColor = Color(0xFFE2E2E2),
-            disabledContentColor = Color.White,
+        Brush.horizontalGradient(
+            listOf(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.surfaceVariant)
         )
     }
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .background(background)
+            .clickable(enabled = enabled, onClick = onClick),
+    ) {
+        Icon(
+            Icons.Filled.ArrowUpward,
+            contentDescription = stringResource(R.string.send),
+            tint = if (enabled) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
 
 /**
  * Closes a trailing unclosed ``` fence so a still-streaming code block

@@ -24,9 +24,7 @@
     <string name="base_url">Base URL</string>
     <string name="api_key">API key</string>
     <string name="model">Model</string>
-    <string name="model_help">Model name on the server (e.g. hermes-agent).</string>
     <string name="provider_optional">Provider (optional)</string>
-    <string name="provider_help">Add a provider (e.g. openrouter) to switch models reliably. A model name alone is sometimes ignored.</string>
     <string name="section_notifications">Notifications (M3)</string>
     <string name="relay_optional">Relay URL (optional)</string>    <string name="fcm_token">FCM token: %1$s…</string>
     <string name="fcm_token_none">FCM token: (none yet)</string>
@@ -77,7 +75,6 @@
     <string name="child_done">child %1$s: %2$s</string>
 
     <string name="conversations">Conversations</string>
-    <string name="activity_title">Activity (%1$d)</string>
     <string name="search_hint">Search</string>
     <string name="menu">Menu</string>
     <string name="back">Back</string>
@@ -89,9 +86,9 @@
     <string name="copied">Copied</string>
     <string name="empty_chat_title">What can I do for you?</string>
     <string name="empty_chat_subtitle">Ask Hermes to run tasks on your server.</string>
-    <string name="suggest_1">Summarize recent changes</string>
-    <string name="suggest_2">Check server status</string>
-    <string name="suggest_3">Plan the next step</string>
+    <string name="suggest_1">Summarize uncommitted changes</string>
+    <string name="suggest_2">Show what is running on the server</string>
+    <string name="suggest_3">Look into recent errors</string>
     <string name="details">Details</string>
     <string name="history_today">Today</string>
     <string name="history_week">Previous 7 days</string>

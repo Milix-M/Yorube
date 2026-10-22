@@ -9,6 +9,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import com.hermes.client.HermesApp
+import com.hermes.client.R
 import com.hermes.client.data.store.ClientSettings
 import com.hermes.client.ui.screens.ChatScreen
 import com.hermes.client.ui.theme.HermesAppTheme
@@ -31,6 +32,38 @@ class ChatScreenTest {
 
     @Test
     fun emptySettingsSend_showsConfigError() {
+        clearSettings()
+        compose.setContent {
+            HermesAppTheme {
+                ChatScreen(sessionId = null, onOpenSettings = {}, onNavigateBack = {})
+            }
+        }
+        compose.onNodeWithTag("chatInput").performTextInput("hello")
+        compose.onNodeWithTag("sendButton").performClick()
+        compose.waitUntil(timeoutMillis = 10_000) {
+            compose.onAllNodesWithText("Base URL and API key are not set. Open Settings.")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
+    @Test
+    fun suggestionChip_sendsWithoutSettings() {
+        clearSettings()
+        val app = ApplicationProvider.getApplicationContext<Application>() as HermesApp
+        val suggestion = app.getString(R.string.suggest_1)
+        compose.setContent {
+            HermesAppTheme {
+                ChatScreen(sessionId = null, onOpenSettings = {}, onNavigateBack = {})
+            }
+        }
+        compose.onNodeWithText(suggestion).performClick()
+        compose.waitUntil(timeoutMillis = 10_000) {
+            compose.onAllNodesWithText("Base URL and API key are not set. Open Settings.")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
+    private fun clearSettings() {
         // Hermetic: other tests' saves must not leak in; blank the store first.
         val app = ApplicationProvider.getApplicationContext<Application>() as HermesApp
         kotlinx.coroutines.runBlocking {
@@ -42,17 +75,6 @@ class ChatScreenTest {
                 if (System.currentTimeMillis() >= deadline) error("timed out clearing settings")
                 withContext(Dispatchers.IO) { Thread.sleep(100) }
             }
-        }
-        compose.setContent {
-            HermesAppTheme {
-                ChatScreen(sessionId = null, onOpenSettings = {}, onNavigateBack = {})
-            }
-        }
-        compose.onNodeWithTag("chatInput").performTextInput("hello")
-        compose.onNodeWithTag("sendButton").performClick()
-        compose.waitUntil(timeoutMillis = 10_000) {
-            compose.onAllNodesWithText("Base URL and API key are not set. Open Settings.")
-                .fetchSemanticsNodes().isNotEmpty()
         }
     }
 }

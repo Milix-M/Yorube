@@ -90,22 +90,6 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
             SettingsCard(title = stringResource(R.string.section_server)) {
                 SettingField(stringResource(R.string.base_url), vm.baseUrl, "https://host:port", tag = "baseUrl") { vm.baseUrl = it }
                 SettingField(stringResource(R.string.api_key), vm.apiKey, "Bearer", secret = true, tag = "apiKey") { vm.apiKey = it }
-                SettingField(
-                    label = stringResource(R.string.model),
-                    value = vm.model,
-                    placeholder = "hermes-agent",
-                    tag = "model",
-                    help = stringResource(R.string.model_help),
-                    onChange = { vm.model = it },
-                )
-                SettingField(
-                    label = stringResource(R.string.provider_optional),
-                    value = vm.provider,
-                    placeholder = "openrouter",
-                    tag = "provider",
-                    help = stringResource(R.string.provider_help),
-                    onChange = { vm.provider = it },
-                )
             }
 
             SettingsCard(title = stringResource(R.string.section_cloudflare)) {
@@ -204,7 +188,6 @@ private fun SettingField(
     keyboardType: KeyboardType = KeyboardType.Text,
     secret: Boolean = false,
     tag: String = "",
-    help: String? = null,
     onChange: (String) -> Unit,
 ) {
     var visible by remember(tag) { mutableStateOf(false) }
@@ -229,12 +212,4 @@ private fun SettingField(
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).testTag(tag),
     )
-    help?.let {
-        Text(
-            it,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-        )
-    }
 }
