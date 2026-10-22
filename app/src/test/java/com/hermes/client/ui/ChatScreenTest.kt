@@ -1,13 +1,19 @@
 package com.hermes.client.ui
 
+import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.test.core.app.ApplicationProvider
+import com.hermes.client.HermesApp
+import com.hermes.client.data.store.ClientSettings
 import com.hermes.client.ui.screens.ChatScreen
 import com.hermes.client.ui.theme.HermesAppTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -25,6 +31,18 @@ class ChatScreenTest {
 
     @Test
     fun emptySettingsSend_showsConfigError() {
+        // Hermetic: other tests' saves must not leak in; blank the store first.
+        val app = ApplicationProvider.getApplicationContext<Application>() as HermesApp
+        kotlinx.coroutines.runBlocking {
+            app.container.settingsStore.save(ClientSettings())
+            val deadline = System.currentTimeMillis() + 10_000
+            while (app.container.settingsStore.current().baseUrl.isNotBlank() ||
+                app.container.settingsStore.current().apiKey.isNotBlank()
+            ) {
+                if (System.currentTimeMillis() >= deadline) error("timed out clearing settings")
+                withContext(Dispatchers.IO) { Thread.sleep(100) }
+            }
+        }
         compose.setContent {
             HermesAppTheme {
                 ChatScreen(sessionId = null, onOpenSettings = {}, onNavigateBack = {})

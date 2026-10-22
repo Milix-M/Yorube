@@ -134,7 +134,8 @@ fun ChatScreen(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                },,                navigationIcon = {
+                },
+                navigationIcon = {
                     Row {
                         if (onOpenDrawer != null) {
                             IconButton(

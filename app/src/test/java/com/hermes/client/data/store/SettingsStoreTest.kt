@@ -55,8 +55,9 @@ class SettingsStoreTest {
             val store = SettingsStore(app)
             assertEquals(ClientSettings(), store.current())
         } finally {
+            // Leave the shared store blank so later tests start unconfigured.
             storeFile.delete()
-            SettingsStore(app).save(ClientSettings(baseUrl = "https://example.com", apiKey = "k"))
+            SettingsStore(app).save(ClientSettings())
             resetDataStoreSingleton()
         }
     }

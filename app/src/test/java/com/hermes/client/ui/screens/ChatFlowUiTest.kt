@@ -104,7 +104,12 @@ class ChatFlowUiTest {
         compose.waitUntil(timeoutMillis = 30_000) {
             compose.onAllNodesWithTag("activityToggle").fetchSemanticsNodes().isNotEmpty()
         }
-        compose.onNodeWithTag("activityToggle").performClick()
+        // Tool-error rows stay visible on their own, so activity can split
+        // into several cards; open every one of them.
+        val toggleCount = compose.onAllNodesWithTag("activityToggle").fetchSemanticsNodes().size
+        repeat(toggleCount) { i ->
+            compose.onAllNodesWithTag("activityToggle")[i].performClick()
+        }
         for (text in listOf("terminal", "boom", "working", "delegating", "child ok")) {
             compose.waitUntil(timeoutMillis = 30_000) {
                 compose.onAllNodesWithText(text, substring = true).fetchSemanticsNodes().isNotEmpty()
