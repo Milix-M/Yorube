@@ -11,6 +11,7 @@ import com.hermes.client.R
 import com.hermes.client.data.api.ApprovalAnswer
 import com.hermes.client.data.api.ApprovalRequest
 import com.hermes.client.data.api.ClarifyRequest
+import com.hermes.client.data.api.humanPreview
 import com.hermes.client.data.api.HermesApiException
 import com.hermes.client.data.api.HistoryMessage
 import com.hermes.client.data.api.RunCreateRequest
@@ -248,13 +249,13 @@ class ChatViewModel(
                 }
             }
             is RunEvent.ToolStarted ->
-                messages.add(UiMessage(idSeq++, MsgKind.TOOL, s(R.string.tool_started, event.tool, event.preview).trim()))
+                messages.add(UiMessage(idSeq++, MsgKind.TOOL, s(R.string.tool_started, event.tool, humanPreview(event.preview)).trim()))
             is RunEvent.ToolCompleted ->
                 messages.add(
                     UiMessage(
                         idSeq++,
                         if (event.isError) MsgKind.ERROR else MsgKind.TOOL,
-                        s(R.string.tool_finished, event.tool, event.durationSeconds.toString(), event.preview).trim(),
+                        s(R.string.tool_finished, event.tool, event.durationSeconds.toString(), humanPreview(event.preview)).trim(),
                     )
                 )
             is RunEvent.SubagentStarted ->

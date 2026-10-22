@@ -17,12 +17,10 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.hermes.client.ui.screens.ChatScreen
 import com.hermes.client.ui.screens.ConversationDrawerContent
-import com.hermes.client.ui.screens.ConversationListScreen
 import com.hermes.client.ui.screens.SettingsScreen
 import kotlinx.coroutines.launch
 
 object Routes {
-    const val LIST = "list"
     const val CHAT = "chat"
     const val SETTINGS = "settings"
 
@@ -40,24 +38,15 @@ private const val SlideOffset = 4
 @Composable
 fun NavGraph(startSessionId: String?) {
     val navController = rememberNavController()
+    // Home is a fresh chat; past conversations live in the sidebar drawer.
     NavHost(
         navController = navController,
-        startDestination = if (startSessionId != null) {
-            Routes.chat(startSessionId)
-        } else {
-            Routes.LIST
-        },
+        startDestination = Routes.chat(startSessionId),
         enterTransition = { slideInHorizontally(initialOffsetX = { it / SlideOffset }) + fadeIn() },
         exitTransition = { slideOutHorizontally(targetOffsetX = { -it / SlideOffset }) + fadeOut() },
         popEnterTransition = { slideInHorizontally(initialOffsetX = { -it / SlideOffset }) + fadeIn() },
         popExitTransition = { slideOutHorizontally(targetOffsetX = { it / SlideOffset }) + fadeOut() },
     ) {
-        composable(Routes.LIST) {
-            ConversationListScreen(
-                onOpenChat = { sessionId, title -> navController.navigate(Routes.chat(sessionId, title)) },
-                onOpenSettings = { navController.navigate(Routes.SETTINGS) },
-            )
-        }
         composable(
             route = "${Routes.CHAT}?sessionId={sessionId}&title={title}",
             arguments = listOf(
@@ -85,7 +74,7 @@ fun NavGraph(startSessionId: String?) {
                         onOpenChat = { id, chatTitle ->
                             scope.launch { drawerState.close() }
                             navController.navigate(Routes.chat(id, chatTitle)) {
-                                popUpTo(Routes.LIST) { inclusive = false }
+                                popUpTo(Routes.CHAT) { inclusive = true }
                             }
                         },
                         onOpenSettings = { navController.navigate(Routes.SETTINGS) },

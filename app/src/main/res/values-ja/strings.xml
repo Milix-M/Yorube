@@ -18,7 +18,7 @@
     <string name="settings">設定</string>
     <string name="section_server">サーバー</string>
     <string name="section_cloudflare">Cloudflare Access (オプション)</string>
-    <string name="section_cloudflare_help">サーバーURLがCloudflare Accessで保護されている場合のみ必要です。Cloudflareの画面でサービストークンを作り、2つの値を貼ります。</string>
+    <string name="section_cloudflare_help">サーバーURLがCloudflare Accessで保護されている場合のみ入力。</string>
     <string name="cf_id">クライアントID</string>
     <string name="cf_secret">クライアントシークレット</string>
     <string name="base_url">Base URL</string>

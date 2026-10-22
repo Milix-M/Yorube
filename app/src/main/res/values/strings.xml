@@ -18,7 +18,7 @@
     <string name="settings">Settings</string>
     <string name="section_server">Server</string>
     <string name="section_cloudflare">Cloudflare Access (optional)</string>
-    <string name="section_cloudflare_help">Required only when the server URL is protected by Cloudflare Access. Create a service token on the Cloudflare dashboard and paste both values.</string>
+    <string name="section_cloudflare_help">Fill in only when the server URL is protected by Cloudflare Access.</string>
     <string name="cf_id">Client ID</string>
     <string name="cf_secret">Client Secret</string>
     <string name="base_url">Base URL</string>

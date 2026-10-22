@@ -65,7 +65,7 @@ class NavGraphTest {
     }
 
     @Test
-    fun fullFlow_listToChatToSettingsAndBack() {
+    fun fullFlow_chatToDrawerToSettingsAndBack() {
         server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
             override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
                 return when {
@@ -83,8 +83,11 @@ class NavGraphTest {
                 NavGraph(null)
             }
         }
+        // Home is a fresh chat.
+        compose.onNodeWithTag("chatInput").assertIsDisplayed()
+        // Past conversations live in the sidebar drawer.
+        compose.onNodeWithTag("menuButton").performClick()
         waitFor("Hello")
-        // List -> chat via item tap (covers onOpenChat navigation).
         compose.onNodeWithText("Hello").performClick()
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
         // Chat -> settings via gear (covers chat onOpenSettings navigation).
@@ -93,9 +96,9 @@ class NavGraphTest {
         // Settings -> back to chat (covers settings onNavigateBack).
         compose.onNodeWithTag("backButton").performClick()
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
-        // Chat -> back to list (covers chat onNavigateBack).
+        // Chat -> back stays on chat (covers chat onNavigateBack).
         compose.onNodeWithTag("backButton").performClick()
-        compose.onNodeWithText("Hermes").assertIsDisplayed()
+        compose.onNodeWithTag("chatInput").assertIsDisplayed()
     }
 
     @Test
@@ -127,6 +130,9 @@ class NavGraphTest {
                 NavGraph(null)
             }
         }
+        // Home is a fresh chat; history lives in the drawer.
+        compose.onNodeWithTag("chatInput").assertIsDisplayed()
+        compose.onNodeWithTag("menuButton").performClick()
         waitFor("Hello")
         compose.onNodeWithText("Hello").performClick()
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
@@ -155,10 +161,9 @@ class NavGraphTest {
                 NavGraph(null)
             }
         }
-        waitFor("Hello")
-        compose.onNodeWithText("Hello").performClick()
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
         compose.onNodeWithTag("menuButton").performClick()
+        waitFor("Hello")
         compose.onNodeWithTag("closeDrawer").performClick()
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
     }

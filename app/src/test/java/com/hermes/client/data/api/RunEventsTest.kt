@@ -14,6 +14,34 @@ class RunEventsTest {
         buildJsonObject { pairs.forEach { (k, v) -> put(k, v) } }
 
     @Test
+    fun humanPreview_extractsOutputFromJsonBlob() {
+        assertEquals(
+            "done ok",
+            humanPreview("""{"output":"done ok","exit_code":0,"error":null}"""),
+        )
+    }
+
+    @Test
+    fun humanPreview_fallsBackToError() {
+        assertEquals("boom", humanPreview("""{"output":"","error":"boom"}"""))
+    }
+
+    @Test
+    fun humanPreview_keepsPlainText() {
+        assertEquals("ls -la", humanPreview("ls -la"))
+        assertEquals("{oops", humanPreview("{oops"))
+        assertEquals("not json}", humanPreview("not json}"))
+    }
+
+    @Test
+    fun humanPreview_truncatesLongText() {
+        val long = "x".repeat(500)
+        val shown = humanPreview(long)
+        assertTrue(shown.length <= 201)
+        assertTrue(shown.endsWith("…"))
+    }
+
+    @Test
     fun delta_usesFirstNonBlankKey() {
         val e = parseRunEvent("message.delta", obj("delta" to "hel", "text" to "lo"))
         assertEquals(RunEvent.Delta("hel"), e)

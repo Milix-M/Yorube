@@ -21,7 +21,7 @@ class SettingsViewModel(
 
     var baseUrl by mutableStateOf("")
     var apiKey by mutableStateOf("")
-    var model by mutableStateOf("hermes-agent")
+    var model by mutableStateOf("")
     var provider by mutableStateOf("")
     var relayUrl by mutableStateOf("")
     var firebaseProjectId by mutableStateOf("")

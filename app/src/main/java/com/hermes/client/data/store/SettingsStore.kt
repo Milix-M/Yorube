@@ -13,7 +13,7 @@ private val Context.settingsDataStore by preferencesDataStore(name = "hermes_set
 data class ClientSettings(
     val baseUrl: String = "",
     val apiKey: String = "",
-    val model: String = "hermes-agent",
+    val model: String = "",
     val provider: String = "",
     val relayUrl: String = "",
     val fcmToken: String = "",
@@ -50,7 +50,7 @@ class SettingsStore(private val context: Context) {
         ClientSettings(
             baseUrl = p[Keys.BASE_URL] ?: "",
             apiKey = p[Keys.API_KEY] ?: "",
-            model = p[Keys.MODEL] ?: "hermes-agent",
+            model = p[Keys.MODEL] ?: "",
             provider = p[Keys.PROVIDER] ?: "",
             relayUrl = p[Keys.RELAY_URL] ?: "",
             fcmToken = p[Keys.FCM_TOKEN] ?: "",
@@ -73,7 +73,7 @@ class SettingsStore(private val context: Context) {
         context.settingsDataStore.edit { p ->
             p[Keys.BASE_URL] = value.baseUrl.trim().removeSuffix("/")
             p[Keys.API_KEY] = value.apiKey.trim()
-            p[Keys.MODEL] = value.model.trim().ifBlank { "hermes-agent" }
+            p[Keys.MODEL] = value.model.trim()
             p[Keys.PROVIDER] = value.provider.trim()
             p[Keys.RELAY_URL] = value.relayUrl.trim().removeSuffix("/")
             p[Keys.FCM_TOKEN] = value.fcmToken
