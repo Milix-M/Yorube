@@ -34,6 +34,11 @@ class RunEventsTest {
     }
 
     @Test
+    fun humanPreview_invalidJsonFallsBackToRaw() {
+        assertEquals("{not json}", humanPreview("{not json}"))
+    }
+
+    @Test
     fun humanPreview_truncatesLongText() {
         val long = "x".repeat(500)
         val shown = humanPreview(long)
