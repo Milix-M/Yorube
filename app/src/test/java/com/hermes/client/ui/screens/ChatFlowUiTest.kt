@@ -105,6 +105,35 @@ class ChatFlowUiTest {
     }
 
     @Test
+    fun markdown_rendersBoldAndCodeBlock() {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        server.enqueue(
+            events(
+                frame(
+                    "message.delta",
+                    """{"event":"message.delta","delta":"Here is **bold** text\n\n```kotlin\nval x = 1\n```"}""",
+                ),
+                frame("run.completed", """{"event":"run.completed","output":"done"}"""),
+            )
+        )
+        kotlinx.coroutines.runBlocking { saveSettings() }
+
+        compose.setContent {
+            HermesAppTheme {
+                ChatScreen(sessionId = null, onOpenSettings = {}, onNavigateBack = {})
+            }
+        }
+        compose.onNodeWithTag("chatInput").performTextInput("hi")
+        compose.onNodeWithTag("sendButton").performClick()
+        for (text in listOf("Here is", "bold", "val x = 1", "kotlin")) {
+            compose.waitUntil(timeoutMillis = 30_000) {
+                compose.onAllNodesWithText(text, substring = true).fetchSemanticsNodes().isNotEmpty()
+            }
+        }
+    }
+
+    @Test
     fun approvalDialog_postsDecision() {
         server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
         server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))

@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,6 +46,7 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -79,6 +81,13 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.mikepenz.markdown.compose.components.MarkdownComponentModel
+import com.mikepenz.markdown.compose.components.markdownComponents
+import com.mikepenz.markdown.m3.Markdown
+import org.intellij.markdown.MarkdownTokenTypes
+import org.intellij.markdown.ast.findChildOfType
+import org.intellij.markdown.ast.getTextInNode
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -377,6 +386,7 @@ private fun ChatInputBar(
                     }
                     FilledIconButton(
                         onClick = onSteer,
+                        colors = sendButtonColors(),
                         modifier = Modifier.testTag("sendButton"),
                     ) {
                         Icon(
@@ -388,6 +398,7 @@ private fun ChatInputBar(
                     FilledIconButton(
                         onClick = onSend,
                         enabled = input.isNotBlank(),
+                        colors = sendButtonColors(),
                         modifier = Modifier.testTag("sendButton"),
                     ) {
                         Icon(
@@ -471,7 +482,8 @@ private fun MessageRow(msg: UiMessage, showCursor: Boolean) {
         MsgKind.USER -> {
             Box(Modifier.fillMaxWidth().padding(start = 48.dp, top = 4.dp, bottom = 4.dp), contentAlignment = Alignment.CenterEnd) {
                 Surface(
-                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    color = userBubbleColor(),
+                    contentColor = userBubbleTextColor(),
                     shape = RoundedCornerShape(18.dp),
                     modifier = Modifier.widthIn(max = 340.dp),
                 ) {
@@ -494,13 +506,29 @@ private fun MessageRow(msg: UiMessage, showCursor: Boolean) {
                     copied = false
                 }
             }
+            // Same markdown components for every message; the model carries the text.
+            val components = remember {
+                markdownComponents(
+                    codeFence = { ChatGptCodeFence(it) },
+                    codeBlock = { ChatGptCodeFence(it) },
+                )
+            }
             Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-                SelectionContainer(modifier = Modifier.weight(1f)) {
-                    Text(
-                        msg.text + if (showCursor) "▍" else "",
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(end = 4.dp),
-                    )
+                Column(Modifier.weight(1f)) {
+                    if (msg.text.isNotBlank()) {
+                        Markdown(
+                            content = closeUnclosedFences(msg.text),
+                            components = components,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    if (showCursor) {
+                        Text(
+                            "▍",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
                 IconButton(
                     onClick = {
@@ -550,6 +578,119 @@ private fun MessageRow(msg: UiMessage, showCursor: Boolean) {
                         modifier = Modifier.padding(start = 8.dp),
                     )
                 }
+            }
+        }
+    }
+}
+
+/** ChatGPT-like neutral user bubble: light gray / dark charcoal. */
+@Composable
+private fun userBubbleColor(): Color =
+    if (isSystemInDarkTheme()) Color(0xFF2F2F2F) else Color(0xFFECECEC)
+
+@Composable
+private fun userBubbleTextColor(): Color =
+    if (isSystemInDarkTheme()) Color(0xFFEDEDED) else Color(0xFF0D0D0D)
+
+/** ChatGPT-like solid send button: black circle / white circle. */
+@Composable
+private fun sendButtonColors() =
+    if (isSystemInDarkTheme()) {
+        IconButtonDefaults.filledIconButtonColors(
+            containerColor = Color.White,
+            contentColor = Color.Black,
+            disabledContainerColor = Color(0xFF3A3A3A),
+            disabledContentColor = Color(0xFF8E8E8E),
+        )
+    } else {
+        IconButtonDefaults.filledIconButtonColors(
+            containerColor = Color.Black,
+            contentColor = Color.White,
+            disabledContainerColor = Color(0xFFE2E2E2),
+            disabledContentColor = Color.White,
+        )
+    }
+
+/**
+ * Closes a trailing unclosed ``` fence so a still-streaming code block
+ * already renders as a block instead of raw backticks.
+ */
+private fun closeUnclosedFences(text: String): String {
+    val fences = text.split("```").size - 1
+    return if (fences % 2 == 1) text + "\n```" else text
+}
+
+@Composable
+private fun ColumnScope.ChatGptCodeFence(model: MarkdownComponentModel) {
+    val lang = model.node.findChildOfType(MarkdownTokenTypes.FENCE_LANG)
+        ?.getTextInNode(model.content)?.toString()?.trim().orEmpty()
+    val code = model.node.children
+        .filter { it.type == MarkdownTokenTypes.CODE_FENCE_CONTENT }
+        .joinToString("") { it.getTextInNode(model.content).toString() }
+        .trimEnd()
+        .ifEmpty {
+            // Indented code block (no fence): fall back to raw node text.
+            model.node.getTextInNode(model.content).toString().trim()
+        }
+    ChatGptCodeBlock(language = lang, code = code)
+}
+
+@Composable
+private fun ChatGptCodeBlock(language: String, code: String) {
+    val clipboard = LocalClipboardManager.current
+    var copied by remember(code) { mutableStateOf(false) }
+    LaunchedEffect(copied) {
+        if (copied) {
+            kotlinx.coroutines.delay(1200)
+            copied = false
+        }
+    }
+    Surface(
+        color = Color(0xFF1E1E1E),
+        contentColor = Color(0xFFE8E8E8),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+    ) {
+        Column {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 2.dp),
+            ) {
+                Text(
+                    language.ifBlank { "text" },
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 12.sp,
+                    color = Color(0xFF9E9E9E),
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(
+                    onClick = {
+                        clipboard.setText(AnnotatedString(code))
+                        copied = true
+                    },
+                    modifier = Modifier.size(32.dp),
+                ) {
+                    Icon(
+                        if (copied) Icons.Filled.Check else Icons.Filled.ContentCopy,
+                        contentDescription = stringResource(if (copied) R.string.copied else R.string.copy),
+                        tint = Color(0xFF9E9E9E),
+                        modifier = Modifier.size(15.dp),
+                    )
+                }
+            }
+            SelectionContainer {
+                Text(
+                    code,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 13.sp,
+                    lineHeight = 19.sp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp)
+                        .padding(bottom = 10.dp),
+                )
             }
         }
     }

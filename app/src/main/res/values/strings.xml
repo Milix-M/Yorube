@@ -85,4 +85,8 @@
     <string name="suggest_2">Check server status</string>
     <string name="suggest_3">Plan the next step</string>
     <string name="details">Details</string>
+    <string name="history_today">Today</string>
+    <string name="history_week">Previous 7 days</string>
+    <string name="history_month">Previous 30 days</string>
+    <string name="history_older">Older</string>
 </resources>

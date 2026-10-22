@@ -85,4 +85,8 @@
     <string name="suggest_2">サーバーの状態を確認して</string>
     <string name="suggest_3">次の一手を考えて</string>
     <string name="details">詳細</string>
+    <string name="history_today">今日</string>
+    <string name="history_week">過去7日間</string>
+    <string name="history_month">過去30日間</string>
+    <string name="history_older">それ以前</string>
 </resources>

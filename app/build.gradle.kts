@@ -83,6 +83,8 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.serialization.json)
     implementation(libs.datastore.preferences)
+    implementation(libs.markdown.renderer)
+    implementation(libs.markdown.renderer.m3)
     // FCM only. No google-services plugin: FirebaseApp is initialized
     // manually from Settings (FirebaseConfig), so the build works without
     // google-services.json. See data/fcm/FirebaseInit.kt.

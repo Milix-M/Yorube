@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -257,38 +256,50 @@ private fun ConversationListBody(
                 )
             }
         else -> LazyColumn(Modifier.fillMaxSize()) {
-            items(sessions, key = { it.key.ifBlank { it.displayTitle } }) { s ->
-                val selected = selectedKey != null && s.key == selectedKey
-                Surface(
-                    color = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = if (compact) 0.dp else 4.dp, vertical = 1.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .combinedClickable(
-                            onClick = { onOpenChat(s.key) },
-                            onLongClick = { onAskDelete(s.key) },
-                        ),
-                ) {
-                    ListItem(
-                        headlineContent = {
-                            Text(s.displayTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        },
-                        supportingContent = {
-                            Text(s.key.take(24), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        },
-                        trailingContent = {
-                            IconButton(onClick = { onAskDelete(s.key) }) {
-                                Icon(
-                                    Icons.Filled.Delete,
-                                    contentDescription = stringResource(R.string.delete),
-                                    modifier = Modifier.size(18.dp),
-                                )
-                            }
-                        },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    )
+            var lastBucket: HistoryBucket? = null
+            sessions.forEach { s ->
+                val bucket = bucketFor(s.updatedAt)
+                if (bucket != lastBucket) {
+                    lastBucket = bucket
+                    item(key = "header-$bucket") {
+                        Text(
+                            stringResource(bucket.titleRes),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 12.dp, top = 10.dp, bottom = 2.dp),
+                        )
+                    }
+                }
+                item(key = "session-${s.key.ifBlank { s.displayTitle }}") {
+                    val selected = selectedKey != null && s.key == selectedKey
+                    Surface(
+                        color = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = if (compact) 0.dp else 4.dp, vertical = 1.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .combinedClickable(
+                                onClick = { onOpenChat(s.key) },
+                                onLongClick = { onAskDelete(s.key) },
+                            ),
+                    ) {
+                        ListItem(
+                            headlineContent = {
+                                Text(s.displayTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            },
+                            trailingContent = {
+                                IconButton(onClick = { onAskDelete(s.key) }) {
+                                    Icon(
+                                        Icons.Filled.Delete,
+                                        contentDescription = stringResource(R.string.delete),
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                            },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        )
+                    }
                 }
             }
         }
@@ -313,4 +324,26 @@ private fun DeleteDialog(id: String, onDismiss: () -> Unit, onConfirm: () -> Uni
 private fun List<SessionInfo>.filterQuery(q: String): List<SessionInfo> {
     if (q.isBlank()) return this
     return filter { it.displayTitle.contains(q, ignoreCase = true) || it.key.contains(q, ignoreCase = true) }
+}
+
+/** ChatGPT-like history sections. */
+private enum class HistoryBucket(val titleRes: Int) {
+    TODAY(R.string.history_today),
+    WEEK(R.string.history_week),
+    MONTH(R.string.history_month),
+    OLDER(R.string.history_older),
+}
+
+private fun bucketFor(updatedAt: Double?): HistoryBucket {
+    if (updatedAt == null) return HistoryBucket.OLDER
+    // Server sends epoch seconds; tolerate millis/micros just in case.
+    var epochSec = updatedAt
+    while (epochSec > 1e11) epochSec /= 1000.0
+    val ageDays = (System.currentTimeMillis() / 1000.0 - epochSec) / 86400.0
+    return when {
+        ageDays < 1 -> HistoryBucket.TODAY
+        ageDays < 7 -> HistoryBucket.WEEK
+        ageDays < 30 -> HistoryBucket.MONTH
+        else -> HistoryBucket.OLDER
+    }
 }
