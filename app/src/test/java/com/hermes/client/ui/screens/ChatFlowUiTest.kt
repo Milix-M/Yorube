@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
 import android.os.Looper
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -95,9 +96,16 @@ class ChatFlowUiTest {
         }
         compose.onNodeWithTag("chatInput").performTextInput("hi")
         compose.onNodeWithTag("sendButton").performClick()
-        // Note: the terminal "final" is not rendered on its own — the streamed
-        // "answer" already holds the reply. Waiting for it would time out.
-        for (text in listOf("answer", "terminal", "boom", "working", "delegating", "child ok")) {
+        // Tool calls and thinking notes fold into one activity card; the
+        // streamed answer stays visible.
+        compose.waitUntil(timeoutMillis = 30_000) {
+            compose.onAllNodesWithText("answer", substring = true).fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.waitUntil(timeoutMillis = 30_000) {
+            compose.onAllNodesWithTag("activityToggle").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("activityToggle").performClick()
+        for (text in listOf("terminal", "boom", "working", "delegating", "child ok")) {
             compose.waitUntil(timeoutMillis = 30_000) {
                 compose.onAllNodesWithText(text, substring = true).fetchSemanticsNodes().isNotEmpty()
             }

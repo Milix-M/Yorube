@@ -18,6 +18,7 @@
     <string name="settings">Settings</string>
     <string name="section_server">Server</string>
     <string name="section_cloudflare">Cloudflare Access (optional)</string>
+    <string name="section_cloudflare_help">Required only when the server URL is protected by Cloudflare Access. Create a service token on the Cloudflare dashboard and paste both values.</string>
     <string name="cf_id">Client ID</string>
     <string name="cf_secret">Client Secret</string>
     <string name="base_url">Base URL</string>
@@ -30,6 +31,7 @@
     <string name="relay_optional">Relay URL (optional)</string>    <string name="fcm_token">FCM token: %1$s…</string>
     <string name="fcm_token_none">FCM token: (none yet)</string>
     <string name="section_firebase">Firebase manual setup (optional)</string>
+    <string name="section_firebase_help">Required only for push notifications without google-services.json. Copy the four values from the Firebase console.</string>
     <string name="fb_project">Project ID</string>
     <string name="fb_app">App ID</string>
     <string name="fb_key">API key</string>
@@ -75,6 +77,7 @@
     <string name="child_done">child %1$s: %2$s</string>
 
     <string name="conversations">Conversations</string>
+    <string name="activity_title">Activity (%1$d)</string>
     <string name="search_hint">Search</string>
     <string name="menu">Menu</string>
     <string name="back">Back</string>

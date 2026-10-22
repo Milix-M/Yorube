@@ -109,6 +109,7 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
             }
 
             SettingsCard(title = stringResource(R.string.section_cloudflare)) {
+                SectionHelp(stringResource(R.string.section_cloudflare_help))
                 SettingField(stringResource(R.string.cf_id), vm.cfClientId, "", tag = "cfId") { vm.cfClientId = it }
                 SettingField(stringResource(R.string.cf_secret), vm.cfClientSecret, "", secret = true, tag = "cfSecret") { vm.cfClientSecret = it }
             }
@@ -124,6 +125,7 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
             }
 
             SettingsCard(title = stringResource(R.string.section_firebase)) {
+                SectionHelp(stringResource(R.string.section_firebase_help))
                 SettingField(stringResource(R.string.fb_project), vm.firebaseProjectId, "", tag = "fbProject") { vm.firebaseProjectId = it }
                 SettingField(stringResource(R.string.fb_app), vm.firebaseAppId, "", tag = "fbApp") { vm.firebaseAppId = it }
                 SettingField(stringResource(R.string.fb_key), vm.firebaseApiKey, "", secret = true, tag = "fbKey") { vm.firebaseApiKey = it }
@@ -172,6 +174,16 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
             },
         )
     }
+}
+
+@Composable
+private fun SectionHelp(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+    )
 }
 
 @Composable

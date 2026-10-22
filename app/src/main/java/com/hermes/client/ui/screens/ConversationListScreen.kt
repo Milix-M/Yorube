@@ -146,7 +146,12 @@ fun ConversationListScreen(
     }
 
     pendingDelete?.let { id ->
-        DeleteDialog(id = id, onDismiss = { pendingDelete = null }, onConfirm = { vm.delete(id); pendingDelete = null })
+        DeleteDialog(
+            label = vm.sessions.find { it.key == id }?.title?.ifBlank { null }
+                ?: stringResource(R.string.new_chat),
+            onDismiss = { pendingDelete = null },
+            onConfirm = { vm.delete(id); pendingDelete = null },
+        )
     }
 }
 
@@ -217,7 +222,12 @@ fun ConversationDrawerContent(
     }
 
     pendingDelete?.let { id ->
-        DeleteDialog(id = id, onDismiss = { pendingDelete = null }, onConfirm = { vm.delete(id); pendingDelete = null })
+        DeleteDialog(
+            label = vm.sessions.find { it.key == id }?.title?.ifBlank { null }
+                ?: stringResource(R.string.new_chat),
+            onDismiss = { pendingDelete = null },
+            onConfirm = { vm.delete(id); pendingDelete = null },
+        )
     }
 }
 
@@ -293,13 +303,20 @@ private fun ConversationListBody(
                             .padding(horizontal = if (compact) 0.dp else 4.dp, vertical = 1.dp)
                             .clip(RoundedCornerShape(12.dp))
                             .combinedClickable(
-                                onClick = { onOpenChat(s.key, s.displayTitle) },
+                                onClick = { onOpenChat(s.key, s.title) },
                                 onLongClick = { onAskDelete(s.key) },
                             ),
                     ) {
                         ListItem(
                             headlineContent = {
-                                Text(s.displayTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(
+                                    s.title?.ifBlank { null } ?: stringResource(R.string.new_chat),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            },
+                            supportingContent = formatDateTime(s.updatedAt)?.let { date ->
+                                { Text(date, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                             },
                             trailingContent = {
                                 IconButton(onClick = { onAskDelete(s.key) }) {
@@ -320,7 +337,7 @@ private fun ConversationListBody(
 }
 
 @Composable
-private fun DeleteDialog(id: String, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+private fun DeleteDialog(label: String, onDismiss: () -> Unit, onConfirm: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
@@ -330,8 +347,22 @@ private fun DeleteDialog(id: String, onDismiss: () -> Unit, onConfirm: () -> Uni
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
         },
         title = { Text(stringResource(R.string.delete_title)) },
-        text = { Text(id.take(40)) },
+        text = { Text(label.take(40)) },
     )
+}
+
+/** Short date for conversation rows. Null when the server sent no timestamp. */
+private fun formatDateTime(updatedAt: Double?): String? {
+    if (updatedAt == null) return null
+    var epochSec = updatedAt
+    while (epochSec > 1e11) epochSec /= 1000.0
+    return try {
+        java.time.Instant.ofEpochSecond(epochSec.toLong())
+            .atZone(java.time.ZoneId.systemDefault())
+            .format(java.time.format.DateTimeFormatter.ofPattern("M/d HH:mm"))
+    } catch (_: Exception) {
+        null
+    }
 }
 
 private fun List<SessionInfo>.filterQuery(q: String): List<SessionInfo> {

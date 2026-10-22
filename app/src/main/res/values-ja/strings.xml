@@ -18,6 +18,7 @@
     <string name="settings">設定</string>
     <string name="section_server">サーバー</string>
     <string name="section_cloudflare">Cloudflare Access (オプション)</string>
+    <string name="section_cloudflare_help">サーバーURLがCloudflare Accessで保護されている場合のみ必要です。Cloudflareの画面でサービストークンを作り、2つの値を貼ります。</string>
     <string name="cf_id">クライアントID</string>
     <string name="cf_secret">クライアントシークレット</string>
     <string name="base_url">Base URL</string>
@@ -31,6 +32,7 @@
     <string name="fcm_token">FCMトークン: %1$s…</string>
     <string name="fcm_token_none">FCMトークン: (まだなし)</string>
     <string name="section_firebase">Firebase手動設定 (オプション)</string>
+    <string name="section_firebase_help">google-services.jsonを使わず通知を受ける場合のみ必要です。Firebaseコンソールの4つの値を写します。</string>
     <string name="fb_project">プロジェクトID</string>
     <string name="fb_app">アプリID</string>
     <string name="fb_key">APIキー</string>
@@ -76,6 +78,7 @@
     <string name="child_done">子 %1$s: %2$s</string>
 
     <string name="conversations">会話</string>
+    <string name="activity_title">アクティビティ (%1$d)</string>
     <string name="search_hint">検索</string>
     <string name="menu">メニュー</string>
     <string name="back">戻る</string>

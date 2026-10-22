@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -35,6 +34,8 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
@@ -133,8 +134,7 @@ fun ChatScreen(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                },
-                navigationIcon = {
+                },,                navigationIcon = {
                     Row {
                         if (onOpenDrawer != null) {
                             IconButton(
@@ -203,9 +203,16 @@ fun ChatScreen(
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
-                    itemsIndexed(vm.messages, key = { _, m -> m.id }) { index, msg ->
-                        val isLast = index == vm.messages.size - 1
-                        MessageRow(msg = msg, showCursor = isLast && vm.busy && msg.kind == MsgKind.ASSISTANT)
+                    val rows = groupRows(vm.messages.toList())
+                    items(rows.size, key = { i -> rows[i].key }) { i ->
+                        when (val row = rows[i]) {
+                            is ChatRow.Single -> MessageRow(
+                                msg = row.message,
+                                showCursor = i == rows.size - 1 && vm.busy &&
+                                    row.message.kind == MsgKind.ASSISTANT,
+                            )
+                            is ChatRow.Activity -> ActivityCard(messages = row.messages)
+                        }
                     }
                     if (vm.busy && vm.messages.none { it.kind == MsgKind.ASSISTANT }) {
                         item(key = "thinking") { ThinkingRow() }
@@ -451,6 +458,94 @@ private fun ThinkingRow() {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 8.dp),
         )
+    }
+}
+
+/**
+ * Tool calls, thinking notes and other system rows are folded into one
+ * collapsible activity card, so the chat stays readable. The texts stay
+ * the same — only the presentation folds.
+ */
+private sealed interface ChatRow {
+    val key: String
+
+    data class Single(val message: UiMessage) : ChatRow {
+        override val key: String get() = "msg-${message.id}"
+    }
+
+    data class Activity(val messages: List<UiMessage>) : ChatRow {
+        override val key: String get() = "act-${messages.first().id}-${messages.last().id}"
+    }
+}
+
+private fun groupRows(messages: List<UiMessage>): List<ChatRow> {
+    val rows = mutableListOf<ChatRow>()
+    var activity = mutableListOf<UiMessage>()
+    fun flush() {
+        if (activity.isNotEmpty()) {
+            rows.add(ChatRow.Activity(activity))
+            activity = mutableListOf()
+        }
+    }
+    for (m in messages) {
+        if (m.kind == MsgKind.TOOL || m.kind == MsgKind.STATUS) {
+            activity.add(m)
+        } else {
+            flush()
+            rows.add(ChatRow.Single(m))
+        }
+    }
+    flush()
+    return rows
+}
+
+@Composable
+private fun ActivityCard(messages: List<UiMessage>) {
+    var expanded by remember(messages.first().id) { mutableStateOf(false) }
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+    ) {
+        Column {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
+            ) {
+                Icon(
+                    Icons.Filled.PlayArrow,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(14.dp),
+                )
+                Text(
+                    stringResource(R.string.activity_title, messages.size),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f).padding(start = 6.dp),
+                )
+                IconButton(
+                    onClick = { expanded = !expanded },
+                    modifier = Modifier.testTag("activityToggle"),
+                ) {
+                    Icon(
+                        if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
+            if (expanded) {
+                messages.forEach { m ->
+                    Text(
+                        m.text,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp),
+                    )
+                }
+            }
+        }
     }
 }
 
