@@ -2,6 +2,7 @@ package com.hermes.client.ui.navigation
 
 import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.hasTextExactly
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -197,8 +198,15 @@ class NavGraphTest {
             }
         }
         // Launch lands on the latest conversation, not an empty chat.
-        waitFor("recent answer")
-        compose.onNodeWithText("recent answer").assertIsDisplayed()
+        // (Assistant markdown may split text nodes: match by substring.)
+        compose.waitUntil(timeoutMillis = 15_000) {
+            compose.onAllNodesWithText("recent answer", substring = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        assertTrue(
+            compose.onAllNodesWithText("recent answer", substring = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        )
     }
 
     @Test
@@ -222,9 +230,8 @@ class NavGraphTest {
         compose.onNodeWithTag("menuButton").performClick()
         compose.onNodeWithTag("drawerNewChat").performClick()
         // Already on a fresh home chat: only the drawer closes, no transition.
-        compose.waitUntil(timeoutMillis = 10_000) {
-            compose.onAllNodesWithTag("closeDrawer").fetchSemanticsNodes().isEmpty()
-        }
+        // (Closed drawer content stays composed off-screen, so assert hidden.)
+        compose.onNodeWithTag("drawerNewChat").assertIsNotDisplayed()
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
     }
 
