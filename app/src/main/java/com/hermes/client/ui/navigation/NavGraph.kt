@@ -14,8 +14,8 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -71,16 +71,22 @@ fun NavGraph(startSessionId: String?) {
         }
     )
     LaunchedEffect(Unit) { startVm.refresh() }
+    // Home shows the latest conversation once it arrives (explicit session
+    // ids, e.g. from a notification tap, always win). Ordinary forward
+    // navigation replaces the fresh home without growing the back stack.
     val latest = startVm.sessions.firstOrNull()
-    val startDestination = if (startSessionId != null || latest == null) {
-        Routes.chat(startSessionId)
-    } else {
-        Routes.chat(latest.key, latest.title)
+    var forwarded by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(latest?.key) {
+        if (startSessionId == null && latest != null && !forwarded) {
+            forwarded = true
+            navController.navigate(Routes.chat(latest.key, latest.title)) {
+                popUpTo(Routes.CHAT) { inclusive = true }
+            }
+        }
     }
-    key(startDestination) {
-        NavHost(
-            navController = navController,
-            startDestination = startDestination,
+    NavHost(
+        navController = navController,
+        startDestination = Routes.chat(startSessionId),
         // Material shared-axis-X: short slide with fade. Forward slides in
         // from the right, back pops from the left.
         enterTransition = {
@@ -178,7 +184,6 @@ fun NavGraph(startSessionId: String?) {
         }
         composable(Routes.SETTINGS) {
             SettingsScreen(onNavigateBack = { navController.popBackStack() })
-        }
         }
     }
 }
