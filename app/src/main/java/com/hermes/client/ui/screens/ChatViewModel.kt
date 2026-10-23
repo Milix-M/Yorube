@@ -592,8 +592,14 @@ internal fun splitUserFacing(text: String): VisibleSplit {
 
 /** Pretty, capped rendering of a machine payload for the expanded activity view. */
 internal fun prettyMachineJson(trimmed: String, max: Int = 1500): String {
+    val el = try {
+        HermesJson.parseToJsonElement(trimmed)
+    } catch (_: Exception) {
+        return trimmed.take(max)
+    }
+    if (el !is JsonObject && el !is JsonArray) return trimmed.take(max)
     val pretty = try {
-        PrettyJson.encodeToString(JsonElement.serializer(), HermesJson.parseToJsonElement(trimmed))
+        PrettyJson.encodeToString(JsonElement.serializer(), el)
     } catch (_: Exception) {
         return trimmed.take(max)
     }

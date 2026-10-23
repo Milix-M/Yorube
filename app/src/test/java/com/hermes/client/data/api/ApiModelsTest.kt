@@ -67,7 +67,7 @@ class ApiModelsTest {
     @Test
     fun parseSessionDate_scalesAndKeys() {
         val sec = 1_700_000_000.0
-        assertEquals(sec, parseDate("{\"updated_at\":$sec}")!!)
+        assertEquals(sec, parseDate("{\"updated_at\":$sec}")!!, 0.0)
         assertEquals(sec, parseDate("{\"updated_at\":${sec * 1000.0}}")!!, 0.001)
         assertEquals(sec, parseDate("{\"updated_at\":${sec * 1_000_000.0}}")!!, 1.0)
         assertEquals(sec, parseDate("{\"updatedAt\":$sec}")!!)
