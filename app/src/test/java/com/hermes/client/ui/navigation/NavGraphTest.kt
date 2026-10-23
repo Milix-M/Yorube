@@ -2,6 +2,7 @@ package com.hermes.client.ui.navigation
 
 import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.hasTextExactly
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -76,7 +77,9 @@ class NavGraphTest {
                     (request.path ?: "").startsWith("/api/sessions/") ->
                         MockResponse().setBody("""{"messages":[]}""")
                     (request.path ?: "").startsWith("/api/sessions") ->
-                        MockResponse().setBody("""{"sessions":[{"id":"s1","title":"Hello"}]}""")
+                        MockResponse().setBody(
+                            """{"sessions":[{"id":"s1","title":"Hello"},{"id":"s2","title":"Other"}]}"""
+                        )
                     else -> MockResponse().setBody("{}")
                 }
             }
@@ -87,12 +90,13 @@ class NavGraphTest {
                 NavGraph(null)
             }
         }
-        // Home is a fresh chat.
+        // Home is the latest chat ("Hello" is also the top bar title).
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
         // Past conversations live in the sidebar drawer.
         compose.onNodeWithTag("menuButton").performClick()
         waitFor("Hello")
-        compose.onNodeWithText("Hello").performClick()
+        // Open the other row, which is unambiguous.
+        compose.onNodeWithText("Other").performClick()
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
         // Chat -> settings via gear (covers chat onOpenSettings navigation).
         compose.onNodeWithTag("settingsButton").performClick()
@@ -124,7 +128,9 @@ class NavGraphTest {
                     (request.path ?: "").startsWith("/api/sessions/") ->
                         MockResponse().setBody("""{"messages":[]}""")
                     (request.path ?: "").startsWith("/api/sessions") ->
-                        MockResponse().setBody("""{"sessions":[{"id":"s1","title":"Hello"}]}""")
+                        MockResponse().setBody(
+                            """{"sessions":[{"id":"s1","title":"Hello"},{"id":"s2","title":"Other"}]}"""
+                        )
                     else -> MockResponse().setBody("{}")
                 }
             }
@@ -135,11 +141,11 @@ class NavGraphTest {
                 NavGraph(null)
             }
         }
-        // Home is a fresh chat; history lives in the drawer.
+        // Home is the latest chat; history lives in the drawer.
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
         compose.onNodeWithTag("menuButton").performClick()
         waitFor("Hello")
-        compose.onNodeWithText("Hello").performClick()
+        compose.onNodeWithText("Other").performClick()
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
         // Open ChatGPT-like drawer and start a new chat from it.
         compose.onNodeWithTag("menuButton").performClick()
@@ -170,6 +176,67 @@ class NavGraphTest {
         compose.onNodeWithTag("menuButton").performClick()
         waitFor("Hello")
         compose.onNodeWithTag("closeDrawer").performClick()
+        compose.onNodeWithTag("chatInput").assertIsDisplayed()
+    }
+
+    @Test
+    fun homeShowsLatestChat() {
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                return when {
+                    (request.path ?: "").startsWith("/api/sessions/s2/messages") ->
+                        MockResponse().setBody(
+                            """{"messages":[{"role":"user","content":"q"},{"role":"assistant","content":"recent answer"}]}"""
+                        )
+                    (request.path ?: "").startsWith("/api/sessions") ->
+                        MockResponse().setBody(
+                            """{"sessions":[{"id":"s2","title":"Recent"},{"id":"s1","title":"Old"}]}"""
+                        )
+                    else -> MockResponse().setBody("{}")
+                }
+            }
+        }
+        saveSettings()
+        compose.setContent {
+            HermesAppTheme {
+                NavGraph(null)
+            }
+        }
+        // Launch lands on the latest conversation, not an empty chat.
+        // (Assistant markdown may split text nodes: match by substring.)
+        compose.waitUntil(timeoutMillis = 15_000) {
+            compose.onAllNodesWithText("recent answer", substring = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        assertTrue(
+            compose.onAllNodesWithText("recent answer", substring = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        )
+    }
+
+    @Test
+    fun freshHomeNewChatClosesDrawerWithoutNavigating() {
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                return when {
+                    (request.path ?: "").startsWith("/api/sessions") ->
+                        MockResponse().setBody("""{"sessions":[]}""")
+                    else -> MockResponse().setBody("{}")
+                }
+            }
+        }
+        saveSettings()
+        compose.setContent {
+            HermesAppTheme {
+                NavGraph(null)
+            }
+        }
+        compose.onNodeWithTag("chatInput").assertIsDisplayed()
+        compose.onNodeWithTag("menuButton").performClick()
+        compose.onNodeWithTag("drawerNewChat").performClick()
+        // Already on a fresh home chat: only the drawer closes, no transition.
+        // (Closed drawer content stays composed off-screen, so assert hidden.)
+        compose.onNodeWithTag("drawerNewChat").assertIsNotDisplayed()
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
     }
 

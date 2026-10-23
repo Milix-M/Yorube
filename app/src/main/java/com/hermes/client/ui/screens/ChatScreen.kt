@@ -111,10 +111,11 @@ fun ChatScreen(
     onNavigateBack: () -> Unit = {},
     onOpenDrawer: (() -> Unit)? = null,
     title: String? = null,
+    instanceNonce: Int = 0,
 ) {
     val app = LocalContext.current.applicationContext as HermesApp
     val vm: ChatViewModel = viewModel(
-        key = "chat-${sessionId.orEmpty()}",
+        key = "chat-${sessionId.orEmpty()}-$instanceNonce",
         factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
@@ -703,16 +704,31 @@ private fun ActivityLog(msgs: List<UiMessage>, modifier: Modifier = Modifier) {
             enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
             exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
         ) {
-            Column(Modifier.padding(start = 22.dp)) {
-                for (m in msgs) {
-                    Text(
-                        m.text,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                    )
+            // Expanded: full tool payloads (name, args, result) with wrapping
+            // so the user can see exactly what each tool call did. Selectable.
+            SelectionContainer {
+                Column(Modifier.padding(start = 22.dp, top = 2.dp, bottom = 4.dp)) {
+                    for (m in msgs) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                            verticalAlignment = Alignment.Top,
+                        ) {
+                            Icon(
+                                Icons.Filled.Bolt,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(13.dp).padding(top = 2.dp),
+                            )
+                            Text(
+                                m.text,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(start = 6.dp),
+                            )
+                        }
+                    }
                 }
             }
         }
