@@ -1,10 +1,15 @@
 package com.hermes.client.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -45,10 +50,12 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -75,6 +82,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -408,10 +416,11 @@ private fun ChatEmptyState(modifier: Modifier = Modifier) {
                     )
                 ),
         ) {
-            Text(
-                "✦",
-                style = MaterialTheme.typography.headlineMedium,
-                color = Color.White,
+            Icon(
+                painter = painterResource(R.drawable.ic_hero_spark),
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(34.dp),
             )
         }
         Spacer(Modifier.height(20.dp))
@@ -426,6 +435,7 @@ private fun ChatEmptyState(modifier: Modifier = Modifier) {
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ThinkingRow() {
     val t = rememberInfiniteTransition(label = "thinking")
@@ -446,7 +456,7 @@ private fun ThinkingRow() {
             .testTag("thinkingIndicator")
             .alpha(alpha),
     ) {
-        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+        LoadingIndicator(modifier = Modifier.size(22.dp))
         Text(
             stringResource(R.string.thinking),
             style = MaterialTheme.typography.bodyMedium,
@@ -640,7 +650,11 @@ private fun ActivityLog(msgs: List<UiMessage>, modifier: Modifier = Modifier) {
                 modifier = Modifier.weight(1f).padding(start = 6.dp),
             )
         }
-        if (expanded) {
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
+            exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
+        ) {
             Column(Modifier.padding(start = 22.dp)) {
                 for (m in msgs) {
                     Text(

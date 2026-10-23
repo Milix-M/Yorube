@@ -2,7 +2,9 @@ package com.hermes.client.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
@@ -47,14 +49,17 @@ private val HermesTypography = Typography(
     labelSmall = Typography().labelSmall.copy(fontWeight = FontWeight.Medium),
 )
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun HermesAppTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
     // Gemini-like: soft light surface + dark charcoal, brand-blue primary.
+    // Motion: Material 3 Expressive scheme (springy, emphasized) for all components.
     MaterialTheme(
         colorScheme = if (darkTheme) HermesDarkScheme else HermesLightScheme,
+        motionScheme = MotionScheme.expressive(),
         shapes = HermesShapes,
         typography = HermesTypography,
         content = content,

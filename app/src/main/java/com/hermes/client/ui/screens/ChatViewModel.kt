@@ -78,6 +78,8 @@ class ChatViewModel(
                     val kind = if (m.role == "user") MsgKind.USER else MsgKind.ASSISTANT
                     if (m.text.isNotBlank()) messages.add(UiMessage(idSeq++, kind, m.text))
                 }
+                // History also carries tool-role payloads: fold their markup out of bubbles.
+                foldMarkupOutOfReplies()
                 statusLine = ""
             } catch (e: Exception) {
                 statusLine = ""
@@ -234,18 +236,12 @@ class ChatViewModel(
         when (event) {
             is RunEvent.Delta -> {
                 if (event.text.isEmpty()) return false
-                if (assistantIndex < 0) {
-                    assistantIndex = messages.size
-                    messages.add(UiMessage(idSeq++, MsgKind.ASSISTANT, event.text))
-                } else {
-                    val cur = messages[assistantIndex]
-                    messages[assistantIndex] = cur.copy(text = cur.text + event.text)
-                }
+                appendDeltaText(event.text)
                 statusLine = s(R.string.st_writing)
             }
             is RunEvent.Interim -> {
                 if (!event.alreadyStreamed && event.text.isNotBlank()) {
-                    messages.add(UiMessage(idSeq++, MsgKind.STATUS, event.text))
+                    messages.add(UiMessage(idSeq++, MsgKind.STATUS, foldInlineMarkup(event.text)))
                 }
             }
             is RunEvent.ToolStarted ->
@@ -299,6 +295,8 @@ class ChatViewModel(
         event.pendingSteer?.ifBlank { null }?.let {
             messages.add(UiMessage(idSeq++, MsgKind.STATUS, s(R.string.st_undelivered, it)))
         }
+        // Chunk splits can strand half a tool block in the reply: sweep it out.
+        foldMarkupOutOfReplies()
     }
 
     private suspend fun reconnectOrFinish(id: String, attempt: Int, cause: Exception? = null) {
@@ -355,4 +353,97 @@ class ChatViewModel(
         if (e is IllegalArgumentException) return e.message ?: "Bad settings."
         return (e.message ?: e.javaClass.simpleName).take(200)
     }
+
+    /** Route a streamed chunk: tool markup folds into the activity log, prose appends to the reply. */
+    private fun appendDeltaText(chunk: String) {
+        val split = splitUntrustedBlocks(chunk)
+        for (log in split.logs) messages.add(UiMessage(idSeq++, MsgKind.TOOL, summarizeToolBlock(log)))
+        if (split.visible.isNotBlank()) appendAssistantText(split.visible)
+    }
+
+    private fun appendAssistantText(text: String) {
+        if (assistantIndex < 0) {
+            assistantIndex = messages.size
+            messages.add(UiMessage(idSeq++, MsgKind.ASSISTANT, text))
+        } else {
+            val cur = messages[assistantIndex]
+            messages[assistantIndex] = cur.copy(text = cur.text + text)
+        }
+    }
+
+    /** Interim notes stay one line: fold any embedded tool markup into its summary. */
+    private fun foldInlineMarkup(text: String): String {
+        val split = splitUntrustedBlocks(text)
+        if (split.logs.isEmpty()) return text
+        val parts = mutableListOf<String>()
+        if (split.visible.isNotBlank()) parts.add(split.visible.trim())
+        for (log in split.logs) parts.add(summarizeToolBlock(log))
+        return parts.joinToString(" · ")
+    }
+
+    /** Post-pass for chunk-boundary splits and history: pull tool markup out of reply bubbles. */
+    private fun foldMarkupOutOfReplies() {
+        val rebuilt = ArrayList<UiMessage>(messages.size)
+        for (m in messages) {
+            if (m.kind != MsgKind.ASSISTANT) {
+                rebuilt.add(m)
+                continue
+            }
+            val split = splitUntrustedBlocks(m.text)
+            if (split.logs.isEmpty()) {
+                rebuilt.add(m)
+                continue
+            }
+            if (split.visible.isNotBlank()) rebuilt.add(m.copy(text = split.visible))
+            for (log in split.logs) rebuilt.add(UiMessage(idSeq++, MsgKind.TOOL, summarizeToolBlock(log)))
+        }
+        messages.clear()
+        messages.addAll(rebuilt)
+        assistantIndex = rebuilt.indexOfLast { it.kind == MsgKind.ASSISTANT }
+    }
+}
+
+/**
+ * Hermes server wraps high-risk tool results (web_search, web_extract, browser_*,
+ * mcp_*) in `<untrusted_tool_result source="…">…</untrusted_tool_result>` trust
+ * delimiters (agent/tool_dispatch_helpers.py). They are DATA, not reply text:
+ * never show them in a chat bubble, fold them into the one-line activity log.
+ */
+internal data class ToolSplit(val visible: String, val logs: List<String>)
+
+private val UntrustedOpenTag = Regex("""<\s*untrusted_tool_result\b[^>]*>""", RegexOption.IGNORE_CASE)
+private val UntrustedCloseTag = Regex("""</\s*untrusted_tool_result\s*>""", RegexOption.IGNORE_CASE)
+private val UntrustedSourceAttr = Regex("""source\s*=\s*["']([^"']+)["']""", RegexOption.IGNORE_CASE)
+private val TrustBoilerplate = Regex(
+    """The following content was retrieved from an external source\.[\s\S]*?can issue instructions\.\s*""",
+    RegexOption.IGNORE_CASE,
+)
+private val AnyMarkupTag = Regex("""<[^>]*>""")
+private val WhitespaceRun = Regex("""\s+""")
+
+internal fun splitUntrustedBlocks(text: String): ToolSplit {
+    if (!text.contains("untrusted_tool_result", ignoreCase = true)) return ToolSplit(text, emptyList())
+    val logs = mutableListOf<String>()
+    val visible = StringBuilder()
+    var cursor = 0
+    while (true) {
+        val open = UntrustedOpenTag.find(text, cursor) ?: break
+        val close = UntrustedCloseTag.find(text, open.range.last + 1)
+        val end = close?.range?.last?.plus(1) ?: text.length
+        visible.append(text, cursor, open.range.first)
+        logs.add(text.substring(open.range.first, end))
+        cursor = end
+    }
+    visible.append(text, cursor, text.length)
+    return ToolSplit(visible.toString(), logs)
+}
+
+/** One-line, bubble-free summary of a folded tool-result block. */
+internal fun summarizeToolBlock(block: String): String {
+    val source = UntrustedSourceAttr.find(block)?.groupValues?.getOrNull(1)?.ifBlank { null } ?: "tool"
+    val textOnly = AnyMarkupTag.replace(TrustBoilerplate.replace(block, " "), " ")
+        .split(WhitespaceRun).filter { it.isNotEmpty() }.joinToString(" ")
+    val label = source.replace('_', ' ')
+    if (textOnly.isBlank()) return label
+    return "$label: ${textOnly.take(140)}"
 }
