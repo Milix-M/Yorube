@@ -9,13 +9,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsNotDisplayed
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -70,17 +71,17 @@ class HermesDsTest {
         compose.onNodeWithText("Title").assertIsDisplayed()
         compose.onNodeWithTag("dsBack").assertIsDisplayed()
         compose.onNodeWithTag("dsInput").performTextInput("abc")
-        compose.onNodeWithText("Hint").assertDoesNotExist()
+        assertTrue(compose.onAllNodesWithText("Hint").fetchSemanticsNodes().isEmpty())
         compose.onNodeWithTag("dsDots").assertIsDisplayed()
         compose.onNodeWithTag("dsBar").assertIsDisplayed()
-        compose.onNodeWithText("Body").assertDoesNotExist()
+        assertTrue(compose.onAllNodesWithText("Body").fetchSemanticsNodes().isEmpty())
         compose.onNodeWithTag("dsGo").performClick()
         compose.onNodeWithText("Body").assertIsDisplayed()
         compose.onNodeWithText("OK").performClick()
-        compose.onNodeWithText("Body").assertDoesNotExist()
+        assertTrue(compose.onAllNodesWithText("Body").fetchSemanticsNodes().isEmpty())
         compose.onNodeWithTag("dsGo").performClick()
         compose.onNodeWithText("No").performClick()
-        compose.onNodeWithText("Body").assertDoesNotExist()
+        assertTrue(compose.onAllNodesWithText("Body").fetchSemanticsNodes().isEmpty())
     }
 
     @Test
