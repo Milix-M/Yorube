@@ -181,6 +181,28 @@ class HermesApiTest {
     }
 
     @Test
+    fun listSessions_mixedDateShapes() = runTest {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"sessions":[
+                    {"id":"a","updated_at":1700000000},
+                    {"id":"b","updatedAt":1700000000000},
+                    {"id":"c","created_at":"2026-10-24T00:00:00Z"},
+                    {"id":"d"},
+                    {"id":"","title":""},
+                    "junk"
+                ]}"""
+            )
+        )
+        val sessions = api.listSessions()
+        assertEquals(listOf("a", "b", "c", "d"), sessions.map { it.key })
+        assertEquals(1_700_000_000.0, sessions[0].updatedAt!!, 0.001)
+        assertEquals(1_700_000_000.0, sessions[1].updatedAt!!, 1.0)
+        assertEquals(1_792_800_000.0, sessions[2].updatedAt!!, 1.0)
+        assertEquals(null, sessions[3].updatedAt)
+    }
+
+    @Test
     fun getSessionMessages_mixedContent() = runTest {
         server.enqueue(
             MockResponse().setBody(

@@ -20,7 +20,9 @@ import com.hermes.client.data.api.RunEvent
 import java.util.UUID
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -87,8 +89,8 @@ class ChatViewModel(
                             if (split.visible.isNotBlank()) {
                                 messages.add(UiMessage(idSeq++, MsgKind.ASSISTANT, split.visible))
                             }
-                            for (summary in split.folded) {
-                                messages.add(UiMessage(idSeq++, MsgKind.TOOL, summary))
+                            for (entry in split.folded) {
+                                messages.add(UiMessage(idSeq++, MsgKind.TOOL, entry.render()))
                             }
                         }
                         // tool/system/function roles are machine payloads, never chat bubbles.
@@ -388,7 +390,7 @@ class ChatViewModel(
     /** Route a streamed chunk: machine content folds into the activity log, prose appends to the reply. */
     private fun appendDeltaText(chunk: String) {
         val split = splitUserFacing(chunk)
-        for (summary in split.folded) messages.add(UiMessage(idSeq++, MsgKind.TOOL, summary))
+        for (entry in split.folded) messages.add(UiMessage(idSeq++, MsgKind.TOOL, entry.render()))
         if (split.visible.isNotBlank()) appendAssistantText(split.visible)
     }
 
@@ -408,7 +410,7 @@ class ChatViewModel(
         if (split.folded.isEmpty()) return text
         val parts = mutableListOf<String>()
         if (split.visible.isNotBlank()) parts.add(split.visible.trim())
-        parts.addAll(split.folded)
+        for (entry in split.folded) parts.add(entry.summary)
         return parts.joinToString(" · ")
     }
 
@@ -426,7 +428,7 @@ class ChatViewModel(
                 continue
             }
             if (split.visible.isNotBlank()) rebuilt.add(m.copy(text = split.visible))
-            for (summary in split.folded) rebuilt.add(UiMessage(idSeq++, MsgKind.TOOL, summary))
+            for (entry in split.folded) rebuilt.add(UiMessage(idSeq++, MsgKind.TOOL, entry.render()))
         }
         messages.clear()
         messages.addAll(rebuilt)
@@ -441,6 +443,9 @@ class ChatViewModel(
  * never show them in a chat bubble, fold them into the one-line activity log.
  */
 internal data class ToolSplit(val visible: String, val logs: List<String>)
+
+/** A folded machine payload: one-line summary plus fuller detail for the expanded view. */
+internal data class Folded(val summary: String, val detail: String = "")
 
 private val UntrustedOpenTag = Regex("""<\s*untrusted_tool_result\b[^>]*>""", RegexOption.IGNORE_CASE)
 private val UntrustedCloseTag = Regex("""</\s*untrusted_tool_result\s*>""", RegexOption.IGNORE_CASE)
@@ -484,7 +489,7 @@ internal fun summarizeToolBlock(block: String): String {
  * everything machine-made (trust-delimited tool results, structured JSON
  * payloads, tag-wrapped dumps, [tool …] markers) folds into one-line summaries.
  */
-internal data class VisibleSplit(val visible: String, val folded: List<String>)
+internal data class VisibleSplit(val visible: String, val folded: List<Folded>)
 
 private val ToolPrefixMarker = Regex("""^\[tool[^\]\n]*\]\s*""", RegexOption.IGNORE_CASE)
 private val WholeTagPayload = Regex("""^<([A-Za-z][\w.-]*)(\s[^<>]*)?>[\s\S]*</\1\s*>$""")
@@ -512,15 +517,28 @@ internal fun summarizeJsonObject(o: JsonObject): String {
     s("error")?.let { return "$name [error]: ${it.take(140)}" }
     val results = o["results"] as? JsonArray
     if (results != null) {
-        val head = (results.firstOrNull() as? JsonObject)?.let { first ->
+        if (results.isEmpty()) return "$name: no results"
+        val head = results.take(2).mapNotNull { item ->
+            val first = item as? JsonObject ?: return@mapNotNull null
             val t = (first["title"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.trim().orEmpty()
             val u = (first["url"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.trim().orEmpty()
-            listOf(t, u).filter { it.isNotEmpty() }.joinToString(" — ")
-        }.orEmpty()
+            listOf(t, u).filter { it.isNotEmpty() }.joinToString(" — ").takeIf { it.isNotEmpty() }
+        }.joinToString("; ")
         return if (head.isEmpty()) "$name: ${results.size} results" else "$name: $head"
     }
-    return "$name: {${o.keys.take(4).joinToString(", ")}}"
+    return if (o.keys.size <= 4) "$name: ${compactPairs(o)}" else "$name: ${compactPairs(o)}…"
 }
+
+/** Render a JSON value compactly for one-line summaries. */
+internal fun jsonScalar(el: JsonElement): String = when (el) {
+    is JsonPrimitive -> if (el.isString) el.content.take(80) else el.toString()
+    is JsonArray -> "[${el.size}]"
+    is JsonObject -> "{${el.keys.take(3).joinToString(",")}}"
+    else -> "null"
+}
+
+internal fun compactPairs(o: JsonObject, max: Int = 5): String =
+    o.entries.take(max).joinToString(", ") { (k, v) -> "$k=${jsonScalar(v)}" }
 
 /**
  * Summarize a whole-message machine JSON payload such as
@@ -557,22 +575,52 @@ internal fun summarizeTagPayload(trimmed: String): String? {
 
 internal fun splitUserFacing(text: String): VisibleSplit {
     val untrusted = splitUntrustedBlocks(text)
-    val folded = untrusted.logs.map(::summarizeToolBlock).toMutableList()
+    val folded = untrusted.logs.map { block ->
+        Folded(summarizeToolBlock(block), untrustedDetail(block))
+    }.toMutableList()
     var rest = stripToolPrefix(untrusted.visible)
-    summarizeMachineJson(rest.trim())?.let {
-        folded.add(it)
+    summarizeMachineJson(rest.trim())?.let { summary ->
+        folded.add(Folded(summary, prettyMachineJson(rest.trim())))
         rest = ""
     }
-    summarizeTagPayload(rest.trim())?.let {
-        folded.add(it)
+    summarizeTagPayload(rest.trim())?.let { summary ->
+        folded.add(Folded(summary, rest.trim().take(1000)))
         rest = ""
     }
     return VisibleSplit(rest, folded)
 }
 
+/** Pretty, capped rendering of a machine payload for the expanded activity view. */
+internal fun prettyMachineJson(trimmed: String, max: Int = 1500): String {
+    val el = try {
+        HermesJson.parseToJsonElement(trimmed)
+    } catch (_: Exception) {
+        return trimmed.take(max)
+    }
+    if (el !is JsonObject && el !is JsonArray) return trimmed.take(max)
+    val pretty = try {
+        PrettyJson.encodeToString(JsonElement.serializer(), el)
+    } catch (_: Exception) {
+        return trimmed.take(max)
+    }
+    return if (pretty.length <= max) pretty else pretty.take(max) + "…"
+}
+
+private val PrettyJson = Json { prettyPrint = true }
+
+/** Readable inner text of an untrusted block (boilerplate and tags stripped). */
+internal fun untrustedDetail(block: String, max: Int = 1500): String {
+    val inner = AnyMarkupTag.replace(TrustBoilerplate.replace(block, " "), " ")
+        .split(WhitespaceRun).filter { it.isNotEmpty() }.joinToString(" ")
+    return if (inner.length <= max) inner else inner.take(max) + "…"
+}
+
+/** Rendered activity-log entry: summary line first, detail below for the expanded view. */
+internal fun Folded.render(): String = if (detail.isBlank()) summary else "$summary\n$detail"
+
 /** Single folded line for machine-role content (history tool/system messages, reasoning). */
 internal fun foldForLog(text: String): String {
     val split = splitUserFacing(text)
-    return (listOf(split.visible.trim()).filter { it.isNotEmpty() } + split.folded)
+    return (listOf(split.visible.trim()).filter { it.isNotEmpty() } + split.folded.map { it.summary })
         .joinToString(" · ").take(200)
 }
