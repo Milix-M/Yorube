@@ -77,7 +77,9 @@ class NavGraphTest {
                     (request.path ?: "").startsWith("/api/sessions/") ->
                         MockResponse().setBody("""{"messages":[]}""")
                     (request.path ?: "").startsWith("/api/sessions") ->
-                        MockResponse().setBody("""{"sessions":[{"id":"s1","title":"Hello"}]}""")
+                        MockResponse().setBody(
+                            """{"sessions":[{"id":"s1","title":"Hello"},{"id":"s2","title":"Other"}]}"""
+                        )
                     else -> MockResponse().setBody("{}")
                 }
             }
@@ -88,12 +90,13 @@ class NavGraphTest {
                 NavGraph(null)
             }
         }
-        // Home is a fresh chat.
+        // Home is the latest chat ("Hello" is also the top bar title).
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
         // Past conversations live in the sidebar drawer.
         compose.onNodeWithTag("menuButton").performClick()
         waitFor("Hello")
-        compose.onNodeWithText("Hello").performClick()
+        // Open the other row, which is unambiguous.
+        compose.onNodeWithText("Other").performClick()
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
         // Chat -> settings via gear (covers chat onOpenSettings navigation).
         compose.onNodeWithTag("settingsButton").performClick()
@@ -125,7 +128,9 @@ class NavGraphTest {
                     (request.path ?: "").startsWith("/api/sessions/") ->
                         MockResponse().setBody("""{"messages":[]}""")
                     (request.path ?: "").startsWith("/api/sessions") ->
-                        MockResponse().setBody("""{"sessions":[{"id":"s1","title":"Hello"}]}""")
+                        MockResponse().setBody(
+                            """{"sessions":[{"id":"s1","title":"Hello"},{"id":"s2","title":"Other"}]}"""
+                        )
                     else -> MockResponse().setBody("{}")
                 }
             }
@@ -136,11 +141,11 @@ class NavGraphTest {
                 NavGraph(null)
             }
         }
-        // Home is a fresh chat; history lives in the drawer.
+        // Home is the latest chat; history lives in the drawer.
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
         compose.onNodeWithTag("menuButton").performClick()
         waitFor("Hello")
-        compose.onNodeWithText("Hello").performClick()
+        compose.onNodeWithText("Other").performClick()
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
         // Open ChatGPT-like drawer and start a new chat from it.
         compose.onNodeWithTag("menuButton").performClick()
