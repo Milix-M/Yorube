@@ -77,6 +77,7 @@
 
     <string name="conversations">会話</string>
     <string name="search_hint">検索</string>
+    <string name="search_chats">チャットを検索</string>
     <string name="menu">メニュー</string>
     <string name="back">戻る</string>
     <string name="settings_desc">設定</string>
@@ -85,6 +86,8 @@
     <string name="thinking">考え中…</string>
     <string name="copy">コピー</string>
     <string name="copied">コピーしました</string>
+    <string name="attach">画像を添付</string>
+    <string name="image_label">画像</string>
     <string name="empty_chat_title">何をお手伝いしますか?</string>
     <string name="empty_chat_subtitle">サーバー上のHermesに作業を頼めます。</string>
     <string name="suggest_1">未コミットの変更を要約して</string>

@@ -76,6 +76,7 @@
 
     <string name="conversations">Conversations</string>
     <string name="search_hint">Search</string>
+    <string name="search_chats">Search chats</string>
     <string name="menu">Menu</string>
     <string name="back">Back</string>
     <string name="settings_desc">Settings</string>
@@ -84,6 +85,8 @@
     <string name="thinking">Thinking…</string>
     <string name="copy">Copy</string>
     <string name="copied">Copied</string>
+    <string name="attach">Attach image</string>
+    <string name="image_label">image</string>
     <string name="empty_chat_title">What can I do for you?</string>
     <string name="empty_chat_subtitle">Ask Hermes to run tasks on your server.</string>
     <string name="suggest_1">Summarize uncommitted changes</string>

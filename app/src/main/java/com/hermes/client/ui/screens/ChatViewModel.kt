@@ -13,12 +13,17 @@ import com.hermes.client.data.api.ApprovalRequest
 import com.hermes.client.data.api.ClarifyRequest
 import com.hermes.client.data.api.humanPreview
 import com.hermes.client.data.api.HermesApiException
+import com.hermes.client.data.api.HermesJson
 import com.hermes.client.data.api.HistoryMessage
 import com.hermes.client.data.api.RunCreateRequest
 import com.hermes.client.data.api.RunEvent
 import java.util.UUID
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.isString
 
 enum class MsgKind { USER, ASSISTANT, TOOL, STATUS, ERROR }
 
@@ -75,8 +80,26 @@ class ChatViewModel(
                 val history = api.getSessionMessages(id)
                 messages.clear()
                 for (m in history) {
-                    val kind = if (m.role == "user") MsgKind.USER else MsgKind.ASSISTANT
-                    if (m.text.isNotBlank()) messages.add(UiMessage(idSeq++, kind, m.text))
+                    if (m.text.isBlank()) continue
+                    when (m.role) {
+                        "user" -> messages.add(UiMessage(idSeq++, MsgKind.USER, m.text))
+                        "assistant" -> {
+                            val split = splitUserFacing(m.text)
+                            if (split.visible.isNotBlank()) {
+                                messages.add(UiMessage(idSeq++, MsgKind.ASSISTANT, split.visible))
+                            }
+                            for (summary in split.folded) {
+                                messages.add(UiMessage(idSeq++, MsgKind.TOOL, summary))
+                            }
+                        }
+                        // tool/system/function roles are machine payloads, never chat bubbles.
+                        else -> {
+                            val summary = foldForLog(m.text)
+                            if (summary.isNotBlank()) {
+                                messages.add(UiMessage(idSeq++, MsgKind.TOOL, summary))
+                            }
+                        }
+                    }
                 }
                 // History also carries tool-role payloads: fold their markup out of bubbles.
                 foldMarkupOutOfReplies()
@@ -246,14 +269,17 @@ class ChatViewModel(
             }
             is RunEvent.ToolStarted ->
                 messages.add(UiMessage(idSeq++, MsgKind.TOOL, s(R.string.tool_started, event.tool, humanPreview(event.preview)).trim()))
-            is RunEvent.ToolCompleted ->
+            is RunEvent.ToolCompleted -> {
+                val preview = humanPreview(event.preview)
+                val shown = summarizeMachineJson(preview.trim()) ?: preview
                 messages.add(
                     UiMessage(
                         idSeq++,
                         if (event.isError) MsgKind.ERROR else MsgKind.TOOL,
-                        s(R.string.tool_finished, event.tool, event.durationSeconds.toString(), humanPreview(event.preview)).trim(),
+                        s(R.string.tool_finished, event.tool, event.durationSeconds.toString(), shown).trim(),
                     )
                 )
+            }
             is RunEvent.SubagentStarted ->
                 messages.add(UiMessage(idSeq++, MsgKind.STATUS, s(R.string.delegating, event.summary)))
             is RunEvent.SubagentCompleted ->
@@ -265,6 +291,11 @@ class ChatViewModel(
             is RunEvent.ClarifyRequested -> {
                 clarify = ClarifyPrompt(id, event.requestId, event.executionGeneration, event.prompt)
                 statusLine = s(R.string.st_question)
+            }
+            is RunEvent.Reasoning -> {
+                if (event.text.isNotBlank()) {
+                    messages.add(UiMessage(idSeq++, MsgKind.STATUS, foldForLog(event.text)))
+                }
             }
             is RunEvent.Terminal -> {
                 finishTerminal(event)
@@ -290,7 +321,8 @@ class ChatViewModel(
             messages.add(UiMessage(idSeq++, MsgKind.ASSISTANT, event.output))
         }
         if (!event.error.isNullOrBlank() && event.status != "completed") {
-            messages.add(UiMessage(idSeq++, MsgKind.ERROR, event.error))
+            val shown = summarizeMachineJson(event.error.trim()) ?: event.error
+            messages.add(UiMessage(idSeq++, MsgKind.ERROR, shown))
         }
         event.pendingSteer?.ifBlank { null }?.let {
             messages.add(UiMessage(idSeq++, MsgKind.STATUS, s(R.string.st_undelivered, it)))
@@ -354,10 +386,10 @@ class ChatViewModel(
         return (e.message ?: e.javaClass.simpleName).take(200)
     }
 
-    /** Route a streamed chunk: tool markup folds into the activity log, prose appends to the reply. */
+    /** Route a streamed chunk: machine content folds into the activity log, prose appends to the reply. */
     private fun appendDeltaText(chunk: String) {
-        val split = splitUntrustedBlocks(chunk)
-        for (log in split.logs) messages.add(UiMessage(idSeq++, MsgKind.TOOL, summarizeToolBlock(log)))
+        val split = splitUserFacing(chunk)
+        for (summary in split.folded) messages.add(UiMessage(idSeq++, MsgKind.TOOL, summary))
         if (split.visible.isNotBlank()) appendAssistantText(split.visible)
     }
 
@@ -371,17 +403,17 @@ class ChatViewModel(
         }
     }
 
-    /** Interim notes stay one line: fold any embedded tool markup into its summary. */
+    /** Interim notes stay one line: fold any embedded machine content into its summary. */
     private fun foldInlineMarkup(text: String): String {
-        val split = splitUntrustedBlocks(text)
-        if (split.logs.isEmpty()) return text
+        val split = splitUserFacing(text)
+        if (split.folded.isEmpty()) return text
         val parts = mutableListOf<String>()
         if (split.visible.isNotBlank()) parts.add(split.visible.trim())
-        for (log in split.logs) parts.add(summarizeToolBlock(log))
+        parts.addAll(split.folded)
         return parts.joinToString(" · ")
     }
 
-    /** Post-pass for chunk-boundary splits and history: pull tool markup out of reply bubbles. */
+    /** Post-pass for chunk-boundary splits and history: pull machine content out of reply bubbles. */
     private fun foldMarkupOutOfReplies() {
         val rebuilt = ArrayList<UiMessage>(messages.size)
         for (m in messages) {
@@ -389,13 +421,13 @@ class ChatViewModel(
                 rebuilt.add(m)
                 continue
             }
-            val split = splitUntrustedBlocks(m.text)
-            if (split.logs.isEmpty()) {
+            val split = splitUserFacing(m.text)
+            if (split.folded.isEmpty()) {
                 rebuilt.add(m)
                 continue
             }
             if (split.visible.isNotBlank()) rebuilt.add(m.copy(text = split.visible))
-            for (log in split.logs) rebuilt.add(UiMessage(idSeq++, MsgKind.TOOL, summarizeToolBlock(log)))
+            for (summary in split.folded) rebuilt.add(UiMessage(idSeq++, MsgKind.TOOL, summary))
         }
         messages.clear()
         messages.addAll(rebuilt)
@@ -446,4 +478,102 @@ internal fun summarizeToolBlock(block: String): String {
     val label = source.replace('_', ' ')
     if (textOnly.isBlank()) return label
     return "$label: ${textOnly.take(140)}"
+}
+
+/**
+ * MECE split of any inbound model text: user-facing prose stays visible,
+ * everything machine-made (trust-delimited tool results, structured JSON
+ * payloads, tag-wrapped dumps, [tool …] markers) folds into one-line summaries.
+ */
+internal data class VisibleSplit(val visible: String, val folded: List<String>)
+
+private val ToolPrefixMarker = Regex("""^\[tool[^\]\n]*\]\s*""", RegexOption.IGNORE_CASE)
+private val WholeTagPayload = Regex("""^<([A-Za-z][\w.-]*)(\s[^<>]*)?>[\s\S]*</\1\s*>$""")
+private val MachineJsonKeys = setOf(
+    "tool_name", "tool_call_id", "tool_call", "function_call", "tool_output", "results",
+)
+
+internal fun stripToolPrefix(text: String): String = ToolPrefixMarker.replace(text, "")
+
+internal fun isMachineJsonObject(o: JsonObject): Boolean {
+    if (o.keys.any { it in MachineJsonKeys }) return true
+    if ("output" in o || "error" in o) return true
+    return "success" in o && "name" in o
+}
+
+/** One-line summary of a structured tool-result JSON object. Null when not an object. */
+internal fun summarizeJsonObject(o: JsonObject): String {
+    fun s(key: String): String? {
+        val v = o[key] as? JsonPrimitive ?: return null
+        if (!v.isString) return null
+        return v.content.trim().takeIf { it.isNotEmpty() }
+    }
+    val name = s("name") ?: s("tool_name") ?: s("tool") ?: "tool"
+    s("output")?.let { return "$name: ${it.take(140)}" }
+    s("error")?.let { return "$name [error]: ${it.take(140)}" }
+    val results = o["results"] as? JsonArray
+    if (results != null) {
+        val head = (results.firstOrNull() as? JsonObject)?.let { first ->
+            val t = (first["title"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.trim().orEmpty()
+            val u = (first["url"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.trim().orEmpty()
+            listOf(t, u).filter { it.isNotEmpty() }.joinToString(" — ")
+        }.orEmpty()
+        return if (head.isEmpty()) "$name: ${results.size} results" else "$name: $head"
+    }
+    return "$name: {${o.keys.take(4).joinToString(", ")}}"
+}
+
+/**
+ * Summarize a whole-message machine JSON payload such as
+ * {"success":true,"name":"grounded-citations",…}. Null for prose or
+ * non-machine JSON (e.g. an answer the user explicitly asked for as plain data).
+ */
+internal fun summarizeMachineJson(trimmed: String): String? {
+    if (!(trimmed.startsWith("{") || trimmed.startsWith("["))) return null
+    val el = try {
+        HermesJson.parseToJsonElement(trimmed)
+    } catch (_: Exception) {
+        return null
+    }
+    if (el is JsonObject) {
+        if (!isMachineJsonObject(el)) return null
+        return summarizeJsonObject(el)
+    }
+    if (el is JsonArray) {
+        if (el.isEmpty()) return null
+        val first = el.first() as? JsonObject ?: return null
+        if (first.keys.none { it == "url" || it == "link" || it == "href" || it == "title" }) return null
+        val head = (first["title"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.trim().orEmpty()
+        val links = if (head.isEmpty()) "${el.size} links" else "$head (+${el.size - 1})"
+        return "links: $links"
+    }
+    return null
+}
+
+/** Summarize a whole-message tag-wrapped dump (<foo>…</foo>). Null for prose. */
+internal fun summarizeTagPayload(trimmed: String): String? {
+    val m = WholeTagPayload.matchEntire(trimmed) ?: return null
+    return "markup: <${m.groupValues[1]}>"
+}
+
+internal fun splitUserFacing(text: String): VisibleSplit {
+    val untrusted = splitUntrustedBlocks(text)
+    val folded = untrusted.logs.map(::summarizeToolBlock).toMutableList()
+    var rest = stripToolPrefix(untrusted.visible)
+    summarizeMachineJson(rest.trim())?.let {
+        folded.add(it)
+        rest = ""
+    }
+    summarizeTagPayload(rest.trim())?.let {
+        folded.add(it)
+        rest = ""
+    }
+    return VisibleSplit(rest, folded)
+}
+
+/** Single folded line for machine-role content (history tool/system messages, reasoning). */
+internal fun foldForLog(text: String): String {
+    val split = splitUserFacing(text)
+    return (listOf(split.visible.trim()).filter { it.isNotEmpty() } + split.folded)
+        .joinToString(" · ").take(200)
 }

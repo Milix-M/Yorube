@@ -776,4 +776,135 @@ class ChatViewModelTest {
         assertEquals(MsgKind.TOOL, vm.messages[1].kind)
         assertEquals("web search: bulk", vm.messages[1].text)
     }
+
+    @Test
+    fun jsonDelta_foldsIntoActivityLog() = runVmTest {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        server.enqueue(
+            events(
+                frame(
+                    "message.delta",
+                    """{"event":"message.delta","delta":"{\"success\":true,\"name\":\"grounded-citations\",\"x\":1}"}""",
+                ),
+                frame("run.completed", """{"event":"run.completed"}"""),
+            )
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { !vm.busy }
+        assertTrue(vm.messages.none { it.kind == MsgKind.ASSISTANT })
+        assertTrue(vm.messages.any { it.kind == MsgKind.TOOL && it.text.startsWith("grounded-citations: ") })
+    }
+
+    @Test
+    fun historyToolJson_foldsNeverBubbles() = runVmTest {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"messages":[{"role":"assistant","content":"ok"},{"role":"tool","content":"{\"success\":true,\"name\":\"grounded-citations\",\"x\":1}"}]}"""
+            )
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, "s1")
+        awaitCondition { vm.messages.size == 2 }
+        assertEquals(MsgKind.ASSISTANT, vm.messages[0].kind)
+        assertEquals(MsgKind.TOOL, vm.messages[1].kind)
+        assertTrue(vm.messages.none { it.text.contains("\"success\"") })
+    }
+
+    @Test
+    fun historySystemRole_foldsToLog() = runVmTest {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"messages":[{"role":"system","content":"session started"}]}"""
+            )
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, "s1")
+        awaitCondition { vm.messages.size == 1 }
+        assertEquals(MsgKind.TOOL, vm.messages[0].kind)
+        assertEquals("session started", vm.messages[0].text)
+    }
+
+    @Test
+    fun reasoningEvent_foldsToStatus() = runVmTest {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        server.enqueue(
+            events(
+                frame("reasoning.delta", """{"event":"reasoning.delta","text":"thinking hard"}"""),
+                frame("run.completed", """{"event":"run.completed"}"""),
+            )
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { !vm.busy }
+        assertTrue(vm.messages.any { it.kind == MsgKind.STATUS && it.text == "thinking hard" })
+        assertTrue(vm.messages.none { it.kind == MsgKind.ASSISTANT })
+    }
+
+    @Test
+    fun toolCompletedJsonPreview_isSummarized() = runVmTest {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        server.enqueue(
+            events(
+                frame(
+                    "tool.completed",
+                    """{"event":"tool.completed","tool":"web_search","duration":1.0,"preview":"{\"success\":true,\"name\":\"grounded-citations\",\"x\":1}"}""",
+                ),
+                frame("run.completed", """{"event":"run.completed"}"""),
+            )
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { !vm.busy }
+        assertTrue(vm.messages.none { it.text.contains("\"success\"") })
+        assertTrue(vm.messages.any { it.kind == MsgKind.TOOL && it.text.contains("grounded-citations") })
+    }
+
+    @Test
+    fun terminalJsonError_isSummarized() = runVmTest {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        server.enqueue(
+            events(
+                frame(
+                    "run.failed",
+                    """{"event":"run.failed","error":"{\"tool_name\":\"t\",\"error\":\"kaput\"}"}""",
+                ),
+            )
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { !vm.busy }
+        assertTrue(vm.messages.any { it.kind == MsgKind.ERROR && it.text == "t [error]: kaput" })
+    }
+
+    @Test
+    fun tagPayloadDelta_foldsIntoActivityLog() = runVmTest {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        server.enqueue(
+            events(
+                frame("message.delta", """{"event":"message.delta","delta":"<result>some dump</result>"}"""),
+                frame("run.completed", """{"event":"run.completed"}"""),
+            )
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { !vm.busy }
+        assertTrue(vm.messages.none { it.kind == MsgKind.ASSISTANT })
+        assertTrue(vm.messages.any { it.kind == MsgKind.TOOL && it.text == "markup: <result>" })
+    }
 }
