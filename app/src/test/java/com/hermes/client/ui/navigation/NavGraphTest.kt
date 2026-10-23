@@ -94,7 +94,7 @@ class NavGraphTest {
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
         // Past conversations live in the sidebar drawer.
         compose.onNodeWithTag("menuButton").performClick()
-        waitFor("Hello")
+        waitFor("Other")
         // Open the other row, which is unambiguous.
         compose.onNodeWithText("Other").performClick()
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
@@ -144,7 +144,7 @@ class NavGraphTest {
         // Home is the latest chat; history lives in the drawer.
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
         compose.onNodeWithTag("menuButton").performClick()
-        waitFor("Hello")
+        waitFor("Other")
         compose.onNodeWithText("Other").performClick()
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
         // Open ChatGPT-like drawer and start a new chat from it.

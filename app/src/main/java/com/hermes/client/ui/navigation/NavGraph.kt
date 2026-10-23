@@ -8,15 +8,11 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
@@ -32,10 +28,10 @@ import androidx.navigation.navArgument
 import com.hermes.client.HermesApp
 import com.hermes.client.ui.screens.ChatScreen
 import com.hermes.client.ui.screens.ConversationDrawerContent
+import com.hermes.client.ui.ds.HermesDrawer
 import com.hermes.client.ui.screens.ConversationListViewModel
 import com.hermes.client.ui.screens.ConversationSearchScreen
 import com.hermes.client.ui.screens.SettingsScreen
-import kotlinx.coroutines.launch
 
 object Routes {
     const val CHAT = "chat"
@@ -136,19 +132,19 @@ fun NavGraph(startSessionId: String?) {
         ) { entry ->
             val sessionId = entry.arguments?.getString("sessionId")
             val title = entry.arguments?.getString("title")
-            val drawerState = rememberDrawerState(DrawerValue.Closed)
-            val scope = rememberCoroutineScope()
             // Fresh-home nonce: tapping "new chat" while already home recreates
             // the chat in place (no navigation, no transition), just closing
             // the drawer. From another session, navigate home as usual.
             var homeNonce by rememberSaveable { mutableIntStateOf(0) }
-            ModalNavigationDrawer(
-                drawerState = drawerState,
+            var drawerOpen by rememberSaveable { mutableStateOf(false) }
+            HermesDrawer(
+                open = drawerOpen,
+                onClose = { drawerOpen = false },
                 drawerContent = {
                     ConversationDrawerContent(
                         selectedSessionId = sessionId,
                         onOpenChat = { id, chatTitle ->
-                            scope.launch { drawerState.close() }
+                            drawerOpen = false
                             if (id == null && sessionId == null) {
                                 homeNonce++
                             } else {
@@ -158,11 +154,11 @@ fun NavGraph(startSessionId: String?) {
                             }
                         },
                         onOpenSearch = {
-                            scope.launch { drawerState.close() }
+                            drawerOpen = false
                             navController.navigate(Routes.SEARCH)
                         },
                         onOpenSettings = { navController.navigate(Routes.SETTINGS) },
-                        onCloseDrawer = { scope.launch { drawerState.close() } },
+                        onCloseDrawer = { drawerOpen = false },
                     )
                 },
             ) {
@@ -173,7 +169,7 @@ fun NavGraph(startSessionId: String?) {
                     onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                     // At the home root there is nothing to pop: stay instead of a blank screen.
                     onNavigateBack = { if (navController.previousBackStackEntry != null) navController.popBackStack() },
-                    onOpenDrawer = { scope.launch { drawerState.open() } },
+                    onOpenDrawer = { drawerOpen = true },
                 )
             }
         }

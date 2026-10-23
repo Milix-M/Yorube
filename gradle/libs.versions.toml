@@ -10,7 +10,6 @@ coroutines = "1.9.0"
 okhttp = "4.12.0"
 serialization = "1.7.3"
 datastore = "1.1.1"
-markdown-renderer = "0.28.0"
 firebase-messaging = "24.0.1"
 junit = "4.13.2"
 espresso = "3.5.1"
@@ -24,8 +23,11 @@ lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity-compose" }
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "compose-bom" }
 compose-ui = { module = "androidx.compose.ui:ui" }
+compose-ui-text = { module = "androidx.compose.ui:ui-text" }
+compose-foundation = { module = "androidx.compose.foundation:foundation" }
+compose-animation = { module = "androidx.compose.animation:animation" }
+compose-animation-core = { module = "androidx.compose.animation:animation-core" }
 compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
-compose-material3 = { module = "androidx.compose.material3:material3" }
 compose-material-icons-core = { module = "androidx.compose.material:material-icons-core" }
 compose-material-icons-extended = { module = "androidx.compose.material:material-icons-extended" }
 navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigation-compose" }
@@ -33,8 +35,6 @@ coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-androi
 okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
-markdown-renderer = { module = "com.mikepenz:multiplatform-markdown-renderer", version.ref = "markdown-renderer" }
-markdown-renderer-m3 = { module = "com.mikepenz:multiplatform-markdown-renderer-m3", version.ref = "markdown-renderer" }
 firebase-messaging = { module = "com.google.firebase:firebase-messaging", version.ref = "firebase-messaging" }
 junit = { module = "junit:junit", version.ref = "junit" }
 mockwebserver = { module = "com.squareup.okhttp3:mockwebserver", version.ref = "okhttp" }
