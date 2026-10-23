@@ -247,6 +247,7 @@ fun ConversationDrawerContent(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DrawerItemRow(
     icon: androidx.compose.ui.graphics.vector.ImageVector,

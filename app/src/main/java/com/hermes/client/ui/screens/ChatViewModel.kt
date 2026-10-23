@@ -23,7 +23,6 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.isString
 
 enum class MsgKind { USER, ASSISTANT, TOOL, STATUS, ERROR }
 
