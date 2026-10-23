@@ -1,10 +1,15 @@
 package com.hermes.client.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -72,9 +77,11 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -408,10 +415,11 @@ private fun ChatEmptyState(modifier: Modifier = Modifier) {
                     )
                 ),
         ) {
-            Text(
-                "✦",
-                style = MaterialTheme.typography.headlineMedium,
-                color = Color.White,
+            Icon(
+                painter = painterResource(R.drawable.ic_hero_spark),
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(34.dp),
             )
         }
         Spacer(Modifier.height(20.dp))
@@ -428,31 +436,57 @@ private fun ChatEmptyState(modifier: Modifier = Modifier) {
 
 @Composable
 private fun ThinkingRow() {
-    val t = rememberInfiniteTransition(label = "thinking")
-    val alpha by t.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "thinkingAlpha",
-    )
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp)
-            .testTag("thinkingIndicator")
-            .alpha(alpha),
+            .testTag("thinkingIndicator"),
     ) {
-        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+        TypingDots()
         Text(
             stringResource(R.string.thinking),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 8.dp),
         )
+    }
+}
+
+/** Gemini-like typing indicator: three dots wave with springy Emphasized motion. */
+@Composable
+private fun TypingDots() {
+    val t = rememberInfiniteTransition(label = "typing")
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        for (i in 0 until 3) {
+            val scale by t.animateFloat(
+                initialValue = 0.5f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(600, delayMillis = i * 150),
+                    repeatMode = RepeatMode.Reverse,
+                ),
+                label = "dot$i",
+            )
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        alpha = 0.4f + 0.6f * scale
+                    }
+                    .clip(CircleShape)
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(Color(0xFF4285F4), Color(0xFF9B72CB))
+                        )
+                    ),
+            )
+        }
     }
 }
 
@@ -640,7 +674,11 @@ private fun ActivityLog(msgs: List<UiMessage>, modifier: Modifier = Modifier) {
                 modifier = Modifier.weight(1f).padding(start = 6.dp),
             )
         }
-        if (expanded) {
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
+            exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
+        ) {
             Column(Modifier.padding(start = 22.dp)) {
                 for (m in msgs) {
                     Text(

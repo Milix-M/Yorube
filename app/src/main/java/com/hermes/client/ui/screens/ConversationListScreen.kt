@@ -190,12 +190,6 @@ fun ConversationDrawerContent(
                 }
                 Spacer(Modifier.weight(1f))
                 IconButton(
-                    onClick = vm::refresh,
-                    modifier = Modifier.testTag("drawerRefresh"),
-                ) {
-                    Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.refresh))
-                }
-                IconButton(
                     onClick = { onOpenChat(null, null) },
                     modifier = Modifier.testTag("drawerNewChat"),
                 ) {
@@ -322,7 +316,8 @@ private fun ConversationListBody(
                             .combinedClickable(
                                 onClick = { onOpenChat(s.key, s.title) },
                                 onLongClick = { onAskDelete(s.key) },
-                            ),
+                            )
+                            .animateItem(),
                     ) {
                         ListItem(
                             headlineContent = {

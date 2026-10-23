@@ -669,4 +669,111 @@ class ChatViewModelTest {
         assertTrue(vm.error!!.isNotBlank())
         assertEquals(false, vm.busy)
     }
+
+    @Test
+    fun untrustedDelta_foldsIntoActivityLog() = runVmTest {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        server.enqueue(
+            events(
+                frame(
+                    "message.delta",
+                    """{"event":"message.delta","delta":"調べたよ: <untrusted_tool_result source=\"web_search\">result body here</untrusted_tool_result> 以上です"}""",
+                ),
+                frame("run.completed", """{"event":"run.completed"}"""),
+            )
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { !vm.busy }
+        assertTrue(vm.messages.none { it.text.contains("untrusted_tool_result") })
+        assertTrue(vm.messages.any { it.kind == MsgKind.ASSISTANT && it.text.contains("調べたよ") })
+        assertTrue(vm.messages.any { it.kind == MsgKind.TOOL && it.text.startsWith("web search:") })
+    }
+
+    @Test
+    fun pureMarkupDelta_startsNoBubble() = runVmTest {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        server.enqueue(
+            events(
+                frame(
+                    "message.delta",
+                    """{"event":"message.delta","delta":"<untrusted_tool_result source=\"web_search\">bulk data here</untrusted_tool_result>"}""",
+                ),
+                frame("message.delta", """{"event":"message.delta","delta":"done"}"""),
+                frame("run.completed", """{"event":"run.completed"}"""),
+            )
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { !vm.busy }
+        val assistants = vm.messages.filter { it.kind == MsgKind.ASSISTANT }
+        assertEquals(1, assistants.size)
+        assertEquals("done", assistants[0].text)
+        assertTrue(vm.messages.any { it.kind == MsgKind.TOOL && it.text == "web search: bulk data here" })
+    }
+
+    @Test
+    fun untrustedInterim_foldsToOneLineStatus() = runVmTest {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        server.enqueue(
+            events(
+                frame(
+                    "message.interim",
+                    """{"event":"message.interim","text":"<untrusted_tool_result source=\"mcp_issues\">some payload</untrusted_tool_result>","already_streamed":false}""",
+                ),
+                frame("run.completed", """{"event":"run.completed"}"""),
+            )
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { !vm.busy }
+        assertTrue(vm.messages.any { it.kind == MsgKind.STATUS && it.text == "mcp issues: some payload" })
+        assertTrue(vm.messages.none { it.text.contains("untrusted_tool_result") })
+    }
+
+    @Test
+    fun terminalOutputWithMarkup_foldsBlock() = runVmTest {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        server.enqueue(
+            events(
+                frame(
+                    "run.completed",
+                    """{"event":"run.completed","output":"答え <untrusted_tool_result source=\"web_extract\">抜粋</untrusted_tool_result>"}""",
+                ),
+            )
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { !vm.busy }
+        assertTrue(vm.messages.any { it.kind == MsgKind.ASSISTANT && it.text == "答え " })
+        assertTrue(vm.messages.any { it.kind == MsgKind.TOOL && it.text == "web extract: 抜粋" })
+        assertTrue(vm.messages.none { it.text.contains("untrusted_tool_result") })
+    }
+
+    @Test
+    fun loadHistory_foldsToolMarkup() = runVmTest {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"messages":[{"role":"user","content":"q"},{"role":"tool","content":"<untrusted_tool_result source=\"web_search\">bulk</untrusted_tool_result>"}]}"""
+            )
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, "s1")
+        awaitCondition { vm.messages.size == 2 }
+        assertEquals(MsgKind.USER, vm.messages[0].kind)
+        assertEquals(MsgKind.TOOL, vm.messages[1].kind)
+        assertEquals("web search: bulk", vm.messages[1].text)
+    }
 }

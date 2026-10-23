@@ -1,10 +1,13 @@
 package com.hermes.client.ui.navigation
 
 import android.net.Uri
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
@@ -33,7 +36,8 @@ object Routes {
     }
 }
 
-private const val SlideOffset = 4
+private const val EnterMs = 350
+private const val ExitMs = 200
 
 @Composable
 fun NavGraph(startSessionId: String?) {
@@ -42,10 +46,16 @@ fun NavGraph(startSessionId: String?) {
     NavHost(
         navController = navController,
         startDestination = Routes.chat(startSessionId),
-        enterTransition = { slideInHorizontally(initialOffsetX = { it / SlideOffset }) + fadeIn() },
-        exitTransition = { slideOutHorizontally(targetOffsetX = { -it / SlideOffset }) + fadeOut() },
-        popEnterTransition = { slideInHorizontally(initialOffsetX = { -it / SlideOffset }) + fadeIn() },
-        popExitTransition = { slideOutHorizontally(targetOffsetX = { it / SlideOffset }) + fadeOut() },
+        enterTransition = {
+            fadeIn(tween(EnterMs, easing = FastOutSlowInEasing)) +
+                scaleIn(initialScale = 0.96f, animationSpec = tween(EnterMs, easing = FastOutSlowInEasing))
+        },
+        exitTransition = { fadeOut(tween(ExitMs, easing = FastOutLinearInEasing)) },
+        popEnterTransition = { fadeIn(tween(EnterMs, easing = FastOutSlowInEasing)) },
+        popExitTransition = {
+            fadeOut(tween(ExitMs, easing = FastOutLinearInEasing)) +
+                scaleOut(targetScale = 0.98f, animationSpec = tween(ExitMs, easing = FastOutLinearInEasing))
+        },
     ) {
         composable(
             route = "${Routes.CHAT}?sessionId={sessionId}&title={title}",
