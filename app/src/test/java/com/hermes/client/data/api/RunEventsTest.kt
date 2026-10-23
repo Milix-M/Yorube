@@ -132,6 +132,14 @@ class RunEventsTest {
     }
 
     @Test
+    fun reasoning_mapsText() {
+        val e = parseRunEvent("reasoning.delta", obj("text" to "hmm"))
+        assertEquals(RunEvent.Reasoning("hmm"), e)
+        val blank = parseRunEvent("reasoning.available", JsonObject(emptyMap()))
+        assertEquals(RunEvent.Reasoning(""), blank)
+    }
+
+    @Test
     fun unknownName_isKept() {
         val e = parseRunEvent("something.new", JsonObject(emptyMap()))
         assertEquals(RunEvent.Unknown("something.new"), e)

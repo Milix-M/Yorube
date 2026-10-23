@@ -3,24 +3,34 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Original Hermes mark: abstract paper-plane / messenger wing from basic shapes. -->
-    <!-- Left wing -->
+    <!-- Readable paper plane: bold dart pointing up-right, folded wing, speed lines. -->
+    <!-- Speed lines -->
+    <path
+        android:strokeColor="#8B93F8"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:pathData="M18,78 L36,70" />
+    <path
+        android:strokeColor="#8B93F8"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:pathData="M22,92 L46,80" />
+    <!-- Lower wing (shade) -->
+    <path
+        android:fillColor="#B9C6FF"
+        android:pathData="M30,72 L84,26 L60,80 Z" />
+    <!-- Upper wing (light) -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M54,26 L54,66 L26,70 Z" />
-    <!-- Right wing -->
+        android:pathData="M30,72 L84,26 L52,58 Z" />
+    <!-- Fold line nose to tail -->
     <path
-        android:fillColor="#D7DFFF"
-        android:pathData="M54,26 L54,66 L82,70 Z" />
-    <!-- Fold line -->
-    <path
-        android:fillColor="#8B93F8"
-        android:pathData="M54,26 L46,70 L54,66 Z" />
-    <!-- Orbit spark -->
+        android:strokeColor="#5B64D8"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M84,26 L52,58" />
+    <!-- Nose tip accent -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M72,30m-4,0a4,4 0,1 1,8 0a4,4 0,1 1,-8 0" />
-    <path
-        android:fillColor="#D7DFFF"
-        android:pathData="M30,78m-2.5,0a2.5,2.5 0,1 1,5 0a2.5,2.5 0,1 1,-5 0" />
+        android:pathData="M84,26m-5,0a5,5 0,1 1,10 0a5,5 0,1 1,-10 0" />
 </vector>

@@ -2,12 +2,14 @@ package com.hermes.client.ui.navigation
 
 import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasTextExactly
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import com.hermes.client.HermesApp
 import com.hermes.client.data.store.ClientSettings
@@ -168,6 +170,43 @@ class NavGraphTest {
         compose.onNodeWithTag("menuButton").performClick()
         waitFor("Hello")
         compose.onNodeWithTag("closeDrawer").performClick()
+        compose.onNodeWithTag("chatInput").assertIsDisplayed()
+    }
+
+    @Test
+    fun drawerSearch_opensSearchAndFilters() {
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                return when {
+                    (request.path ?: "").startsWith("/api/sessions/") ->
+                        MockResponse().setBody("""{"messages":[]}""")
+                    (request.path ?: "").startsWith("/api/sessions") ->
+                        MockResponse().setBody(
+                            """{"sessions":[{"id":"s1","title":"Hello"},{"id":"s2","title":"Other"}]}"""
+                        )
+                    else -> MockResponse().setBody("{}")
+                }
+            }
+        }
+        saveSettings()
+        compose.setContent {
+            HermesAppTheme {
+                NavGraph(null)
+            }
+        }
+        compose.onNodeWithTag("menuButton").performClick()
+        compose.onNodeWithTag("drawerSearch").performClick()
+        // Search screen shows the input and both conversations.
+        compose.onNodeWithTag("searchScreenInput").assertIsDisplayed()
+        waitFor("Other")
+        // Typing filters the history list down to the match.
+        compose.onNodeWithTag("searchScreenInput").performTextInput("Hello")
+        compose.waitUntil(timeoutMillis = 15_000) {
+            compose.onAllNodesWithText("Other").fetchSemanticsNodes().isEmpty()
+        }
+        compose.onNode(hasTextExactly("Hello", includeEditableText = false)).assertIsDisplayed()
+        // Back returns to the home chat.
+        compose.onNodeWithTag("searchBack").performClick()
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
     }
 }

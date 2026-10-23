@@ -20,11 +20,13 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.hermes.client.ui.screens.ChatScreen
 import com.hermes.client.ui.screens.ConversationDrawerContent
+import com.hermes.client.ui.screens.ConversationSearchScreen
 import com.hermes.client.ui.screens.SettingsScreen
 import kotlinx.coroutines.launch
 
 object Routes {
     const val CHAT = "chat"
+    const val SEARCH = "search"
     const val SETTINGS = "settings"
 
     fun chat(sessionId: String?, title: String? = null): String {
@@ -87,6 +89,10 @@ fun NavGraph(startSessionId: String?) {
                                 popUpTo(Routes.CHAT) { inclusive = true }
                             }
                         },
+                        onOpenSearch = {
+                            scope.launch { drawerState.close() }
+                            navController.navigate(Routes.SEARCH)
+                        },
                         onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                         onCloseDrawer = { scope.launch { drawerState.close() } },
                     )
@@ -101,6 +107,16 @@ fun NavGraph(startSessionId: String?) {
                     onOpenDrawer = { scope.launch { drawerState.open() } },
                 )
             }
+        }
+        composable(Routes.SEARCH) {
+            ConversationSearchScreen(
+                onOpenChat = { id, chatTitle ->
+                    navController.navigate(Routes.chat(id, chatTitle)) {
+                        popUpTo(Routes.CHAT) { inclusive = true }
+                    }
+                },
+                onNavigateBack = { navController.popBackStack() },
+            )
         }
         composable(Routes.SETTINGS) {
             SettingsScreen(onNavigateBack = { navController.popBackStack() })

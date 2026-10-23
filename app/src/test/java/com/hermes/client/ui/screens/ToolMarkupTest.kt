@@ -88,4 +88,99 @@ class ToolMarkupTest {
         val summary = summarizeToolBlock("<untrusted_tool_result source=\"mcp_x\">" + "y".repeat(500) + "</untrusted_tool_result>")
         assertEquals("mcp x: " + "y".repeat(140), summary)
     }
+
+    @Test
+    fun split_inlineJsonInProse_staysVisible() {
+        val split = splitUserFacing("結果だよ {\"success\":true,\"name\":\"grounded-citations\",\"x\":1}")
+        assertEquals("結果だよ {\"success\":true,\"name\":\"grounded-citations\",\"x\":1}", split.visible)
+        assertTrue(split.folded.isEmpty())
+    }
+
+    @Test
+    fun split_pureMachineJson_foldsWhole() {
+        val split = splitUserFacing("{\"success\":true,\"name\":\"grounded-citations\",\"x\":1}")
+        assertEquals("", split.visible)
+        assertEquals(1, split.folded.size)
+        assertTrue("folded=${split.folded}", split.folded[0].startsWith("grounded-citations: "))
+    }
+
+    @Test
+    fun split_plainJsonAnswer_staysVisible() {
+        val split = splitUserFacing("{\"answer\": 42}")
+        assertEquals("{\"answer\": 42}", split.visible)
+        assertTrue(split.folded.isEmpty())
+    }
+
+    @Test
+    fun split_brokenJson_staysVisible() {
+        val split = splitUserFacing("{\"success\":true,")
+        assertEquals("{\"success\":true,", split.visible)
+        assertTrue(split.folded.isEmpty())
+    }
+
+    @Test
+    fun split_tagWrappedPayload_folds() {
+        val split = splitUserFacing("<result>some dump</result>")
+        assertEquals("", split.visible)
+        assertEquals(listOf("markup: <result>"), split.folded)
+    }
+
+    @Test
+    fun split_toolPrefix_isStripped() {
+        val split = splitUserFacing("[tool terminal] ls output")
+        assertEquals("ls output", split.visible)
+        assertTrue(split.folded.isEmpty())
+    }
+
+    @Test
+    fun summarizeMachineJson_resultsArray() {
+        val summary = summarizeMachineJson(
+            "{\"tool_name\":\"web_search\",\"results\":[{\"title\":\"Hermes docs\",\"url\":\"https://docs.example/hermes\"}]}"
+        )
+        assertEquals("web_search: Hermes docs — https://docs.example/hermes", summary)
+    }
+
+    @Test
+    fun summarizeMachineJson_errorField() {
+        assertEquals(
+            "t [error]: boom",
+            summarizeMachineJson("{\"tool_name\":\"t\",\"error\":\"boom\"}")
+        )
+    }
+
+    @Test
+    fun summarizeMachineJson_linkArray() {
+        assertEquals(
+            "links: docs (+1)",
+            summarizeMachineJson("[{\"title\":\"docs\",\"url\":\"https://a.example\"},{\"url\":\"https://b.example\"}]")
+        )
+    }
+
+    @Test
+    fun summarizeMachineJson_rejectsNonMachine() {
+        assertEquals(null, summarizeMachineJson("just prose"))
+        assertEquals(null, summarizeMachineJson("[1, 2]"))
+        assertEquals(null, summarizeMachineJson("[]"))
+        assertEquals(null, summarizeMachineJson("[{\"a\":1}]"))
+        assertEquals(null, summarizeMachineJson("\"str\""))
+    }
+
+    @Test
+    fun summarizeJsonObject_keyFallback() {
+        assertEquals("tool: {a, b}", summarizeJsonObject(parseObj("{\"a\":1,\"b\":2}")))
+    }
+
+    @Test
+    fun summarizeTagPayload_rejectsProse() {
+        assertEquals(null, summarizeTagPayload("plain prose"))
+    }
+
+    @Test
+    fun foldForLog_combines() {
+        assertEquals("hi · web search: bulk", foldForLog("hi <untrusted_tool_result source=\"web_search\">bulk</untrusted_tool_result>"))
+        assertEquals("web search: bulk", foldForLog("<untrusted_tool_result source=\"web_search\">bulk</untrusted_tool_result>"))
+    }
+
+    private fun parseObj(raw: String) =
+        kotlinx.serialization.json.Json.parseToJsonElement(raw) as kotlinx.serialization.json.JsonObject
 }

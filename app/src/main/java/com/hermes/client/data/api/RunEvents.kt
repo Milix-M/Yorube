@@ -17,6 +17,7 @@ sealed interface RunEvent {
     ) : RunEvent
     data class SubagentStarted(val summary: String) : RunEvent
     data class SubagentCompleted(val status: String, val summary: String) : RunEvent
+    data class Reasoning(val text: String) : RunEvent
     data class ApprovalRequested(val request: ApprovalRequest) : RunEvent
     data class ClarifyRequested(
         val requestId: String,
@@ -42,6 +43,12 @@ fun parseRunEvent(eventName: String, data: JsonObject): RunEvent {
         name == "message.interim" -> {
             val text = data.str("text", "content", "delta") ?: ""
             RunEvent.Interim(text, data.bool("already_streamed", "alreadyStreamed") == true)
+        }
+        // Structured-reasoning models may emit reasoning chunks on the runs
+        // stream (reasoning.delta / reasoning.available). They are progress
+        // noise, never reply text: fold, don't bubble.
+        name.startsWith("reasoning") -> {
+            RunEvent.Reasoning(data.str("text", "content", "delta") ?: "")
         }
         name == "tool.started" -> {
             RunEvent.ToolStarted(

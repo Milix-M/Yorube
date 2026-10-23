@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -161,6 +162,7 @@ fun ConversationListScreen(
 fun ConversationDrawerContent(
     selectedSessionId: String?,
     onOpenChat: (String?, String?) -> Unit,
+    onOpenSearch: () -> Unit,
     onOpenSettings: () -> Unit,
     onCloseDrawer: () -> Unit,
 ) {
@@ -174,13 +176,11 @@ fun ConversationDrawerContent(
         }
     )
     var pendingDelete by remember { mutableStateOf<String?>(null) }
-    var query by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) { vm.refresh() }
 
     ModalDrawerSheet(modifier = Modifier.width(320.dp)) {
         Column(Modifier.fillMaxHeight().padding(12.dp)) {
-            // Useful action row instead of a static "Hermes" header.
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
@@ -188,19 +188,24 @@ fun ConversationDrawerContent(
                 IconButton(onClick = onCloseDrawer, modifier = Modifier.testTag("closeDrawer")) {
                     Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.back))
                 }
-                Spacer(Modifier.weight(1f))
-                IconButton(
-                    onClick = { onOpenChat(null, null) },
-                    modifier = Modifier.testTag("drawerNewChat"),
-                ) {
-                    Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.new_chat))
-                }
             }
-            SearchField(query = query, onQuery = { query = it }, modifier = Modifier.padding(vertical = 8.dp))
-            Box(Modifier.fillMaxWidth().weight(1f)) {
+            // Primary drawer items: new chat, then chat search (opens the search screen).
+            DrawerItemRow(
+                icon = Icons.Filled.Add,
+                label = stringResource(R.string.new_chat),
+                testTag = "drawerNewChat",
+                onClick = { onOpenChat(null, null) },
+            )
+            DrawerItemRow(
+                icon = Icons.Filled.Search,
+                label = stringResource(R.string.search_chats),
+                testTag = "drawerSearch",
+                onClick = onOpenSearch,
+            )
+            Box(Modifier.fillMaxWidth().weight(1f).padding(top = 4.dp)) {
                 ConversationListBody(
                     loading = vm.loading,
-                    sessions = vm.sessions.filterQuery(query),
+                    sessions = vm.sessions,
                     selectedKey = selectedSessionId,
                     compact = true,
                     onOpenChat = onOpenChat,
@@ -242,8 +247,111 @@ fun ConversationDrawerContent(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun SearchField(query: String, onQuery: (String) -> Unit, modifier: Modifier = Modifier) {
+private fun DrawerItemRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    testTag: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .combinedClickable(onClick = onClick)
+            .testTag(testTag)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(start = 12.dp),
+        )
+    }
+}
+
+/** Full chat-search screen: query field plus the filtered conversation history. */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@Composable
+fun ConversationSearchScreen(
+    onOpenChat: (String?, String?) -> Unit,
+    onNavigateBack: () -> Unit,
+) {
+    val app = LocalContext.current.applicationContext as HermesApp
+    val vm: ConversationListViewModel = viewModel(
+        key = "search-list",
+        factory = object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>): T =
+                ConversationListViewModel(app.container) as T
+        }
+    )
+    var pendingDelete by remember { mutableStateOf<String?>(null) }
+    var query by remember { mutableStateOf("") }
+
+    LaunchedEffect(Unit) { vm.refresh() }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.search_chats)) },
+                navigationIcon = {
+                    IconButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier.testTag("searchBack"),
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.back),
+                        )
+                    }
+                }
+            )
+        },
+    ) { padding ->
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            SearchField(
+                query = query,
+                onQuery = { query = it },
+                modifier = Modifier.padding(vertical = 8.dp),
+                fieldTag = "searchScreenInput",
+            )
+            Box(Modifier.fillMaxSize().weight(1f)) {
+                ConversationListBody(
+                    loading = vm.loading,
+                    sessions = vm.sessions.filterQuery(query),
+                    onOpenChat = onOpenChat,
+                    onAskDelete = { pendingDelete = it },
+                )
+            }
+        }
+    }
+
+    pendingDelete?.let { id ->
+        DeleteDialog(
+            label = vm.sessions.find { it.key == id }?.title?.ifBlank { null }
+                ?: stringResource(R.string.new_chat),
+            onDismiss = { pendingDelete = null },
+            onConfirm = { vm.delete(id); pendingDelete = null },
+        )
+    }
+}
+
+@Composable
+private fun SearchField(
+    query: String,
+    onQuery: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    fieldTag: String = "searchInput",
+) {
     OutlinedTextField(
         value = query,
         onValueChange = onQuery,
@@ -251,7 +359,7 @@ private fun SearchField(query: String, onQuery: (String) -> Unit, modifier: Modi
         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
         singleLine = true,
         shape = RoundedCornerShape(16.dp),
-        modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp).testTag("searchInput"),
+        modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp).testTag(fieldTag),
     )
 }
 

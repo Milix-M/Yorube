@@ -53,8 +53,8 @@ fun HermesAppTheme(
     content: @Composable () -> Unit,
 ) {
     // Gemini-like: soft light surface + dark charcoal, brand-blue primary.
-    // Expressive motion (Emphasized easings, springs) is applied at each
-    // component (nav fade-through, animated activity log, pulsing status).
+    // Expressive-style motion (fade-through nav, animated activity log,
+    // springy typing indicator) is applied per component on stable Material3.
     MaterialTheme(
         colorScheme = if (darkTheme) HermesDarkScheme else HermesLightScheme,
         shapes = HermesShapes,

@@ -1,5 +1,7 @@
 package com.hermes.client.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -37,6 +39,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
@@ -73,7 +76,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -304,6 +306,18 @@ private fun ChatInputBar(
     onSteer: () -> Unit,
     onStop: () -> Unit,
 ) {
+    val context = LocalContext.current
+    // The runs API has no binary upload: an attachment becomes a visible
+    // [image: name] reference token in the text the user actually sends.
+    val attachLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            val name = queryDisplayName(context, uri) ?: "image"
+            val token = "[${context.getString(R.string.image_label)}: $name]"
+            onInputChange(if (input.isBlank()) token else "$input $token")
+        }
+    }
     Column(
         Modifier
             .fillMaxWidth()
@@ -346,8 +360,18 @@ private fun ChatInputBar(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
             ) {
+                IconButton(
+                    onClick = { attachLauncher.launch("image/*") },
+                    modifier = Modifier.testTag("attachButton"),
+                ) {
+                    Icon(
+                        Icons.Filled.Add,
+                        contentDescription = stringResource(R.string.attach),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 TextField(
                     value = input,
                     onValueChange = onInputChange,
@@ -453,7 +477,7 @@ private fun ThinkingRow() {
     }
 }
 
-/** Gemini-like typing indicator: three dots wave with springy Emphasized motion. */
+/** Gemini-like typing indicator: three dots wave in sequence. */
 @Composable
 private fun TypingDots() {
     val t = rememberInfiniteTransition(label = "typing")
@@ -692,6 +716,18 @@ private fun ActivityLog(msgs: List<UiMessage>, modifier: Modifier = Modifier) {
                 }
             }
         }
+    }
+}
+
+/** Display name of a picked file for the attachment reference token. */
+private fun queryDisplayName(context: android.content.Context, uri: android.net.Uri): String? {
+    return try {
+        context.contentResolver.query(uri, null, null, null, null)?.use { c ->
+            val idx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            if (c.moveToFirst() && idx >= 0) c.getString(idx) else null
+        }
+    } catch (_: Exception) {
+        null
     }
 }
 
