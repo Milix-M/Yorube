@@ -82,6 +82,7 @@ dependencies {
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material.icons.core)
     implementation(libs.compose.material.icons.extended)
+    implementation(libs.compose.unstyled)
     implementation(libs.navigation.compose)
     implementation(libs.coroutines.android)
     implementation(libs.okhttp)
