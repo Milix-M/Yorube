@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
 import android.os.Looper
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -95,12 +96,33 @@ class ChatFlowUiTest {
         }
         compose.onNodeWithTag("chatInput").performTextInput("hi")
         compose.onNodeWithTag("sendButton").performClick()
+        // Tool/MCP activity is folded into one-line expandable rows: expand them first.
+        compose.waitUntil(timeoutMillis = 30_000) {
+            compose.onAllNodesWithTag("activityToggle", useUnmergedTree = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        // New activity blocks stream in over time; expand whatever is present, retrying.
+        repeat(10) {
+            val toggles = compose.onAllNodesWithTag("activityToggle", useUnmergedTree = true)
+            for (i in 0 until toggles.fetchSemanticsNodes().size) {
+                try {
+                    toggles[i].performClick()
+                } catch (_: Exception) {
+                }
+            }
+            Thread.sleep(500)
+            val done = listOf("terminal", "working", "delegating", "child ok").all { want ->
+                compose.onAllNodesWithText(want, substring = true, useUnmergedTree = true)
+                    .fetchSemanticsNodes().isNotEmpty()
+            }
+            if (done) return@repeat
+        }
         // Note: the terminal "final" is not rendered on its own — the streamed
         // "answer" already holds the reply. Waiting for it would time out.
-        // Tool calls and thinking notes render as one-line system rows.
+        // Error tool results stay as visible error rows; the rest lives in the activity log.
         for (text in listOf("answer", "terminal", "boom", "working", "delegating", "child ok")) {
             compose.waitUntil(timeoutMillis = 30_000) {
-                compose.onAllNodesWithText(text, substring = true).fetchSemanticsNodes().isNotEmpty()
+                compose.onAllNodesWithText(text, substring = true, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
             }
         }
     }

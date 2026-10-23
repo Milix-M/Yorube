@@ -48,20 +48,17 @@ class ChatScreenTest {
     }
 
     @Test
-    fun suggestionChip_sendsWithoutSettings() {
+    fun emptyState_showsTitleWithoutSuggestions() {
         clearSettings()
         val app = ApplicationProvider.getApplicationContext<Application>() as HermesApp
-        val suggestion = app.getString(R.string.suggest_1)
         compose.setContent {
             HermesAppTheme {
                 ChatScreen(sessionId = null, onOpenSettings = {}, onNavigateBack = {})
             }
         }
-        compose.onNodeWithText(suggestion).performClick()
-        compose.waitUntil(timeoutMillis = 10_000) {
-            compose.onAllNodesWithText("Base URL and API key are not set. Open Settings.")
-                .fetchSemanticsNodes().isNotEmpty()
-        }
+        // Suggestion chips were removed: only the headline remains, no subtitle.
+        compose.onNodeWithText(app.getString(R.string.empty_chat_title)).assertIsDisplayed()
+        compose.onNodeWithTag("chatInput").assertIsDisplayed()
     }
 
     private fun clearSettings() {

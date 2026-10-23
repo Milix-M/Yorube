@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,7 +25,6 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -38,7 +38,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -180,25 +179,27 @@ fun ConversationDrawerContent(
 
     ModalDrawerSheet(modifier = Modifier.width(320.dp)) {
         Column(Modifier.fillMaxHeight().padding(12.dp)) {
+            // Useful action row instead of a static "Hermes" header.
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
             ) {
-                Text(
-                    "Hermes",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f),
-                )
                 IconButton(onClick = onCloseDrawer, modifier = Modifier.testTag("closeDrawer")) {
                     Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.back))
                 }
-            }
-            FilledTonalButton(
-                onClick = { onOpenChat(null, null) },
-                modifier = Modifier.fillMaxWidth().testTag("drawerNewChat"),
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                Text(stringResource(R.string.new_chat), modifier = Modifier.padding(start = 8.dp))
+                Spacer(Modifier.weight(1f))
+                IconButton(
+                    onClick = vm::refresh,
+                    modifier = Modifier.testTag("drawerRefresh"),
+                ) {
+                    Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.refresh))
+                }
+                IconButton(
+                    onClick = { onOpenChat(null, null) },
+                    modifier = Modifier.testTag("drawerNewChat"),
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.new_chat))
+                }
             }
             SearchField(query = query, onQuery = { query = it }, modifier = Modifier.padding(vertical = 8.dp))
             Box(Modifier.fillMaxWidth().weight(1f)) {
@@ -211,12 +212,27 @@ fun ConversationDrawerContent(
                     onAskDelete = { pendingDelete = it },
                 )
             }
-            TextButton(
-                onClick = onOpenSettings,
-                modifier = Modifier.fillMaxWidth().testTag("drawerSettings"),
+            // Subtle footer: icon-only settings, no longer a full-width button.
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
             ) {
-                Icon(Icons.Filled.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
-                Text(stringResource(R.string.settings), modifier = Modifier.padding(start = 8.dp))
+                IconButton(
+                    onClick = onOpenSettings,
+                    modifier = Modifier.testTag("drawerSettings").size(40.dp),
+                ) {
+                    Icon(
+                        Icons.Filled.Settings,
+                        contentDescription = stringResource(R.string.settings_desc),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+                Text(
+                    stringResource(R.string.settings),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }

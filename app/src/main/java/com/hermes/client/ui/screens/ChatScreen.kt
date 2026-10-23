@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,18 +31,18 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -100,7 +99,7 @@ import com.hermes.client.R
 fun ChatScreen(
     sessionId: String?,
     onOpenSettings: () -> Unit,
-    onNavigateBack: () -> Unit,
+    onNavigateBack: () -> Unit = {},
     onOpenDrawer: (() -> Unit)? = null,
     title: String? = null,
 ) {
@@ -116,14 +115,19 @@ fun ChatScreen(
     val snackbar = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
     val clarifyAnswer = remember { mutableStateOf("") }
+    // Folded blocks drive the list; hoist so auto-follow can target the last row.
+    val messageSnapshot = vm.messages.toList()
+    val blocks = remember(messageSnapshot) { buildChatBlocks(messageSnapshot) }
 
     LaunchedEffect(vm.error) {
         vm.error?.let { snackbar.showSnackbar(it); vm.dismissError() }
     }
-    // ChatGPT-like: follow the stream only while the user stays at the bottom.
+    // Follow the stream only while the user stays at the bottom.
     LaunchedEffect(vm.messages.size) {
-        if (vm.messages.isNotEmpty()) {
-            listState.animateScrollToItem(vm.messages.size - 1)
+        if (blocks.isNotEmpty()) {
+            val thinking = vm.busy && vm.messages.none { it.kind == MsgKind.ASSISTANT }
+            val last = blocks.size - 1 + if (thinking) 1 else 0
+            listState.animateScrollToItem(last)
         }
     }
 
@@ -138,25 +142,14 @@ fun ChatScreen(
                     )
                 },
                 navigationIcon = {
-                    Row {
-                        if (onOpenDrawer != null) {
-                            IconButton(
-                                onClick = onOpenDrawer,
-                                modifier = Modifier.testTag("menuButton"),
-                            ) {
-                                Icon(
-                                    Icons.Filled.Menu,
-                                    contentDescription = stringResource(R.string.menu),
-                                )
-                            }
-                        }
+                    if (onOpenDrawer != null) {
                         IconButton(
-                            onClick = onNavigateBack,
-                            modifier = Modifier.testTag("backButton"),
+                            onClick = onOpenDrawer,
+                            modifier = Modifier.testTag("menuButton"),
                         ) {
                             Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.back),
+                                Icons.Filled.Menu,
+                                contentDescription = stringResource(R.string.menu),
                             )
                         }
                     }
@@ -192,27 +185,37 @@ fun ChatScreen(
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             if (vm.messages.isEmpty() && !vm.busy) {
-                ChatEmptyState(
-                    onSuggest = { text ->
-                        vm.input = text
-                        vm.onSend()
-                    },
-                    modifier = Modifier.fillMaxSize(),
-                )
+                ChatEmptyState(modifier = Modifier.fillMaxSize())
             } else {
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().testTag("chatList"),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
-                    itemsIndexed(vm.messages, key = { _, m -> m.id }) { index, msg ->
-                        MessageRow(
-                            msg = msg,
-                            showCursor = index == vm.messages.size - 1 && vm.busy &&
-                                msg.kind == MsgKind.ASSISTANT,
-                            modifier = Modifier.animateItem(),
-                        )
+                    blocks.forEach { block ->
+                        when (block) {
+                            is ChatBlock.Single -> {
+                                val msg = block.msg
+                                val index = vm.messages.indexOf(msg)
+                                item(key = "msg-${msg.id}") {
+                                    MessageRow(
+                                        msg = msg,
+                                        showCursor = index == vm.messages.size - 1 && vm.busy &&
+                                            msg.kind == MsgKind.ASSISTANT,
+                                        modifier = Modifier.animateItem(),
+                                    )
+                                }
+                            }
+                            is ChatBlock.Activity -> {
+                                item(key = "activity-${block.msgs.first().id}") {
+                                    ActivityLog(
+                                        msgs = block.msgs,
+                                        modifier = Modifier.animateItem(),
+                                    )
+                                }
+                            }
+                        }
                     }
                     if (vm.busy && vm.messages.none { it.kind == MsgKind.ASSISTANT }) {
                         item(key = "thinking") { ThinkingRow() }
@@ -387,12 +390,31 @@ private fun ChatInputBar(
 }
 
 @Composable
-private fun ChatEmptyState(onSuggest: (String) -> Unit, modifier: Modifier = Modifier) {
+private fun ChatEmptyState(modifier: Modifier = Modifier) {
     Column(
         modifier = modifier.padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
+        // Gemini-like hero: gradient app mark + single headline. No subtitle, no suggestion chips.
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(72.dp)
+                .clip(CircleShape)
+                .background(
+                    Brush.linearGradient(
+                        listOf(Color(0xFF4285F4), Color(0xFF9B72CB), Color(0xFFD96570))
+                    )
+                ),
+        ) {
+            Text(
+                "✦",
+                style = MaterialTheme.typography.headlineMedium,
+                color = Color.White,
+            )
+        }
+        Spacer(Modifier.height(20.dp))
         Text(
             stringResource(R.string.empty_chat_title),
             style = MaterialTheme.typography.headlineSmall.copy(
@@ -401,26 +423,6 @@ private fun ChatEmptyState(onSuggest: (String) -> Unit, modifier: Modifier = Mod
                 )
             ),
         )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            stringResource(R.string.empty_chat_subtitle),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(16.dp))
-        val suggestions = listOf(
-            stringResource(R.string.suggest_1),
-            stringResource(R.string.suggest_2),
-            stringResource(R.string.suggest_3),
-        )
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            for (s in suggestions) {
-                AssistChip(
-                    onClick = { onSuggest(s) },
-                    label = { Text(s) },
-                )
-            }
-        }
     }
 }
 
@@ -529,23 +531,17 @@ private fun MessageRow(msg: UiMessage, showCursor: Boolean, modifier: Modifier =
             }
         }
         MsgKind.TOOL, MsgKind.STATUS -> {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = modifier.fillMaxWidth().padding(vertical = 3.dp),
-            ) {
-                Icon(
-                    Icons.Filled.PlayArrow,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(14.dp),
-                )
-                Text(
-                    msg.text,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 6.dp),
-                )
-            }
+            // Defensive fallback: tool/status messages are normally grouped into
+            // ActivityLog and never reach here. Render as a plain one-line row
+            // with no bubble so nothing ever shows a chat box.
+            Text(
+                msg.text,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = modifier.fillMaxWidth().padding(vertical = 2.dp),
+            )
         }
         MsgKind.ERROR -> {
             Surface(
@@ -565,6 +561,95 @@ private fun MessageRow(msg: UiMessage, showCursor: Boolean, modifier: Modifier =
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onErrorContainer,
                         modifier = Modifier.padding(start = 8.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Consecutive TOOL/STATUS rows are folded into one Activity block. */
+internal sealed interface ChatBlock {
+    data class Single(val msg: UiMessage) : ChatBlock
+    data class Activity(val msgs: List<UiMessage>) : ChatBlock
+}
+
+internal fun buildChatBlocks(messages: List<UiMessage>): List<ChatBlock> {
+    val out = mutableListOf<ChatBlock>()
+    val pending = mutableListOf<UiMessage>()
+    fun flush() {
+        if (pending.isNotEmpty()) {
+            out.add(ChatBlock.Activity(pending.toList()))
+            pending.clear()
+        }
+    }
+    for (m in messages) {
+        if (m.kind == MsgKind.TOOL || m.kind == MsgKind.STATUS) {
+            pending.add(m)
+        } else {
+            flush()
+            out.add(ChatBlock.Single(m))
+        }
+    }
+    flush()
+    return out
+}
+
+/**
+ * Tool/MCP activity folded into a single line with no chat bubble.
+ * Collapsed: one tappable summary row. Expanded: plain one-line rows.
+ */
+@Composable
+private fun ActivityLog(msgs: List<UiMessage>, modifier: Modifier = Modifier) {
+    var expanded by remember(msgs.firstOrNull()?.id) { mutableStateOf(false) }
+    val summary = if (msgs.size == 1) {
+        msgs.first().text
+    } else {
+        stringResource(R.string.activity_summary, msgs.size, msgs.last().text)
+    }
+    Column(modifier = modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { expanded = !expanded }
+                .testTag("activityToggle")
+                .padding(vertical = 6.dp),
+        ) {
+            Icon(
+                if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = stringResource(
+                    if (expanded) R.string.collapse else R.string.expand
+                ),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp),
+            )
+            Icon(
+                Icons.Filled.Bolt,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(13.dp),
+            )
+            Text(
+                summary,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).padding(start = 6.dp),
+            )
+        }
+        if (expanded) {
+            Column(Modifier.padding(start = 22.dp)) {
+                for (m in msgs) {
+                    Text(
+                        m.text,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
                     )
                 }
             }

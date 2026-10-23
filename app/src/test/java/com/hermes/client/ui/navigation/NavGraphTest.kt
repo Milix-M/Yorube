@@ -3,6 +3,7 @@ package com.hermes.client.ui.navigation
 import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -16,6 +17,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -96,9 +98,10 @@ class NavGraphTest {
         // Settings -> back to chat (covers settings onNavigateBack).
         compose.onNodeWithTag("backButton").performClick()
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
-        // Chat -> back stays on chat (covers chat onNavigateBack).
-        compose.onNodeWithTag("backButton").performClick()
-        compose.onNodeWithTag("chatInput").assertIsDisplayed()
+        // Chat has no back arrow by design: it must not exist on the home chat.
+        assertTrue(
+            compose.onAllNodesWithTag("backButton").fetchSemanticsNodes().isEmpty()
+        )
     }
 
     @Test
