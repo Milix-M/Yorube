@@ -13,7 +13,7 @@ plugins {
 
 android {
     namespace = "com.hermes.client"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.hermes.client"
