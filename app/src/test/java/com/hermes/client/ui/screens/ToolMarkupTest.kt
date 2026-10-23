@@ -239,7 +239,7 @@ class ToolMarkupTest {
         val (clean, folded) = foldEmbeddedJson(
             "調べたよ\n{\"success\":true,\"name\":\"grounded-citations\",\"x\":1}\n以上"
         )
-        assertEquals("調べたよ\n\n以上", clean)
+        assertEquals("調べたよ\n以上", clean)
         assertEquals(1, folded.size)
         assertTrue(folded[0].summary.startsWith("grounded-citations: "))
         assertTrue(folded[0].detail.contains("\"success\": true"))
@@ -278,7 +278,7 @@ class ToolMarkupTest {
     @Test
     fun splitUserFacing_extractsEmbedded() {
         val split = splitUserFacing("結果:\n{\"tool_name\":\"web_search\",\"output\":\"ok\"}\n以上")
-        assertEquals("結果:\n\n以上", split.visible)
+        assertEquals("結果:\n以上", split.visible)
         assertEquals(1, split.folded.size)
         assertEquals("web search: ok", split.folded[0].summary)
     }
