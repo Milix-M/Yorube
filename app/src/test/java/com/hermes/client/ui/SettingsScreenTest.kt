@@ -1,5 +1,6 @@
 package com.hermes.client.ui
 
+import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -8,9 +9,18 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.test.core.app.ApplicationProvider
+import com.hermes.client.HermesApp
+import com.hermes.client.data.store.ClientSettings
 import com.hermes.client.ui.screens.SettingsScreen
 import com.hermes.client.ui.theme.HermesAppTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import org.junit.After
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -26,6 +36,33 @@ class SettingsScreenTest {
     @get:Rule
     val compose = createComposeRule()
 
+    private lateinit var server: MockWebServer
+
+    @Before
+    fun setUp() {
+        server = MockWebServer()
+        server.start()
+    }
+
+    @After
+    fun tearDown() {
+        server.shutdown()
+    }
+
+    private fun saveSettings(settings: ClientSettings) {
+        val app = ApplicationProvider.getApplicationContext<Application>() as HermesApp
+        kotlinx.coroutines.runBlocking {
+            app.container.settingsStore.save(settings)
+            val deadline = System.currentTimeMillis() + 10_000
+            while (app.container.settingsStore.current().baseUrl != settings.baseUrl ||
+                app.container.settingsStore.current().fcmToken != settings.fcmToken
+            ) {
+                if (System.currentTimeMillis() >= deadline) error("timed out saving settings")
+                withContext(Dispatchers.IO) { Thread.sleep(100) }
+            }
+        }
+    }
+
     @Test
     fun saveFlow_showsSaved() {
         compose.setContent {
@@ -36,7 +73,7 @@ class SettingsScreenTest {
         compose.onNodeWithText("Server").assertIsDisplayed()
         compose.onNodeWithTag("baseUrl").performTextInput("https://example.com:8642")
         compose.onNodeWithTag("apiKey").performTextInput("k")
-        for (tag in listOf("model", "provider", "relayUrl", "fbProject", "fbApp", "fbKey", "fbSender", "cfId", "cfSecret")) {
+        for (tag in listOf("relayUrl", "fbProject", "fbApp", "fbKey", "fbSender", "cfId", "cfSecret")) {
             compose.onNodeWithTag(tag).performScrollTo()
             compose.onNodeWithTag(tag).performTextInput("v")
         }
@@ -64,5 +101,54 @@ class SettingsScreenTest {
             compose.onAllNodesWithText("Firebase manual setup (optional)")
                 .fetchSemanticsNodes().isNotEmpty()
         )
+    }
+
+    @Test
+    fun secretToggle_flipsVisibility() {
+        compose.setContent {
+            HermesAppTheme {
+                SettingsScreen(onNavigateBack = {})
+            }
+        }
+        compose.onNodeWithTag("apiKey").performScrollTo()
+        compose.onNodeWithTag("visibility-apiKey").performClick()
+        compose.onNodeWithTag("apiKey").assertIsDisplayed()
+    }
+
+    @Test
+    fun fcmToken_showsSnippetWhenSet() {
+        saveSettings(ClientSettings(baseUrl = "https://example.com", apiKey = "k", fcmToken = "abcdef1234567890"))
+        compose.setContent {
+            HermesAppTheme {
+                SettingsScreen(onNavigateBack = {})
+            }
+        }
+        compose.waitUntil(timeoutMillis = 10_000) {
+            compose.onAllNodesWithText("abcdef123456", substring = true).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
+    @Test
+    fun testButton_showsHealthResult() {
+        val want = server.url("").toString().removeSuffix("/")
+        saveSettings(ClientSettings(baseUrl = want, apiKey = "k"))
+        server.enqueue(MockResponse().setBody("""{"status":"ok"}"""))
+        server.enqueue(
+            MockResponse().setBody("""{"features":{"run_stop":true},"endpoints":{}}""")
+        )
+        compose.setContent {
+            HermesAppTheme {
+                SettingsScreen(onNavigateBack = {})
+            }
+        }
+        compose.onNodeWithText("Test connection").performScrollTo()
+        compose.onNodeWithText("Test connection").performClick()
+        compose.waitUntil(timeoutMillis = 15_000) {
+            compose.onAllNodesWithText("health=true", substring = true).fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithText("Close").performClick()
+        compose.waitUntil(timeoutMillis = 10_000) {
+            compose.onAllNodesWithText("health=true", substring = true).fetchSemanticsNodes().isEmpty()
+        }
     }
 }

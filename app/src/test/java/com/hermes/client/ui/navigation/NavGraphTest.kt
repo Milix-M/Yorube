@@ -3,6 +3,7 @@ package com.hermes.client.ui.navigation
 import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -16,6 +17,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -65,28 +67,41 @@ class NavGraphTest {
     }
 
     @Test
-    fun fullFlow_listToChatToSettingsAndBack() {
-        server.enqueue(MockResponse().setBody("""{"sessions":[{"id":"s1","title":"Hello"}]}"""))
-        server.enqueue(MockResponse().setBody("""{"messages":[]}"""))
+    fun fullFlow_chatToDrawerToSettingsAndBack() {
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                return when {
+                    (request.path ?: "").startsWith("/api/sessions/") ->
+                        MockResponse().setBody("""{"messages":[]}""")
+                    (request.path ?: "").startsWith("/api/sessions") ->
+                        MockResponse().setBody("""{"sessions":[{"id":"s1","title":"Hello"}]}""")
+                    else -> MockResponse().setBody("{}")
+                }
+            }
+        }
         saveSettings()
         compose.setContent {
             HermesAppTheme {
                 NavGraph(null)
             }
         }
+        // Home is a fresh chat.
+        compose.onNodeWithTag("chatInput").assertIsDisplayed()
+        // Past conversations live in the sidebar drawer.
+        compose.onNodeWithTag("menuButton").performClick()
         waitFor("Hello")
-        // List -> chat via item tap (covers onOpenChat navigation).
         compose.onNodeWithText("Hello").performClick()
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
         // Chat -> settings via gear (covers chat onOpenSettings navigation).
-        compose.onNodeWithText("⚙").performClick()
+        compose.onNodeWithTag("settingsButton").performClick()
         waitFor("Settings")
         // Settings -> back to chat (covers settings onNavigateBack).
-        compose.onNodeWithText("‹").performClick()
+        compose.onNodeWithTag("backButton").performClick()
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
-        // Chat -> back to list (covers chat onNavigateBack).
-        compose.onNodeWithText("‹").performClick()
-        compose.onNodeWithText("Hermes").assertIsDisplayed()
+        // Chat has no back arrow by design: it must not exist on the home chat.
+        assertTrue(
+            compose.onAllNodesWithTag("backButton").fetchSemanticsNodes().isEmpty()
+        )
     }
 
     @Test
@@ -96,6 +111,63 @@ class NavGraphTest {
                 NavGraph("s1")
             }
         }
+        compose.onNodeWithTag("chatInput").assertIsDisplayed()
+    }
+
+    @Test
+    fun drawerMenu_newChatStaysOnChat() {
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                return when {
+                    (request.path ?: "").startsWith("/api/sessions/") ->
+                        MockResponse().setBody("""{"messages":[]}""")
+                    (request.path ?: "").startsWith("/api/sessions") ->
+                        MockResponse().setBody("""{"sessions":[{"id":"s1","title":"Hello"}]}""")
+                    else -> MockResponse().setBody("{}")
+                }
+            }
+        }
+        saveSettings()
+        compose.setContent {
+            HermesAppTheme {
+                NavGraph(null)
+            }
+        }
+        // Home is a fresh chat; history lives in the drawer.
+        compose.onNodeWithTag("chatInput").assertIsDisplayed()
+        compose.onNodeWithTag("menuButton").performClick()
+        waitFor("Hello")
+        compose.onNodeWithText("Hello").performClick()
+        compose.onNodeWithTag("chatInput").assertIsDisplayed()
+        // Open ChatGPT-like drawer and start a new chat from it.
+        compose.onNodeWithTag("menuButton").performClick()
+        compose.onNodeWithTag("drawerNewChat").performClick()
+        compose.onNodeWithTag("chatInput").assertIsDisplayed()
+    }
+
+    @Test
+    fun drawerMenu_closeReturnsToChat() {
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                return when {
+                    (request.path ?: "").startsWith("/api/sessions/") ->
+                        MockResponse().setBody("""{"messages":[]}""")
+                    (request.path ?: "").startsWith("/api/sessions") ->
+                        MockResponse().setBody("""{"sessions":[{"id":"s1","title":"Hello"}]}""")
+                    else -> MockResponse().setBody("{}")
+                }
+            }
+        }
+        saveSettings()
+        compose.setContent {
+            HermesAppTheme {
+                NavGraph(null)
+            }
+        }
+        compose.onNodeWithTag("chatInput").assertIsDisplayed()
+        compose.onNodeWithTag("menuButton").performClick()
+        waitFor("Hello")
+        compose.onNodeWithTag("closeDrawer").performClick()
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
     }
 }

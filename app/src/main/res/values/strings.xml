@@ -18,6 +18,7 @@
     <string name="settings">Settings</string>
     <string name="section_server">Server</string>
     <string name="section_cloudflare">Cloudflare Access (optional)</string>
+    <string name="section_cloudflare_help">Fill in only when the server URL is protected by Cloudflare Access.</string>
     <string name="cf_id">Client ID</string>
     <string name="cf_secret">Client Secret</string>
     <string name="base_url">Base URL</string>
@@ -25,18 +26,22 @@
     <string name="model">Model</string>
     <string name="provider_optional">Provider (optional)</string>
     <string name="section_notifications">Notifications (M3)</string>
-    <string name="relay_optional">Relay URL (optional)</string>
-    <string name="fcm_token">FCM token: %1$s…</string>
+    <string name="relay_optional">Relay URL (optional)</string>    <string name="fcm_token">FCM token: %1$s…</string>
     <string name="fcm_token_none">FCM token: (none yet)</string>
     <string name="section_firebase">Firebase manual setup (optional)</string>
+    <string name="section_firebase_help">Required only for push notifications without google-services.json. Copy the four values from the Firebase console.</string>
     <string name="fb_project">Project ID</string>
     <string name="fb_app">App ID</string>
     <string name="fb_key">API key</string>
     <string name="fb_sender">Sender ID</string>
-    <string name="save">Save</string>
+    <string name="save">Save settings</string>
     <string name="saved">Saved ✓</string>
     <string name="test">Test connection</string>
     <string name="testing">Checking…</string>
+    <string name="test_result_title">Connection result</string>
+    <string name="close">Close</string>
+    <string name="show">Show</string>
+    <string name="hide">Hide</string>
 
     <string name="st_loading">loading history</string>
     <string name="st_starting">starting</string>
@@ -68,4 +73,28 @@
     <string name="tool_finished">■ %1$s (%2$s s) %3$s</string>
     <string name="delegating">delegating: %1$s</string>
     <string name="child_done">child %1$s: %2$s</string>
+
+    <string name="conversations">Conversations</string>
+    <string name="search_hint">Search</string>
+    <string name="menu">Menu</string>
+    <string name="back">Back</string>
+    <string name="settings_desc">Settings</string>
+    <string name="refresh">Refresh</string>
+    <string name="scroll_to_bottom">Scroll to latest</string>
+    <string name="thinking">Thinking…</string>
+    <string name="copy">Copy</string>
+    <string name="copied">Copied</string>
+    <string name="empty_chat_title">What can I do for you?</string>
+    <string name="empty_chat_subtitle">Ask Hermes to run tasks on your server.</string>
+    <string name="suggest_1">Summarize uncommitted changes</string>
+    <string name="suggest_2">Show what is running on the server</string>
+    <string name="suggest_3">Look into recent errors</string>
+    <string name="details">Details</string>
+    <string name="activity_summary">%1$d tool steps · %2$s</string>
+    <string name="expand">Expand</string>
+    <string name="collapse">Collapse</string>
+    <string name="history_today">Today</string>
+    <string name="history_week">Previous 7 days</string>
+    <string name="history_month">Previous 30 days</string>
+    <string name="history_older">Older</string>
 </resources>

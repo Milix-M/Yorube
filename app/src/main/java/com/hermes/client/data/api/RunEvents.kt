@@ -112,3 +112,25 @@ fun parseSseData(raw: String): JsonObject? {
         null
     }
 }
+
+/**
+ * Tool previews often arrive as raw JSON blobs such as
+ * {"output":"...","exit_code":0,"error":null}. Show the human part
+ * (output, else error) instead of the raw blob, truncated to stay readable.
+ */
+fun humanPreview(raw: String, maxLen: Int = 200): String {
+    val text = raw.trim()
+    if (text.startsWith("{") && text.endsWith("}")) {
+        val parsed = try {
+            HermesJson.parseToJsonElement(text).jsonObject
+        } catch (_: Exception) {
+            null
+        }
+        if (parsed != null) {
+            val chosen = parsed.str("output")?.ifBlank { null }
+                ?: parsed.str("error")?.ifBlank { null }
+            if (chosen != null) return chosen.take(maxLen)
+        }
+    }
+    return if (text.length <= maxLen) text else text.take(maxLen) + "…"
+}

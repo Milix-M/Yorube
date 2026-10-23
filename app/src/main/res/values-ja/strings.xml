@@ -17,26 +17,32 @@
 
     <string name="settings">設定</string>
     <string name="section_server">サーバー</string>
-    <string name="section_cloudflare">Cloudflare Access (任意)</string>
+    <string name="section_cloudflare">Cloudflare Access (オプション)</string>
+    <string name="section_cloudflare_help">サーバーURLがCloudflare Accessで保護されている場合のみ入力。</string>
     <string name="cf_id">クライアントID</string>
     <string name="cf_secret">クライアントシークレット</string>
     <string name="base_url">Base URL</string>
     <string name="api_key">APIキー</string>
     <string name="model">モデル</string>
-    <string name="provider_optional">プロバイダ (任意)</string>
+    <string name="provider_optional">プロバイダ (オプション)</string>
     <string name="section_notifications">通知 (M3)</string>
-    <string name="relay_optional">中継URL (任意)</string>
+    <string name="relay_optional">中継URL (オプション)</string>
     <string name="fcm_token">FCMトークン: %1$s…</string>
     <string name="fcm_token_none">FCMトークン: (まだなし)</string>
-    <string name="section_firebase">Firebase手動設定 (任意)</string>
+    <string name="section_firebase">Firebase手動設定 (オプション)</string>
+    <string name="section_firebase_help">google-services.jsonを使わず通知を受ける場合のみ必要です。Firebaseコンソールの4つの値を写します。</string>
     <string name="fb_project">プロジェクトID</string>
     <string name="fb_app">アプリID</string>
     <string name="fb_key">APIキー</string>
     <string name="fb_sender">送信者ID</string>
-    <string name="save">保存</string>
+    <string name="save">設定を保存</string>
     <string name="saved">保存済み ✓</string>
     <string name="test">接続試験</string>
     <string name="testing">確認中…</string>
+    <string name="test_result_title">接続結果</string>
+    <string name="close">閉じる</string>
+    <string name="show">表示</string>
+    <string name="hide">隠す</string>
 
     <string name="st_loading">履歴を読込中</string>
     <string name="st_starting">開始中</string>
@@ -68,4 +74,28 @@
     <string name="tool_finished">■ %1$s (%2$s秒) %3$s</string>
     <string name="delegating">委譲中: %1$s</string>
     <string name="child_done">子 %1$s: %2$s</string>
+
+    <string name="conversations">会話</string>
+    <string name="search_hint">検索</string>
+    <string name="menu">メニュー</string>
+    <string name="back">戻る</string>
+    <string name="settings_desc">設定</string>
+    <string name="refresh">更新</string>
+    <string name="scroll_to_bottom">最新へ移動</string>
+    <string name="thinking">考え中…</string>
+    <string name="copy">コピー</string>
+    <string name="copied">コピーしました</string>
+    <string name="empty_chat_title">何をお手伝いしますか?</string>
+    <string name="empty_chat_subtitle">サーバー上のHermesに作業を頼めます。</string>
+    <string name="suggest_1">未コミットの変更を要約して</string>
+    <string name="suggest_2">サーバーで動いているものを確認して</string>
+    <string name="suggest_3">直近のエラーを調べて</string>
+    <string name="details">詳細</string>
+    <string name="activity_summary">ツール %1$d件 · %2$s</string>
+    <string name="expand">展開</string>
+    <string name="collapse">折りたたむ</string>
+    <string name="history_today">今日</string>
+    <string name="history_week">過去7日間</string>
+    <string name="history_month">過去30日間</string>
+    <string name="history_older">それ以前</string>
 </resources>

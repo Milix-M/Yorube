@@ -76,11 +76,15 @@ dependencies {
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
+    implementation(libs.compose.material.icons.core)
+    implementation(libs.compose.material.icons.extended)
     implementation(libs.navigation.compose)
     implementation(libs.coroutines.android)
     implementation(libs.okhttp)
     implementation(libs.serialization.json)
     implementation(libs.datastore.preferences)
+    implementation(libs.markdown.renderer)
+    implementation(libs.markdown.renderer.m3)
     // FCM only. No google-services plugin: FirebaseApp is initialized
     // manually from Settings (FirebaseConfig), so the build works without
     // google-services.json. See data/fcm/FirebaseInit.kt.
