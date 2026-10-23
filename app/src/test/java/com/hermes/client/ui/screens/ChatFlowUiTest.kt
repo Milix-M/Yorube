@@ -101,21 +101,28 @@ class ChatFlowUiTest {
             compose.onAllNodesWithTag("activityToggle", useUnmergedTree = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
-        // New activity blocks stream in over time; expand whatever is present, retrying.
-        repeat(10) {
+        // New activity blocks stream in over time; expand each toggle exactly once
+        // (re-clicking would collapse an already-expanded block again).
+        var expandedToggles = 0
+        for (attempt in 0 until 20) {
             val toggles = compose.onAllNodesWithTag("activityToggle", useUnmergedTree = true)
-            for (i in 0 until toggles.fetchSemanticsNodes().size) {
+            val count = toggles.fetchSemanticsNodes().size
+            var allClicked = true
+            for (i in expandedToggles until count) {
                 try {
                     toggles[i].performClick()
                 } catch (_: Exception) {
+                    allClicked = false
+                    break
                 }
             }
+            if (allClicked) expandedToggles = count
             Thread.sleep(500)
             val done = listOf("terminal", "working", "delegating", "child ok").all { want ->
                 compose.onAllNodesWithText(want, substring = true, useUnmergedTree = true)
                     .fetchSemanticsNodes().isNotEmpty()
             }
-            if (done) return@repeat
+            if (done) break
         }
         // Note: the terminal "final" is not rendered on its own — the streamed
         // "answer" already holds the reply. Waiting for it would time out.
