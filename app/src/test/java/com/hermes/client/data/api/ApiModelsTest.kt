@@ -67,11 +67,11 @@ class ApiModelsTest {
     @Test
     fun parseSessionDate_scalesAndKeys() {
         val sec = 1_700_000_000.0
-        assertEquals(sec, parseDate("{\"updated_at\":$sec}"))
-        assertEquals(sec, parseDate("{\"updated_at\":${sec * 1000.0}}"), 0.001)
-        assertEquals(sec, parseDate("{\"updated_at\":${sec * 1_000_000.0}}"), 1.0)
-        assertEquals(sec, parseDate("{\"updatedAt\":$sec}"))
-        assertEquals(sec, parseDate("{\"created_at\":$sec}"))
+        assertEquals(sec, parseDate("{\"updated_at\":$sec}")!!)
+        assertEquals(sec, parseDate("{\"updated_at\":${sec * 1000.0}}")!!, 0.001)
+        assertEquals(sec, parseDate("{\"updated_at\":${sec * 1_000_000.0}}")!!, 1.0)
+        assertEquals(sec, parseDate("{\"updatedAt\":$sec}")!!)
+        assertEquals(sec, parseDate("{\"created_at\":$sec}")!!)
         assertEquals(null, parseDate("{}"))
         assertEquals(null, parseDate("{\"updated_at\":null}"))
         assertEquals(null, parseDate("{\"updated_at\":\"\"}"))
@@ -86,7 +86,7 @@ class ApiModelsTest {
         )
         assertEquals(1_792_800_000.0, epoch!!, 1.0)
         // Numeric strings also work.
-        assertEquals(1_700_000_000.0, parseDate("{\"updated_at\":\"1700000000\"}"), 0.001)
+        assertEquals(1_700_000_000.0, parseDate("{\"updated_at\":\"1700000000\"}")!!, 0.001)
     }
 
     private fun parseDate(raw: String) =
