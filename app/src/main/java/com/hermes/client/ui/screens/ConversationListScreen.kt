@@ -1,6 +1,9 @@
 package com.hermes.client.ui.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,9 +15,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -23,24 +26,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -51,7 +36,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -66,8 +50,17 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.hermes.client.HermesApp
 import com.hermes.client.R
 import com.hermes.client.data.api.SessionInfo
+import com.hermes.client.ui.ds.Hermes
+import com.hermes.client.ui.ds.HermesDialog
+import com.hermes.client.ui.ds.HermesIconButton
+import com.hermes.client.ui.ds.HermesScaffold
+import com.hermes.client.ui.ds.HermesSnackbarHost
+import com.hermes.client.ui.ds.HermesTextField
+import com.hermes.client.ui.ds.HermesTopBar
+import com.hermes.client.ui.ds.HermesTypingDots
+import com.hermes.client.ui.ds.rememberHermesSnackbarState
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ConversationListScreen(
     onOpenChat: (String?, String?) -> Unit,
@@ -81,7 +74,7 @@ fun ConversationListScreen(
                 ConversationListViewModel(app.container) as T
         }
     )
-    val snackbar = remember { SnackbarHostState() }
+    val snackbar = rememberHermesSnackbarState()
     var pendingDelete by remember { mutableStateOf<String?>(null) }
     var query by remember { mutableStateOf("") }
 
@@ -96,51 +89,56 @@ fun ConversationListScreen(
         onDispose { lifecycle.removeObserver(observer) }
     }
     LaunchedEffect(vm.error) {
-        vm.error?.let { snackbar.showSnackbar(it); vm.dismissError() }
+        vm.error?.let { snackbar.show(it); vm.dismissError() }
     }
 
-    Scaffold(
+    HermesScaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Hermes") },
-                actions = {
-                    IconButton(
-                        onClick = vm::refresh,
-                        modifier = Modifier.testTag("refreshButton"),
-                    ) {
-                        Icon(
-                            Icons.Filled.Refresh,
-                            contentDescription = stringResource(R.string.refresh),
-                        )
-                    }
-                    IconButton(
-                        onClick = onOpenSettings,
-                        modifier = Modifier.testTag("settingsButton"),
-                    ) {
-                        Icon(
-                            Icons.Filled.Settings,
-                            contentDescription = stringResource(R.string.settings_desc),
-                        )
-                    }
+            HermesTopBar(title = "Hermes") {
+                HermesIconButton(
+                    onClick = vm::refresh,
+                    desc = stringResource(R.string.refresh),
+                    modifier = Modifier.testTag("refreshButton"),
+                ) {
+                    Image(imageVector = Icons.Filled.Refresh, contentDescription = null)
                 }
-            )
+                HermesIconButton(
+                    onClick = onOpenSettings,
+                    desc = stringResource(R.string.settings_desc),
+                    modifier = Modifier.testTag("settingsButton"),
+                ) {
+                    Image(imageVector = Icons.Filled.Settings, contentDescription = null)
+                }
+            }
         },
-        snackbarHost = { SnackbarHost(snackbar) },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { onOpenChat(null, null) },
-                modifier = Modifier.testTag("newChat"),
-            ) { Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.new_chat)) }
-        },
-    ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
-            SearchField(query = query, onQuery = { query = it })
-            Box(Modifier.fillMaxSize().weight(1f)) {
-                ConversationListBody(
-                    loading = vm.loading,
-                    sessions = vm.sessions.filterQuery(query),
-                    onOpenChat = onOpenChat,
-                    onAskDelete = { pendingDelete = it },
+        snackbar = { HermesSnackbarHost(snackbar) },
+    ) {
+        Box(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize()) {
+                SearchField(query = query, onQuery = { query = it })
+                Box(Modifier.fillMaxSize().weight(1f)) {
+                    ConversationListBody(
+                        loading = vm.loading,
+                        sessions = vm.sessions.filterQuery(query),
+                        onOpenChat = onOpenChat,
+                        onAskDelete = { pendingDelete = it },
+                    )
+                }
+            }
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(20.dp)
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(Hermes.colors.primary)
+                    .clickable { onOpenChat(null, null) }
+                    .testTag("newChat"),
+            ) {
+                Image(
+                    imageVector = Icons.Filled.Add,
+                    contentDescription = stringResource(R.string.new_chat),
                 )
             }
         }
@@ -156,7 +154,7 @@ fun ConversationListScreen(
     }
 }
 
-/** ChatGPT-like drawer content, reuses the same list ViewModel. */
+/** Drawer content: new chat + search items, then history, then quiet settings. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ConversationDrawerContent(
@@ -179,61 +177,54 @@ fun ConversationDrawerContent(
 
     LaunchedEffect(Unit) { vm.refresh() }
 
-    ModalDrawerSheet(modifier = Modifier.width(320.dp)) {
-        Column(Modifier.fillMaxHeight().padding(12.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-            ) {
-                IconButton(onClick = onCloseDrawer, modifier = Modifier.testTag("closeDrawer")) {
-                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.back))
-                }
+    Column(Modifier.fillMaxHeight()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+        ) {
+            HermesIconButton(onCloseDrawer, desc = stringResource(R.string.back), modifier = Modifier.testTag("closeDrawer")) {
+                Image(imageVector = Icons.Filled.Close, contentDescription = null)
             }
-            // Primary drawer items: new chat, then chat search (opens the search screen).
-            DrawerItemRow(
-                icon = Icons.Filled.Add,
-                label = stringResource(R.string.new_chat),
-                testTag = "drawerNewChat",
-                onClick = { onOpenChat(null, null) },
+        }
+        // Primary drawer items: new chat, then chat search (opens the search screen).
+        DrawerItemRow(
+            icon = { Image(imageVector = Icons.Filled.Add, contentDescription = null) },
+            label = stringResource(R.string.new_chat),
+            testTag = "drawerNewChat",
+            onClick = { onOpenChat(null, null) },
+        )
+        DrawerItemRow(
+            icon = { Image(imageVector = Icons.Filled.Search, contentDescription = null) },
+            label = stringResource(R.string.search_chats),
+            testTag = "drawerSearch",
+            onClick = onOpenSearch,
+        )
+        Box(Modifier.fillMaxWidth().weight(1f).padding(top = 4.dp)) {
+            ConversationListBody(
+                loading = vm.loading,
+                sessions = vm.sessions,
+                selectedKey = selectedSessionId,
+                compact = true,
+                onOpenChat = onOpenChat,
+                onAskDelete = { pendingDelete = it },
             )
-            DrawerItemRow(
-                icon = Icons.Filled.Search,
-                label = stringResource(R.string.search_chats),
-                testTag = "drawerSearch",
-                onClick = onOpenSearch,
-            )
-            Box(Modifier.fillMaxWidth().weight(1f).padding(top = 4.dp)) {
-                ConversationListBody(
-                    loading = vm.loading,
-                    sessions = vm.sessions,
-                    selectedKey = selectedSessionId,
-                    compact = true,
-                    onOpenChat = onOpenChat,
-                    onAskDelete = { pendingDelete = it },
-                )
-            }
-            // Subtle footer: icon-only settings, no longer a full-width button.
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        }
+        // Subtle footer: icon-sized settings, no longer a full-width button.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        ) {
+            HermesIconButton(
+                onClick = onOpenSettings,
+                desc = stringResource(R.string.settings_desc),
+                modifier = Modifier.testTag("drawerSettings").size(40.dp),
             ) {
-                IconButton(
-                    onClick = onOpenSettings,
-                    modifier = Modifier.testTag("drawerSettings").size(40.dp),
-                ) {
-                    Icon(
-                        Icons.Filled.Settings,
-                        contentDescription = stringResource(R.string.settings_desc),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-                Text(
-                    stringResource(R.string.settings),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Image(imageVector = Icons.Filled.Settings, contentDescription = null)
             }
+            BasicText(
+                stringResource(R.string.settings),
+                style = Hermes.type.labelSmall.copy(color = Hermes.colors.onSurfaceVariant),
+            )
         }
     }
 
@@ -250,7 +241,7 @@ fun ConversationDrawerContent(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DrawerItemRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: @Composable () -> Unit,
     label: String,
     testTag: String,
     onClick: () -> Unit,
@@ -262,24 +253,19 @@ private fun DrawerItemRow(
             .clip(RoundedCornerShape(12.dp))
             .combinedClickable(onClick = onClick)
             .testTag(testTag)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = 12.dp, vertical = 12.dp),
     ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp),
-        )
-        Text(
+        Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) { icon() }
+        BasicText(
             label,
-            style = MaterialTheme.typography.bodyMedium,
+            style = Hermes.type.body.copy(color = Hermes.colors.onSurface),
             modifier = Modifier.padding(start = 12.dp),
         )
     }
 }
 
 /** Full chat-search screen: query field plus the filtered conversation history. */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ConversationSearchScreen(
     onOpenChat: (String?, String?) -> Unit,
@@ -299,31 +285,18 @@ fun ConversationSearchScreen(
 
     LaunchedEffect(Unit) { vm.refresh() }
 
-    Scaffold(
+    HermesScaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.search_chats)) },
-                navigationIcon = {
-                    IconButton(
-                        onClick = onNavigateBack,
-                        modifier = Modifier.testTag("searchBack"),
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.back),
-                        )
-                    }
-                }
+            HermesTopBar(
+                title = stringResource(R.string.search_chats),
+                onBack = onNavigateBack,
+                backDesc = stringResource(R.string.back),
+                backTestTag = "searchBack",
             )
         },
-    ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
-            SearchField(
-                query = query,
-                onQuery = { query = it },
-                modifier = Modifier.padding(vertical = 8.dp),
-                fieldTag = "searchScreenInput",
-            )
+    ) {
+        Column(Modifier.fillMaxSize()) {
+            SearchField(query = query, onQuery = { query = it }, fieldTag = "searchScreenInput")
             Box(Modifier.fillMaxSize().weight(1f)) {
                 ConversationListBody(
                     loading = vm.loading,
@@ -352,14 +325,14 @@ private fun SearchField(
     modifier: Modifier = Modifier,
     fieldTag: String = "searchInput",
 ) {
-    OutlinedTextField(
+    HermesTextField(
         value = query,
         onValueChange = onQuery,
-        placeholder = { Text(stringResource(R.string.search_hint)) },
-        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
+        placeholder = stringResource(R.string.search_hint),
         singleLine = true,
-        shape = RoundedCornerShape(16.dp),
-        modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp).testTag(fieldTag),
+        modifier = modifier
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .testTag(fieldTag),
     )
 }
 
@@ -376,7 +349,7 @@ private fun ConversationListBody(
     when {
         loading && sessions.isEmpty() ->
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+                HermesTypingDots()
             }
         sessions.isEmpty() ->
             Column(
@@ -384,22 +357,20 @@ private fun ConversationListBody(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                Icon(
-                    Icons.Filled.Search,
+                Image(
+                    imageVector = Icons.Filled.Search,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(40.dp),
                 )
-                Text(
+                BasicText(
                     stringResource(R.string.empty_conversations),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = Hermes.type.body.copy(color = Hermes.colors.onSurfaceVariant),
                     modifier = Modifier.padding(top = 12.dp),
                 )
             }
         else -> LazyColumn(Modifier.fillMaxSize()) {
-            // Sessions without a server timestamp render with no bucket
-            // header instead of being mislabeled. Headers re-emit after a gap.
+            // Sessions without a server timestamp render with no bucket header
+            // instead of a misleading label. Headers re-emit after a gap.
             var lastBucket: HistoryBucket? = null
             var bucketActive = false
             sessions.forEach { s ->
@@ -408,10 +379,9 @@ private fun ConversationListBody(
                     lastBucket = bucket
                     bucketActive = true
                     item(key = "header-$bucket") {
-                        Text(
+                        BasicText(
                             stringResource(bucket.titleRes),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = Hermes.type.labelSmall.copy(color = Hermes.colors.onSurfaceVariant),
                             modifier = Modifier.padding(start = 12.dp, top = 10.dp, bottom = 2.dp),
                         )
                     }
@@ -420,41 +390,48 @@ private fun ConversationListBody(
                 }
                 item(key = "session-${s.key.ifBlank { s.displayTitle }}") {
                     val selected = selectedKey != null && s.key == selectedKey
-                    Surface(
-                        color = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
-                        shape = RoundedCornerShape(12.dp),
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = if (compact) 0.dp else 4.dp, vertical = 1.dp)
                             .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                if (selected) Hermes.colors.primaryContainer
+                                else androidx.compose.ui.graphics.Color.Transparent
+                            )
                             .combinedClickable(
                                 onClick = { onOpenChat(s.key, s.title) },
                                 onLongClick = { onAskDelete(s.key) },
                             )
-                            .animateItem(),
+                            .animateItem()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
                     ) {
-                        ListItem(
-                            headlineContent = {
-                                Text(
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                BasicText(
                                     s.title?.ifBlank { null } ?: stringResource(R.string.new_chat),
+                                    style = Hermes.type.body.copy(color = Hermes.colors.onSurface),
                                     maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
                                 )
-                            },
-                            supportingContent = formatDateTime(s.updatedAt)?.let { date ->
-                                { Text(date, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                            },
-                            trailingContent = {
-                                IconButton(onClick = { onAskDelete(s.key) }) {
-                                    Icon(
-                                        Icons.Filled.Delete,
-                                        contentDescription = stringResource(R.string.delete),
-                                        modifier = Modifier.size(18.dp),
+                                formatDateTime(s.updatedAt)?.let { date ->
+                                    BasicText(
+                                        date,
+                                        style = Hermes.type.labelSmall.copy(color = Hermes.colors.onSurfaceVariant),
+                                        maxLines = 1,
                                     )
                                 }
-                            },
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                        )
+                            }
+                            HermesIconButton(
+                                onClick = { onAskDelete(s.key) },
+                                desc = stringResource(R.string.delete),
+                            ) {
+                                Image(
+                                    imageVector = Icons.Filled.Delete,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -464,17 +441,20 @@ private fun ConversationListBody(
 
 @Composable
 private fun DeleteDialog(label: String, onDismiss: () -> Unit, onConfirm: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = onConfirm) { Text(stringResource(R.string.delete)) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
-        },
-        title = { Text(stringResource(R.string.delete_title)) },
-        text = { Text(label.take(40)) },
-    )
+    HermesDialog(
+        visible = true,
+        onDismiss = onDismiss,
+        title = stringResource(R.string.delete_title),
+        confirmLabel = stringResource(R.string.delete),
+        onConfirm = onConfirm,
+        dismissLabel = stringResource(R.string.cancel),
+        onDismissAction = onDismiss,
+    ) {
+        BasicText(
+            label.take(40),
+            style = Hermes.type.body.copy(color = Hermes.colors.onSurface),
+        )
+    }
 }
 
 /** Short date for conversation rows. Null when the server sent no timestamp. */
@@ -496,7 +476,7 @@ private fun List<SessionInfo>.filterQuery(q: String): List<SessionInfo> {
     return filter { it.displayTitle.contains(q, ignoreCase = true) || it.key.contains(q, ignoreCase = true) }
 }
 
-/** ChatGPT-like history sections. */
+/** History sections. Undated sessions deliberately get no bucket. */
 private enum class HistoryBucket(val titleRes: Int) {
     TODAY(R.string.history_today),
     WEEK(R.string.history_week),
@@ -504,8 +484,7 @@ private enum class HistoryBucket(val titleRes: Int) {
     OLDER(R.string.history_older),
 }
 
-private fun bucketFor(updatedAt: Double?): HistoryBucket {
-    if (updatedAt == null) return HistoryBucket.OLDER
+private fun bucketFor(updatedAt: Double): HistoryBucket {
     // Server sends epoch seconds; tolerate millis/micros just in case.
     var epochSec = updatedAt
     while (epochSec > 1e11) epochSec /= 1000.0

@@ -56,6 +56,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -152,6 +153,7 @@ fun HermesTopBar(
     title: String,
     onBack: (() -> Unit)? = null,
     backDesc: String? = null,
+    backTestTag: String = "topBack",
     navigation: @Composable RowScope.() -> Unit = {},
     actions: @Composable RowScope.() -> Unit = {},
 ) {
@@ -163,7 +165,7 @@ fun HermesTopBar(
     ) {
         navigation()
         if (onBack != null) {
-            HermesIconButton(onClick = onBack, desc = backDesc, modifier = Modifier.testTag("topBack")) {
+            HermesIconButton(onClick = onBack, desc = backDesc, modifier = Modifier.testTag(backTestTag)) {
                 HermesGlyph("‹", Hermes.type.title.copy(fontSize = 24.sp))
             }
         }
@@ -171,6 +173,7 @@ fun HermesTopBar(
             text = title,
             style = Hermes.type.title.copy(color = Hermes.colors.onSurface),
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier
                 .weight(1f)
                 .padding(horizontal = 12.dp),
