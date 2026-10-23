@@ -37,6 +37,7 @@ class HermesDsTest {
         compose.setContent {
             HermesDsTheme {
                 var dialog by remember { mutableStateOf(false) }
+                var dsText by remember { mutableStateOf("") }
                 Column {
                     HermesTopBar(
                         title = "Title",
@@ -47,8 +48,8 @@ class HermesDsTest {
                         HermesButton("Go", onClick = { dialog = true }, modifier = Modifier.testTag("dsGo"))
                     }
                     HermesTextField(
-                        value = "",
-                        onValueChange = {},
+                        value = dsText,
+                        onValueChange = { dsText = it },
                         label = "Label",
                         placeholder = "Hint",
                         modifier = Modifier.testTag("dsInput"),
