@@ -428,7 +428,7 @@ class ChatViewModel(
                 continue
             }
             if (split.visible.isNotBlank()) rebuilt.add(m.copy(text = split.visible))
-            for (summary in split.folded) rebuilt.add(UiMessage(idSeq++, MsgKind.TOOL, summary))
+            for (entry in split.folded) rebuilt.add(UiMessage(idSeq++, MsgKind.TOOL, entry.render()))
         }
         messages.clear()
         messages.addAll(rebuilt)
