@@ -2,6 +2,9 @@ package com.hermes.client.ui.navigation
 
 import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.and
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -203,7 +206,7 @@ class NavGraphTest {
         compose.waitUntil(timeoutMillis = 15_000) {
             compose.onAllNodesWithText("Other").fetchSemanticsNodes().isEmpty()
         }
-        compose.onNodeWithText("Hello").assertIsDisplayed()
+        compose.onNode(hasText("Hello") and !hasSetTextAction()).assertIsDisplayed()
         // Back returns to the home chat.
         compose.onNodeWithTag("searchBack").performClick()
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
