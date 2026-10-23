@@ -715,7 +715,7 @@ class ChatViewModelTest {
         val assistants = vm.messages.filter { it.kind == MsgKind.ASSISTANT }
         assertEquals(1, assistants.size)
         assertEquals("done", assistants[0].text)
-        assertTrue(vm.messages.any { it.kind == MsgKind.TOOL && it.text == "web search: bulk data here" })
+        assertTrue(vm.messages.any { it.kind == MsgKind.TOOL && it.text.lines().first() == "web search: bulk data here" })
     }
 
     @Test
@@ -758,7 +758,7 @@ class ChatViewModelTest {
         vm.onSend()
         awaitCondition { !vm.busy }
         assertTrue(vm.messages.any { it.kind == MsgKind.ASSISTANT && it.text == "答え " })
-        assertTrue(vm.messages.any { it.kind == MsgKind.TOOL && it.text == "web extract: 抜粋" })
+        assertTrue(vm.messages.any { it.kind == MsgKind.TOOL && it.text.lines().first() == "web extract: 抜粋" })
         assertTrue(vm.messages.none { it.text.contains("untrusted_tool_result") })
     }
 
@@ -774,7 +774,7 @@ class ChatViewModelTest {
         awaitCondition { vm.messages.size == 2 }
         assertEquals(MsgKind.USER, vm.messages[0].kind)
         assertEquals(MsgKind.TOOL, vm.messages[1].kind)
-        assertEquals("web search: bulk", vm.messages[1].text)
+        assertEquals("web search: bulk", vm.messages[1].text.lines().first())
     }
 
     @Test
@@ -905,6 +905,6 @@ class ChatViewModelTest {
         vm.onSend()
         awaitCondition { !vm.busy }
         assertTrue(vm.messages.none { it.kind == MsgKind.ASSISTANT })
-        assertTrue(vm.messages.any { it.kind == MsgKind.TOOL && it.text == "markup: <result>" })
+        assertTrue(vm.messages.any { it.kind == MsgKind.TOOL && it.text.lines().first() == "markup: <result>" })
     }
 }

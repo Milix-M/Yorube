@@ -398,11 +398,15 @@ private fun ConversationListBody(
                 )
             }
         else -> LazyColumn(Modifier.fillMaxSize()) {
+            // Sessions without a server timestamp render with no bucket
+            // header instead of being mislabeled. Headers re-emit after a gap.
             var lastBucket: HistoryBucket? = null
+            var bucketActive = false
             sessions.forEach { s ->
-                val bucket = bucketFor(s.updatedAt)
-                if (bucket != lastBucket) {
+                val bucket = s.updatedAt?.let { bucketFor(it) }
+                if (bucket != null && (!bucketActive || bucket != lastBucket)) {
                     lastBucket = bucket
+                    bucketActive = true
                     item(key = "header-$bucket") {
                         Text(
                             stringResource(bucket.titleRes),
@@ -411,6 +415,8 @@ private fun ConversationListBody(
                             modifier = Modifier.padding(start = 12.dp, top = 10.dp, bottom = 2.dp),
                         )
                     }
+                } else if (bucket == null) {
+                    bucketActive = false
                 }
                 item(key = "session-${s.key.ifBlank { s.displayTitle }}") {
                     val selected = selectedKey != null && s.key == selectedKey

@@ -101,7 +101,7 @@ class ToolMarkupTest {
         val split = splitUserFacing("{\"success\":true,\"name\":\"grounded-citations\",\"x\":1}")
         assertEquals("", split.visible)
         assertEquals(1, split.folded.size)
-        assertTrue("folded=${split.folded}", split.folded[0].startsWith("grounded-citations: "))
+        assertTrue("folded=${split.folded}", split.folded[0].summary.startsWith("grounded-citations: "))
     }
 
     @Test
@@ -122,7 +122,7 @@ class ToolMarkupTest {
     fun split_tagWrappedPayload_folds() {
         val split = splitUserFacing("<result>some dump</result>")
         assertEquals("", split.visible)
-        assertEquals(listOf("markup: <result>"), split.folded)
+        assertEquals(listOf("markup: <result>"), split.folded.map { it.summary })
     }
 
     @Test
@@ -167,7 +167,59 @@ class ToolMarkupTest {
 
     @Test
     fun summarizeJsonObject_keyFallback() {
-        assertEquals("tool: {a, b}", summarizeJsonObject(parseObj("{\"a\":1,\"b\":2}")))
+        assertEquals("tool: a=1, b=2", summarizeJsonObject(parseObj("{\"a\":1,\"b\":2}")))
+    }
+
+    @Test
+    fun summarizeJsonObject_readsValues() {
+        assertEquals(
+            "grounded-citations: success=true, name=grounded-citations, x=1",
+            summarizeJsonObject(parseObj("{\"success\":true,\"name\":\"grounded-citations\",\"x\":1}")),
+        )
+    }
+
+    @Test
+    fun compactPairs_truncatesAndMarksNested() {
+        val parsed = parseObj("{\"a\":null,\"b\":[1,2],\"c\":{\"d\":1},\"e\":\"" + "y".repeat(100) + "\",\"f\":1}")
+        assertEquals("a=null, b=[2], c={d}, e=" + "y".repeat(80) + ", f=1", compactPairs(parsed))
+    }
+
+    @Test
+    fun jsonScalar_shapes() {
+        assertEquals("x", jsonScalar(kotlinx.serialization.json.JsonPrimitive("x")))
+        assertEquals("3", jsonScalar(kotlinx.serialization.json.JsonPrimitive(3)))
+        assertEquals("[2]", jsonScalar(parseArr("[1,2]")))
+        assertEquals("{a}", jsonScalar(parseObj("{\"a\":1}")))
+        assertEquals("null", jsonScalar(kotlinx.serialization.json.JsonNull))
+    }
+
+    @Test
+    fun untrustedDetail_stripsBoilerplate() {
+        val detail = untrustedDetail("<untrusted_tool_result source=\"web_search\">RESULT BODY HERE</untrusted_tool_result>")
+        assertEquals("RESULT BODY HERE", detail)
+        assertEquals("abc…", untrustedDetail("abcdef", max = 3))
+    }
+
+    @Test
+    fun prettyMachineJson_formatsAndCaps() {
+        val pretty = prettyMachineJson("{\"a\":1}")
+        assertTrue(pretty.contains("\"a\": 1"))
+        assertTrue(pretty.contains("\n"))
+        assertEquals("nope", prettyMachineJson("nope"))
+        val long = prettyMachineJson("{\"a\":\"" + "y".repeat(2000) + "\"}", max = 50)
+        assertTrue(long.endsWith("…"))
+    }
+
+    @Test
+    fun foldedRender_joinsSummaryAndDetail() {
+        assertEquals("s", Folded("s").render())
+        assertEquals("s\nd", Folded("s", "d").render())
+    }
+
+    @Test
+    fun splitUserFacing_carriesDetail() {
+        val split = splitUserFacing("<result>some dump</result>")
+        assertEquals("markup: <result>\n<result>some dump</result>", split.folded[0].render())
     }
 
     @Test
@@ -183,4 +235,7 @@ class ToolMarkupTest {
 
     private fun parseObj(raw: String) =
         kotlinx.serialization.json.Json.parseToJsonElement(raw) as kotlinx.serialization.json.JsonObject
+
+    private fun parseArr(raw: String) =
+        kotlinx.serialization.json.Json.parseToJsonElement(raw) as kotlinx.serialization.json.JsonArray
 }

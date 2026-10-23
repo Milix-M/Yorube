@@ -3,8 +3,8 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <!-- Centered four-point sparkle: symmetric, so optical margins match. -->
+    <!-- Material Symbols "auto_awesome" (Apache License 2.0, Google Fonts). -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M12,2 C12.8,7.5 16.5,11.2 22,12 C16.5,12.8 12.8,16.5 12,22 C11.2,16.5 7.5,12.8 2,12 C7.5,11.2 11.2,7.5 12,2 Z" />
+        android:pathData="m19,9 -1.25,-2.75 L15,5 17.75,3.75 L19,1 l1.25,2.75 L23,5 l-2.75,1.25 Z m0,14 -1.25,-2.75 L15,19 l2.75,-1.25 L19,15 l1.25,2.75 L23,19 l-2.75,1.25 Z M9,20 l-2.5,-5.5 L1,12 l5.5,-2.5 L9,4 l2.5,5.5 L17,12 l-5.5,2.5 Z m0,-4.85 L10,13 l2.15,-1 L10,11 L9,8.85 L8,11 l-2.15,1 L8,13 Z M9,12 Z" />
 </vector>

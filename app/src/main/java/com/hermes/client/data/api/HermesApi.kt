@@ -273,7 +273,18 @@ class HermesApi(
                     (el["sessions"] as? JsonArray) ?: (el["data"] as? JsonArray)
                 else -> null
             } ?: return emptyList()
-            HermesJson.decodeFromString<List<SessionInfo>>(arr.toString())
+            arr.mapNotNull { item ->
+                val o = item as? JsonObject ?: return@mapNotNull null
+                val id = o.str("id", "session_id") ?: ""
+                val title = o.str("title", "name")
+                if (id.isBlank() && title.isNullOrBlank()) return@mapNotNull null
+                SessionInfo(
+                    id = o.str("id") ?: "",
+                    sessionId = o.str("session_id") ?: "",
+                    title = title,
+                    updatedAt = parseSessionDate(o),
+                )
+            }
         } catch (_: Exception) {
             emptyList()
         }

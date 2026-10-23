@@ -157,8 +157,7 @@ data class SessionMessage(
     val text: String = "",
 )
 
-fun messageText(content: JsonElement?): String {
-    if (content == null) return ""
+fun messageText(content: JsonElement?): String {    if (content == null) return ""
     if (content is JsonPrimitive && content.isString) return content.content
     if (content is JsonArray) {
         return content.mapNotNull { part ->
@@ -170,6 +169,37 @@ fun messageText(content: JsonElement?): String {
         }.joinToString("\n")
     }
     return ""
+}
+
+/**
+ * Flexible session timestamp: the server may send epoch seconds, millis,
+ * micros, nanos (any numeric scale), an ISO-8601 string, or camelCase keys.
+ * Returns epoch seconds, or null when the payload carries no usable date.
+ */
+internal fun parseSessionDate(o: JsonObject): Double? {
+    val raw = (o["updated_at"] ?: o["updatedAt"] ?: o["created_at"] ?: o["createdAt"])
+        as? JsonPrimitive ?: return null
+    if (!raw.isString) {
+        return raw.doubleOrNull?.let { normalizeEpoch(it) }
+    }
+    return parseDateString(raw.content)
+}
+
+/** Collapse any epoch scale (s/ms/us/ns) down to seconds. */
+internal fun normalizeEpoch(value: Double): Double {
+    var epochSec = value
+    while (epochSec > 1e11) epochSec /= 1000.0
+    return epochSec
+}
+
+internal fun parseDateString(raw: String): Double? {
+    val text = raw.trim()
+    if (text.isEmpty()) return null
+    try {
+        return java.time.Instant.parse(text).epochSecond.toDouble()
+    } catch (_: Exception) {
+    }
+    return text.toDoubleOrNull()?.let { normalizeEpoch(it) }
 }
 
 @Serializable
