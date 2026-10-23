@@ -174,6 +174,61 @@ class NavGraphTest {
     }
 
     @Test
+    fun homeShowsLatestChat() {
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                return when {
+                    (request.path ?: "").startsWith("/api/sessions/s2/messages") ->
+                        MockResponse().setBody(
+                            """{"messages":[{"role":"user","content":"q"},{"role":"assistant","content":"recent answer"}]}"""
+                        )
+                    (request.path ?: "").startsWith("/api/sessions") ->
+                        MockResponse().setBody(
+                            """{"sessions":[{"id":"s2","title":"Recent"},{"id":"s1","title":"Old"}]}"""
+                        )
+                    else -> MockResponse().setBody("{}")
+                }
+            }
+        }
+        saveSettings()
+        compose.setContent {
+            HermesAppTheme {
+                NavGraph(null)
+            }
+        }
+        // Launch lands on the latest conversation, not an empty chat.
+        waitFor("recent answer")
+        compose.onNodeWithText("recent answer").assertIsDisplayed()
+    }
+
+    @Test
+    fun freshHomeNewChatClosesDrawerWithoutNavigating() {
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                return when {
+                    (request.path ?: "").startsWith("/api/sessions") ->
+                        MockResponse().setBody("""{"sessions":[]}""")
+                    else -> MockResponse().setBody("{}")
+                }
+            }
+        }
+        saveSettings()
+        compose.setContent {
+            HermesAppTheme {
+                NavGraph(null)
+            }
+        }
+        compose.onNodeWithTag("chatInput").assertIsDisplayed()
+        compose.onNodeWithTag("menuButton").performClick()
+        compose.onNodeWithTag("drawerNewChat").performClick()
+        // Already on a fresh home chat: only the drawer closes, no transition.
+        compose.waitUntil(timeoutMillis = 10_000) {
+            compose.onAllNodesWithTag("closeDrawer").fetchSemanticsNodes().isEmpty()
+        }
+        compose.onNodeWithTag("chatInput").assertIsDisplayed()
+    }
+
+    @Test
     fun drawerSearch_opensSearchAndFilters() {
         server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
             override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {

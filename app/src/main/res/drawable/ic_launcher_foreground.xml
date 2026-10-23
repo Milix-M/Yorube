@@ -3,34 +3,22 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Readable paper plane: bold dart pointing up-right, folded wing, speed lines. -->
-    <!-- Speed lines -->
+    <!-- Minimal single-line paper plane, nose pointing north-east. -->
     <path
-        android:strokeColor="#8B93F8"
-        android:strokeWidth="5"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4.5"
         android:strokeLineCap="round"
-        android:pathData="M18,78 L36,70" />
+        android:strokeLineJoin="round"
+        android:pathData="M34,68 L74,32 L60,74 L52,60 Z" />
+    <!-- Fold accent -->
     <path
-        android:strokeColor="#8B93F8"
-        android:strokeWidth="5"
+        android:strokeColor="#B9C6FF"
+        android:strokeWidth="3"
         android:strokeLineCap="round"
-        android:pathData="M22,92 L46,80" />
-    <!-- Lower wing (shade) -->
+        android:pathData="M74,32 L52,60" />
+    <!-- Small trailing sparkle -->
     <path
         android:fillColor="#B9C6FF"
-        android:pathData="M30,72 L84,26 L60,80 Z" />
-    <!-- Upper wing (light) -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M30,72 L84,26 L52,58 Z" />
-    <!-- Fold line nose to tail -->
-    <path
-        android:strokeColor="#5B64D8"
-        android:strokeWidth="2.5"
-        android:strokeLineCap="round"
-        android:pathData="M84,26 L52,58" />
-    <!-- Nose tip accent -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M84,26m-5,0a5,5 0,1 1,10 0a5,5 0,1 1,-10 0" />
+        android:pathData="M26,78 C26.8,81.8 29.7,84.7 33.5,85.5 C29.7,86.3 26.8,89.2 26,93 C25.2,89.2 22.3,86.3 18.5,85.5 C22.3,84.7 25.2,81.8 26,78 Z" />
 </vector>
