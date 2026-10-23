@@ -57,6 +57,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -70,9 +71,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.composeunstyled.DisclosedContent
-import com.composeunstyled.DisclosureButton
-import com.composeunstyled.UnstyledDisclosure
 import com.hermes.client.HermesApp
 import com.hermes.client.R
 import com.hermes.client.ui.ds.Hermes
@@ -585,48 +583,61 @@ private fun ActivityLog(msgs: List<UiMessage>, modifier: Modifier = Modifier) {
         stringResource(R.string.activity_summary, msgs.size, msgs.last().text.lineSequence().firstOrNull().orEmpty())
     }
     Column(modifier = modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-        UnstyledDisclosure(
-            expanded = expanded,
-            onExpandedChange = { expanded = it },
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .clickable(
+                    onClick = { expanded = !expanded },
+                    role = Role.Button,
+                )
+                .testTag("activityToggle")
+                .padding(vertical = 6.dp),
         ) {
-            DisclosureButton(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("activityToggle"),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .padding(vertical = 6.dp),
-                ) {
-                    BasicText(
-                        if (expanded) "▾" else "▸",
-                        style = Hermes.type.label.copy(color = Hermes.colors.onSurfaceVariant),
-                    )
-                    BasicText(
-                        "⚡",
-                        style = Hermes.type.labelSmall.copy(color = Hermes.colors.onSurfaceVariant),
-                        modifier = Modifier.padding(start = 6.dp),
-                    )
-                    BasicText(
-                        summary,
-                        style = Hermes.type.labelSmall.copy(color = Hermes.colors.onSurfaceVariant),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f).padding(start = 6.dp),
-                    )
-                }
-            }
-            DisclosedContent(
-                enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
-                exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
-            ) {
-                SelectionContainer {
-                    Column(Modifier.padding(start = 22.dp, top = 2.dp, bottom = 4.dp)) {
-                        for (m in msgs) {
-                            HermesDivider(modifier = Modifier.padding(vertical = 3.dp))
+            BasicText(
+                if (expanded) "▾" else "▸",
+                style = Hermes.type.label.copy(color = Hermes.colors.onSurfaceVariant),
+            )
+            BasicText(
+                "⚡",
+                style = Hermes.type.labelSmall.copy(color = Hermes.colors.onSurfaceVariant),
+                modifier = Modifier.padding(start = 6.dp),
+            )
+            BasicText(
+                summary,
+                style = Hermes.type.labelSmall.copy(color = Hermes.colors.onSurfaceVariant),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).padding(start = 6.dp),
+            )
+        }
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
+            exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
+        ) {
+            SelectionContainer {
+                Column(Modifier.padding(start = 22.dp, top = 2.dp, bottom = 4.dp)) {
+                    for (m in msgs) {
+                        HermesDivider(modifier = Modifier.padding(vertical = 3.dp))
+                        // Summary line in bold, then the full parsed payload below.
+                        val firstNl = m.text.indexOf("\n")
+                        if (firstNl >= 0) {
+                            BasicText(
+                                m.text.substring(0, firstNl),
+                                style = Hermes.type.labelSmall.copy(
+                                    color = Hermes.colors.onSurface,
+                                    fontWeight = FontWeight.SemiBold,
+                                ),
+                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                            )
+                            BasicText(
+                                m.text.substring(firstNl + 1),
+                                style = Hermes.type.mono.copy(color = Hermes.colors.onSurfaceVariant),
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                            )
+                        } else {
                             BasicText(
                                 m.text,
                                 style = Hermes.type.mono.copy(color = Hermes.colors.onSurface),
