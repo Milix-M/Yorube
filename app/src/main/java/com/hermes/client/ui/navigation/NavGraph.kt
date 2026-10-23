@@ -26,6 +26,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.hermes.client.HermesApp
@@ -73,11 +74,15 @@ fun NavGraph(startSessionId: String?) {
     LaunchedEffect(Unit) { startVm.refresh() }
     // Home shows the latest conversation once it arrives (explicit session
     // ids, e.g. from a notification tap, always win). Ordinary forward
-    // navigation replaces the fresh home without growing the back stack.
+    // navigation replaces the fresh home without growing the back stack,
+    // and only while the fresh home is actually showing.
     val latest = startVm.sessions.firstOrNull()
     var forwarded by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(latest?.key) {
-        if (startSessionId == null && latest != null && !forwarded) {
+    val entry by navController.currentBackStackEntryAsState()
+    val onFreshHome = entry?.destination?.route?.startsWith(Routes.CHAT) == true &&
+        entry?.arguments?.getString("sessionId") == null
+    LaunchedEffect(latest?.key, onFreshHome) {
+        if (startSessionId == null && latest != null && !forwarded && onFreshHome) {
             forwarded = true
             navController.navigate(Routes.chat(latest.key, latest.title)) {
                 popUpTo(Routes.CHAT) { inclusive = true }
