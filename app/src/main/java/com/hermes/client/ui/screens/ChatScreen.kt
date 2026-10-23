@@ -3,11 +3,6 @@ package com.hermes.client.ui.screens
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -53,10 +48,12 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -79,7 +76,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -459,6 +455,7 @@ private fun ChatEmptyState(modifier: Modifier = Modifier) {
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ThinkingRow() {
     Row(
@@ -468,282 +465,13 @@ private fun ThinkingRow() {
             .padding(vertical = 8.dp)
             .testTag("thinkingIndicator"),
     ) {
-        TypingDots()
+        LoadingIndicator(modifier = Modifier.size(22.dp))
         Text(
             stringResource(R.string.thinking),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 8.dp),
         )
-    }
-}
-
-/** Gemini-like typing indicator: three dots wave in sequence. */
-@Composable
-private fun TypingDots() {
-    val t = rememberInfiniteTransition(label = "typing")
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        for (i in 0 until 3) {
-            val scale by t.animateFloat(
-                initialValue = 0.5f,
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(600, delayMillis = i * 150),
-                    repeatMode = RepeatMode.Reverse,
-                ),
-                label = "dot$i",
-            )
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                        alpha = 0.4f + 0.6f * scale
-                    }
-                    .clip(CircleShape)
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(Color(0xFF4285F4), Color(0xFF9B72CB))
-                        )
-                    ),
-            )
-        }
-    }
-}
-
-@Composable
-private fun MessageRow(msg: UiMessage, showCursor: Boolean, modifier: Modifier = Modifier) {
-    when (msg.kind) {
-        MsgKind.USER -> {
-            Box(modifier.fillMaxWidth().padding(start = 48.dp, top = 4.dp, bottom = 4.dp), contentAlignment = Alignment.CenterEnd) {
-                Surface(
-                    color = userBubbleColor(),
-                    contentColor = userBubbleTextColor(),
-                    shape = RoundedCornerShape(18.dp),
-                    modifier = Modifier.widthIn(max = 340.dp),
-                ) {
-                    SelectionContainer {
-                        Text(
-                            msg.text,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                        )
-                    }
-                }
-            }
-        }
-        MsgKind.ASSISTANT -> {
-            val clipboard = LocalClipboardManager.current
-            var copied by remember(msg.id) { mutableStateOf(false) }
-            LaunchedEffect(copied) {
-                if (copied) {
-                    kotlinx.coroutines.delay(1200)
-                    copied = false
-                }
-            }
-            // Same markdown components for every message; the model carries the text.
-            val components = remember {
-                markdownComponents(
-                    codeFence = { ChatGptCodeFence(it) },
-                    codeBlock = { ChatGptCodeFence(it) },
-                )
-            }
-            Row(modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp)) {
-                Surface(
-                    color = assistantBubbleColor(),
-                    shape = RoundedCornerShape(18.dp),
-                    modifier = Modifier.weight(1f, fill = false),
-                ) {
-                    Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                        if (msg.text.isNotBlank()) {
-                            Markdown(
-                                content = closeUnclosedFences(msg.text),
-                                components = components,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                        }
-                        if (showCursor) {
-                            Text(
-                                "▍",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-                IconButton(
-                    onClick = {
-                        clipboard.setText(AnnotatedString(msg.text))
-                        copied = true
-                    },
-                ) {
-                    Icon(
-                        if (copied) Icons.Filled.Check else Icons.Filled.ContentCopy,
-                        contentDescription = stringResource(if (copied) R.string.copied else R.string.copy),
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-            }
-        }
-        MsgKind.TOOL, MsgKind.STATUS -> {
-            // Defensive fallback: tool/status messages are normally grouped into
-            // ActivityLog and never reach here. Render as a plain one-line row
-            // with no bubble so nothing ever shows a chat box.
-            Text(
-                msg.text,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = modifier.fillMaxWidth().padding(vertical = 2.dp),
-            )
-        }
-        MsgKind.ERROR -> {
-            Surface(
-                color = MaterialTheme.colorScheme.errorContainer,
-                shape = RoundedCornerShape(12.dp),
-                modifier = modifier.fillMaxWidth().padding(vertical = 4.dp),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(10.dp)) {
-                    Icon(
-                        Icons.Filled.Close,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Text(
-                        msg.text,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.padding(start = 8.dp),
-                    )
-                }
-            }
-        }
-    }
-}
-
-/** Consecutive TOOL/STATUS rows are folded into one Activity block. */
-internal sealed interface ChatBlock {
-    data class Single(val msg: UiMessage) : ChatBlock
-    data class Activity(val msgs: List<UiMessage>) : ChatBlock
-}
-
-internal fun buildChatBlocks(messages: List<UiMessage>): List<ChatBlock> {
-    val out = mutableListOf<ChatBlock>()
-    val pending = mutableListOf<UiMessage>()
-    fun flush() {
-        if (pending.isNotEmpty()) {
-            out.add(ChatBlock.Activity(pending.toList()))
-            pending.clear()
-        }
-    }
-    for (m in messages) {
-        if (m.kind == MsgKind.TOOL || m.kind == MsgKind.STATUS) {
-            pending.add(m)
-        } else {
-            flush()
-            out.add(ChatBlock.Single(m))
-        }
-    }
-    flush()
-    return out
-}
-
-/**
- * Tool/MCP activity folded into a single line with no chat bubble.
- * Collapsed: one tappable summary row. Expanded: plain one-line rows.
- */
-@Composable
-private fun ActivityLog(msgs: List<UiMessage>, modifier: Modifier = Modifier) {
-    var expanded by remember(msgs.firstOrNull()?.id) { mutableStateOf(false) }
-    val summary = if (msgs.size == 1) {
-        msgs.first().text
-    } else {
-        stringResource(R.string.activity_summary, msgs.size, msgs.last().text)
-    }
-    Column(modifier = modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .clickable { expanded = !expanded }
-                .testTag("activityToggle")
-                .padding(vertical = 6.dp),
-        ) {
-            Icon(
-                if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                contentDescription = stringResource(
-                    if (expanded) R.string.collapse else R.string.expand
-                ),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(16.dp),
-            )
-            Icon(
-                Icons.Filled.Bolt,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(13.dp),
-            )
-            Text(
-                summary,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f).padding(start = 6.dp),
-            )
-        }
-        AnimatedVisibility(
-            visible = expanded,
-            enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
-            exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
-        ) {
-            // Expanded: full tool payloads (name, args, result) with wrapping
-            // so the user can see exactly what each tool call did. Selectable.
-            SelectionContainer {
-                Column(Modifier.padding(start = 22.dp, top = 2.dp, bottom = 4.dp)) {
-                    for (m in msgs) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
-                            verticalAlignment = Alignment.Top,
-                        ) {
-                            Icon(
-                                Icons.Filled.Bolt,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(13.dp).padding(top = 2.dp),
-                            )
-                            Text(
-                                m.text,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(start = 6.dp),
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/** Display name of a picked file for the attachment reference token. */
-private fun queryDisplayName(context: android.content.Context, uri: android.net.Uri): String? {
-    return try {
-        context.contentResolver.query(uri, null, null, null, null)?.use { c ->
-            val idx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-            if (c.moveToFirst() && idx >= 0) c.getString(idx) else null
-        }
-    } catch (_: Exception) {
-        null
     }
 }
 
