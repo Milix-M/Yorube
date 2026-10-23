@@ -1,8 +1,8 @@
 package com.hermes.client.ui.navigation
 
 import android.net.Uri
-import androidx.compose.animation.core.EmphasizedAccelerate
-import androidx.compose.animation.core.EmphasizedDecelerate
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -47,14 +47,14 @@ fun NavGraph(startSessionId: String?) {
         navController = navController,
         startDestination = Routes.chat(startSessionId),
         enterTransition = {
-            fadeIn(tween(EnterMs, easing = EmphasizedDecelerate)) +
-                scaleIn(initialScale = 0.96f, animationSpec = tween(EnterMs, easing = EmphasizedDecelerate))
+            fadeIn(tween(EnterMs, easing = FastOutSlowInEasing)) +
+                scaleIn(initialScale = 0.96f, animationSpec = tween(EnterMs, easing = FastOutSlowInEasing))
         },
-        exitTransition = { fadeOut(tween(ExitMs, easing = EmphasizedAccelerate)) },
-        popEnterTransition = { fadeIn(tween(EnterMs, easing = EmphasizedDecelerate)) },
+        exitTransition = { fadeOut(tween(ExitMs, easing = FastOutLinearInEasing)) },
+        popEnterTransition = { fadeIn(tween(EnterMs, easing = FastOutSlowInEasing)) },
         popExitTransition = {
-            fadeOut(tween(ExitMs, easing = EmphasizedAccelerate)) +
-                scaleOut(targetScale = 0.98f, animationSpec = tween(ExitMs, easing = EmphasizedAccelerate))
+            fadeOut(tween(ExitMs, easing = FastOutLinearInEasing)) +
+                scaleOut(targetScale = 0.98f, animationSpec = tween(ExitMs, easing = FastOutLinearInEasing))
         },
     ) {
         composable(
