@@ -1,8 +1,8 @@
 package com.hermes.client.ui.navigation
 
 import android.net.Uri
-import androidx.compose.animation.core.EmphasizedAccelerate
-import androidx.compose.animation.core.EmphasizedDecelerate
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -86,26 +86,26 @@ fun NavGraph(startSessionId: String?) {
         enterTransition = {
             slideInHorizontally(
                 initialOffsetX = { SlidePx },
-                animationSpec = tween(EnterMs, easing = EmphasizedDecelerate),
-            ) + fadeIn(tween(EnterMs, easing = EmphasizedDecelerate))
+                animationSpec = tween(EnterMs, easing = FastOutSlowInEasing),
+            ) + fadeIn(tween(EnterMs, easing = FastOutSlowInEasing))
         },
         exitTransition = {
             slideOutHorizontally(
                 targetOffsetX = { -SlidePx },
-                animationSpec = tween(ExitMs, easing = EmphasizedAccelerate),
-            ) + fadeOut(tween(ExitMs, easing = EmphasizedAccelerate))
+                animationSpec = tween(ExitMs, easing = FastOutLinearInEasing),
+            ) + fadeOut(tween(ExitMs, easing = FastOutLinearInEasing))
         },
         popEnterTransition = {
             slideInHorizontally(
                 initialOffsetX = { -SlidePx },
-                animationSpec = tween(EnterMs, easing = EmphasizedDecelerate),
-            ) + fadeIn(tween(EnterMs, easing = EmphasizedDecelerate))
+                animationSpec = tween(EnterMs, easing = FastOutSlowInEasing),
+            ) + fadeIn(tween(EnterMs, easing = FastOutSlowInEasing))
         },
         popExitTransition = {
             slideOutHorizontally(
                 targetOffsetX = { SlidePx },
-                animationSpec = tween(ExitMs, easing = EmphasizedAccelerate),
-            ) + fadeOut(tween(ExitMs, easing = EmphasizedAccelerate))
+                animationSpec = tween(ExitMs, easing = FastOutLinearInEasing),
+            ) + fadeOut(tween(ExitMs, easing = FastOutLinearInEasing))
         },
     ) {
         composable(

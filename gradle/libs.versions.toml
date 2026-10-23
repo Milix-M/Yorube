@@ -2,7 +2,6 @@
 agp = "8.5.2"
 kotlin = "2.0.20"
 compose-bom = "2024.09.00"
-compose-material3-stable = "1.4.0"
 core-ktx = "1.13.1"
 lifecycle = "2.8.5"
 activity-compose = "1.9.2"
@@ -27,8 +26,6 @@ compose-bom = { module = "androidx.compose:compose-bom", version.ref = "compose-
 compose-ui = { module = "androidx.compose.ui:ui" }
 compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
 compose-material3 = { module = "androidx.compose.material3:material3" }
-# Newer Material3 stable track (MotionScheme-era). Pinned directly.
-compose-material3-stable = { module = "androidx.compose.material3:material3", version.ref = "compose-material3-stable" }
 compose-material-icons-core = { module = "androidx.compose.material:material-icons-core" }
 compose-material-icons-extended = { module = "androidx.compose.material:material-icons-extended" }
 navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigation-compose" }
