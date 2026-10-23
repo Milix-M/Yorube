@@ -1,24 +1,20 @@
 package com.hermes.client.ui.screens
 
+import android.content.Context
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -29,45 +25,21 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -79,31 +51,43 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.mikepenz.markdown.compose.components.MarkdownComponentModel
-import com.mikepenz.markdown.compose.components.markdownComponents
-import com.mikepenz.markdown.m3.Markdown
-import org.intellij.markdown.MarkdownTokenTypes
-import org.intellij.markdown.ast.findChildOfType
-import org.intellij.markdown.ast.getTextInNode
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.composeunstyled.DisclosedContent
+import com.composeunstyled.DisclosureButton
+import com.composeunstyled.UnstyledDisclosure
 import com.hermes.client.HermesApp
 import com.hermes.client.R
+import com.hermes.client.ui.ds.Hermes
+import com.hermes.client.ui.ds.HermesButton
+import com.hermes.client.ui.ds.HermesDialog
+import com.hermes.client.ui.ds.HermesDivider
+import com.hermes.client.ui.ds.HermesIconButton
+import com.hermes.client.ui.ds.HermesLinearBar
+import com.hermes.client.ui.ds.HermesScaffold
+import com.hermes.client.ui.ds.HermesSnackbarHost
+import com.hermes.client.ui.ds.HermesTextField
+import com.hermes.client.ui.ds.HermesTopBar
+import com.hermes.client.ui.ds.HermesTypingDots
+import com.hermes.client.ui.ds.rememberHermesSnackbarState
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
     sessionId: String?,
@@ -113,6 +97,9 @@ fun ChatScreen(
     title: String? = null,
     instanceNonce: Int = 0,
 ) {
+    // onNavigateBack is kept for API compatibility; this screen has no back arrow.
+    @Suppress("UNUSED_PARAMETER")
+    val unusedBack = onNavigateBack
     val app = LocalContext.current.applicationContext as HermesApp
     val vm: ChatViewModel = viewModel(
         key = "chat-${sessionId.orEmpty()}-$instanceNonce",
@@ -122,7 +109,7 @@ fun ChatScreen(
                 ChatViewModel(app.container, sessionId) as T
         }
     )
-    val snackbar = remember { SnackbarHostState() }
+    val snackbar = rememberHermesSnackbarState()
     val listState = rememberLazyListState()
     val clarifyAnswer = remember { mutableStateOf("") }
     // Folded blocks drive the list; hoist so auto-follow can target the last row.
@@ -130,7 +117,7 @@ fun ChatScreen(
     val blocks = remember(messageSnapshot) { buildChatBlocks(messageSnapshot) }
 
     LaunchedEffect(vm.error) {
-        vm.error?.let { snackbar.showSnackbar(it); vm.dismissError() }
+        vm.error?.let { snackbar.show(it); vm.dismissError() }
     }
     // Follow the stream only while the user stays at the bottom.
     LaunchedEffect(vm.messages.size) {
@@ -141,46 +128,32 @@ fun ChatScreen(
         }
     }
 
-    Scaffold(
+    HermesScaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        title?.ifBlank { null } ?: stringResource(R.string.new_chat),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-                navigationIcon = {
+            HermesTopBar(
+                title = title?.ifBlank { null } ?: stringResource(R.string.new_chat),
+                navigation = {
                     if (onOpenDrawer != null) {
-                        IconButton(
+                        HermesIconButton(
                             onClick = onOpenDrawer,
+                            desc = stringResource(R.string.menu),
                             modifier = Modifier.testTag("menuButton"),
                         ) {
-                            Icon(
-                                Icons.Filled.Menu,
-                                contentDescription = stringResource(R.string.menu),
-                            )
+                            Image(imageVector = Icons.Filled.Menu, contentDescription = null)
                         }
                     }
                 },
-                actions = {
-                    IconButton(
-                        onClick = onOpenSettings,
-                        modifier = Modifier.testTag("settingsButton"),
-                    ) {
-                        Icon(
-                            Icons.Filled.Settings,
-                            contentDescription = stringResource(R.string.settings_desc),
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                ),
-            )
+            ) {
+                HermesIconButton(
+                    onClick = onOpenSettings,
+                    desc = stringResource(R.string.settings_desc),
+                    modifier = Modifier.testTag("settingsButton"),
+                ) {
+                    Image(imageVector = Icons.Filled.Settings, contentDescription = null)
+                }
+            }
         },
-        snackbarHost = { SnackbarHost(snackbar) },
+        snackbar = { HermesSnackbarHost(snackbar) },
         bottomBar = {
             ChatInputBar(
                 input = vm.input,
@@ -192,8 +165,8 @@ fun ChatScreen(
                 onStop = vm::onStop,
             )
         }
-    ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+    ) {
+        Box(Modifier.fillMaxSize()) {
             if (vm.messages.isEmpty() && !vm.busy) {
                 ChatEmptyState(modifier = Modifier.fillMaxSize())
             } else {
@@ -236,64 +209,67 @@ fun ChatScreen(
     }
 
     vm.approval?.let { req ->
-        AlertDialog(
-            onDismissRequest = { /* must choose */ },
-            confirmButton = {},
-            title = { Text(stringResource(R.string.approval_title)) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    req.command?.let { cmd ->
-                        Surface(
-                            tonalElevation = 2.dp,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            SelectionContainer {
-                                Text(
-                                    cmd,
-                                    fontFamily = FontFamily.Monospace,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    modifier = Modifier.padding(10.dp),
-                                )
-                            }
-                        }
-                    }
-                    req.description?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        for (choice in req.choices) {
-                            FilledTonalButton(
-                                onClick = { vm.answerApproval(choice) },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) { Text(choice) }
+        HermesDialog(
+            visible = true,
+            onDismiss = { /* must choose */ },
+            dismissOnOutside = false,
+            title = stringResource(R.string.approval_title),
+            confirmLabel = null,
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                req.command?.let { cmd ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Hermes.colors.surfaceVariant)
+                            .padding(10.dp),
+                    ) {
+                        SelectionContainer {
+                            BasicText(
+                                cmd,
+                                style = Hermes.type.mono.copy(color = Hermes.colors.onSurface),
+                            )
                         }
                     }
                 }
-            },
-        )
+                req.description?.let { BasicText(it, style = Hermes.type.body.copy(color = Hermes.colors.onSurface)) }
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for (choice in req.choices) {
+                        HermesButton(
+                            choice,
+                            onClick = { vm.answerApproval(choice) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+            }
+        }
     }
 
     vm.clarify?.let { prompt ->
-        AlertDialog(
-            onDismissRequest = { /* must answer */ },
-            confirmButton = {
-                TextButton(onClick = {
-                    vm.answerClarify(clarifyAnswer.value)
-                    clarifyAnswer.value = ""
-                }) { Text(stringResource(R.string.send)) }
+        HermesDialog(
+            visible = true,
+            onDismiss = { /* must answer */ },
+            dismissOnOutside = false,
+            title = stringResource(R.string.question_title),
+            confirmLabel = stringResource(R.string.send),
+            onConfirm = {
+                vm.answerClarify(clarifyAnswer.value)
+                clarifyAnswer.value = ""
             },
-            title = { Text(stringResource(R.string.question_title)) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(prompt.prompt)
-                    androidx.compose.material3.OutlinedTextField(
-                        value = clarifyAnswer.value,
-                        onValueChange = { clarifyAnswer.value = it },
-                        modifier = Modifier.fillMaxWidth().testTag("clarifyInput"),
-                        maxLines = 4,
-                    )
-                }
-            },
-        )
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                BasicText(prompt.prompt, style = Hermes.type.body.copy(color = Hermes.colors.onSurface))
+                HermesTextField(
+                    value = clarifyAnswer.value,
+                    onValueChange = { clarifyAnswer.value = it },
+                    modifier = Modifier.fillMaxWidth().testTag("clarifyInput"),
+                    maxLines = 4,
+                    singleLine = false,
+                )
+            }
+        }
     }
 }
 
@@ -331,93 +307,83 @@ private fun ChatInputBar(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
             ) {
-                CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-                Text(
+                HermesTypingDots(modifier = Modifier.size(56.dp, 12.dp))
+                BasicText(
                     if (statusLine.isNotBlank()) statusLine else stringResource(R.string.thinking),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = Hermes.type.labelSmall.copy(color = Hermes.colors.onSurfaceVariant),
                     modifier = Modifier.padding(start = 8.dp),
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp))
+            HermesLinearBar(modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp))
         } else if (statusLine.isNotBlank()) {
-            Text(
+            BasicText(
                 statusLine,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = Hermes.type.labelSmall.copy(color = Hermes.colors.onSurfaceVariant),
                 modifier = Modifier.padding(bottom = 6.dp),
             )
         }
-        Surface(
-            shape = RoundedCornerShape(28.dp),
-            tonalElevation = 2.dp,
-            border = androidx.compose.foundation.BorderStroke(
-                1.dp,
-                MaterialTheme.colorScheme.outlineVariant,
-            ),
-            modifier = Modifier.fillMaxWidth(),
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(26.dp))
+                .background(Hermes.colors.surfaceVariant.copy(alpha = 0.6f))
+                .padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+            HermesIconButton(
+                onClick = { attachLauncher.launch("image/*") },
+                desc = stringResource(R.string.attach),
+                modifier = Modifier.testTag("attachButton"),
             ) {
-                IconButton(
-                    onClick = { attachLauncher.launch("image/*") },
-                    modifier = Modifier.testTag("attachButton"),
+                Image(imageVector = Icons.Filled.Add, contentDescription = null)
+            }
+            HermesTextField(
+                value = input,
+                onValueChange = onInputChange,
+                modifier = Modifier.weight(1f).testTag("chatInput"),
+                placeholder = if (busy) stringResource(R.string.steer_hint)
+                else stringResource(R.string.message_hint),
+                maxLines = 5,
+                singleLine = false,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(
+                    onSend = { if (busy) onSteer() else onSend() },
+                ),
+            )
+            if (busy) {
+                HermesIconButton(
+                    onClick = onStop,
+                    desc = stringResource(R.string.stop),
+                    modifier = Modifier.testTag("stopButton"),
                 ) {
-                    Icon(
-                        Icons.Filled.Add,
-                        contentDescription = stringResource(R.string.attach),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Image(imageVector = Icons.Filled.Stop, contentDescription = null)
                 }
-                TextField(
-                    value = input,
-                    onValueChange = onInputChange,
-                    modifier = Modifier.weight(1f).testTag("chatInput"),
-                    placeholder = {
-                        Text(
-                            if (busy) stringResource(R.string.steer_hint)
-                            else stringResource(R.string.message_hint),
-                        )
-                    },
-                    maxLines = 5,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                    keyboardActions = KeyboardActions(
-                        onSend = { if (busy) onSteer() else onSend() },
-                    ),
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        disabledContainerColor = Color.Transparent,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                    ),
+                GradientSendButton(
+                    enabled = input.isNotBlank(),
+                    onClick = onSteer,
+                    modifier = Modifier.testTag("sendButton"),
                 )
-                if (busy) {
-                    // ChatGPT-like stop + steer-send side by side.
-                    IconButton(
-                        onClick = onStop,
-                        modifier = Modifier.testTag("stopButton"),
-                    ) {
-                        Icon(Icons.Filled.Stop, contentDescription = stringResource(R.string.stop))
-                    }
-                    GradientSendButton(
-                        enabled = input.isNotBlank(),
-                        onClick = onSteer,
-                        modifier = Modifier.testTag("sendButton"),
-                    )
-                } else {
-                    GradientSendButton(
-                        enabled = input.isNotBlank(),
-                        onClick = onSend,
-                        modifier = Modifier.testTag("sendButton"),
-                    )
-                }
+            } else {
+                GradientSendButton(
+                    enabled = input.isNotBlank(),
+                    onClick = onSend,
+                    modifier = Modifier.testTag("sendButton"),
+                )
             }
         }
+    }
+}
+
+/** Display name of a picked file for the attachment reference token. */
+private fun queryDisplayName(context: Context, uri: Uri): String? {
+    return try {
+        context.contentResolver.query(uri, null, null, null, null)?.use { c ->
+            val idx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            if (c.moveToFirst() && idx >= 0) c.getString(idx) else null
+        }
+    } catch (_: Exception) {
+        null
     }
 }
 
@@ -440,17 +406,16 @@ private fun ChatEmptyState(modifier: Modifier = Modifier) {
                     )
                 ),
         ) {
-            Icon(
+            androidx.compose.foundation.Image(
                 painter = painterResource(R.drawable.ic_hero_spark),
                 contentDescription = null,
-                tint = Color.White,
                 modifier = Modifier.size(34.dp),
             )
         }
         Spacer(Modifier.height(20.dp))
-        Text(
+        BasicText(
             stringResource(R.string.empty_chat_title),
-            style = MaterialTheme.typography.headlineSmall.copy(
+            style = Hermes.type.headline.copy(
                 brush = Brush.horizontalGradient(
                     listOf(Color(0xFF4285F4), Color(0xFF9B72CB), Color(0xFFD96570))
                 )
@@ -468,50 +433,12 @@ private fun ThinkingRow() {
             .padding(vertical = 8.dp)
             .testTag("thinkingIndicator"),
     ) {
-        TypingDots()
-        Text(
+        HermesTypingDots()
+        BasicText(
             stringResource(R.string.thinking),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = Hermes.type.body.copy(color = Hermes.colors.onSurfaceVariant),
             modifier = Modifier.padding(start = 8.dp),
         )
-    }
-}
-
-/** Gemini-like typing indicator: three dots wave in sequence. */
-@Composable
-private fun TypingDots() {
-    val t = rememberInfiniteTransition(label = "typing")
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        for (i in 0 until 3) {
-            val scale by t.animateFloat(
-                initialValue = 0.5f,
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(600, delayMillis = i * 150),
-                    repeatMode = RepeatMode.Reverse,
-                ),
-                label = "dot$i",
-            )
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                        alpha = 0.4f + 0.6f * scale
-                    }
-                    .clip(CircleShape)
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(Color(0xFF4285F4), Color(0xFF9B72CB))
-                        )
-                    ),
-            )
-        }
     }
 }
 
@@ -519,23 +446,26 @@ private fun TypingDots() {
 private fun MessageRow(msg: UiMessage, showCursor: Boolean, modifier: Modifier = Modifier) {
     when (msg.kind) {
         MsgKind.USER -> {
-            Box(modifier.fillMaxWidth().padding(start = 48.dp, top = 4.dp, bottom = 4.dp), contentAlignment = Alignment.CenterEnd) {
-                Surface(
-                    color = userBubbleColor(),
-                    contentColor = userBubbleTextColor(),
-                    shape = RoundedCornerShape(18.dp),
-                    modifier = Modifier.widthIn(max = 340.dp),
+            Box(
+                modifier.fillMaxWidth().padding(start = 48.dp, top = 4.dp, bottom = 4.dp),
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(Hermes.colors.userBubble)
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
                 ) {
                     SelectionContainer {
-                        Text(
+                        BasicText(
                             msg.text,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            style = Hermes.type.body.copy(color = Hermes.colors.onUserBubble),
                         )
                     }
                 }
             }
         }
+        // Assistant replies render as plain text, never in a chat bubble.
         MsgKind.ASSISTANT -> {
             val clipboard = LocalClipboardManager.current
             var copied by remember(msg.id) { mutableStateOf(false) }
@@ -545,46 +475,35 @@ private fun MessageRow(msg: UiMessage, showCursor: Boolean, modifier: Modifier =
                     copied = false
                 }
             }
-            // Same markdown components for every message; the model carries the text.
-            val components = remember {
-                markdownComponents(
-                    codeFence = { ChatGptCodeFence(it) },
-                    codeBlock = { ChatGptCodeFence(it) },
-                )
-            }
             Row(modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp)) {
-                Surface(
-                    color = assistantBubbleColor(),
-                    shape = RoundedCornerShape(18.dp),
-                    modifier = Modifier.weight(1f, fill = false),
-                ) {
-                    Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                        if (msg.text.isNotBlank()) {
-                            Markdown(
-                                content = closeUnclosedFences(msg.text),
-                                components = components,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                        }
-                        if (showCursor) {
-                            Text(
-                                "▍",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+                Column(Modifier.weight(1f, fill = false)) {
+                    if (msg.text.isNotBlank()) {
+                        HermesMarkdown(
+                            text = msg.text,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    if (showCursor) {
+                        BasicText(
+                            "▍",
+                            style = Hermes.type.body.copy(color = Hermes.colors.onSurfaceVariant),
+                        )
                     }
                 }
-                IconButton(
-                    onClick = {
-                        clipboard.setText(AnnotatedString(msg.text))
-                        copied = true
-                    },
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable {
+                            clipboard.setText(AnnotatedString(msg.text))
+                            copied = true
+                        }
+                        .padding(10.dp),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Icon(
-                        if (copied) Icons.Filled.Check else Icons.Filled.ContentCopy,
-                        contentDescription = stringResource(if (copied) R.string.copied else R.string.copy),
-                        modifier = Modifier.size(18.dp),
+                    BasicText(
+                        if (copied) stringResource(R.string.copied) else stringResource(R.string.copy),
+                        style = Hermes.type.labelSmall.copy(color = Hermes.colors.onSurfaceVariant),
                     )
                 }
             }
@@ -593,32 +512,31 @@ private fun MessageRow(msg: UiMessage, showCursor: Boolean, modifier: Modifier =
             // Defensive fallback: tool/status messages are normally grouped into
             // ActivityLog and never reach here. Render as a plain one-line row
             // with no bubble so nothing ever shows a chat box.
-            Text(
+            BasicText(
                 msg.text,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = Hermes.type.labelSmall.copy(color = Hermes.colors.onSurfaceVariant),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = modifier.fillMaxWidth().padding(vertical = 2.dp),
             )
         }
         MsgKind.ERROR -> {
-            Surface(
-                color = MaterialTheme.colorScheme.errorContainer,
-                shape = RoundedCornerShape(12.dp),
-                modifier = modifier.fillMaxWidth().padding(vertical = 4.dp),
+            Box(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Hermes.colors.errorContainer)
+                    .padding(10.dp),
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(10.dp)) {
-                    Icon(
-                        Icons.Filled.Close,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.size(16.dp),
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    BasicText(
+                        "!",
+                        style = Hermes.type.label.copy(color = Hermes.colors.onErrorContainer),
                     )
-                    Text(
+                    BasicText(
                         msg.text,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        style = Hermes.type.body.copy(color = Hermes.colors.onErrorContainer),
                         modifier = Modifier.padding(start = 8.dp),
                     )
                 }
@@ -656,76 +574,63 @@ internal fun buildChatBlocks(messages: List<UiMessage>): List<ChatBlock> {
 
 /**
  * Tool/MCP activity folded into a single line with no chat bubble.
- * Collapsed: one tappable summary row. Expanded: plain one-line rows.
+ * Collapsed: one tappable summary row. Expanded: full parsed payloads.
  */
 @Composable
 private fun ActivityLog(msgs: List<UiMessage>, modifier: Modifier = Modifier) {
     var expanded by remember(msgs.firstOrNull()?.id) { mutableStateOf(false) }
     val summary = if (msgs.size == 1) {
-        msgs.first().text
+        msgs.first().text.lineSequence().firstOrNull().orEmpty()
     } else {
-        stringResource(R.string.activity_summary, msgs.size, msgs.last().text)
+        stringResource(R.string.activity_summary, msgs.size, msgs.last().text.lineSequence().firstOrNull().orEmpty())
     }
     Column(modifier = modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .clickable { expanded = !expanded }
-                .testTag("activityToggle")
-                .padding(vertical = 6.dp),
+        UnstyledDisclosure(
+            expanded = expanded,
+            onExpandedChange = { expanded = it },
         ) {
-            Icon(
-                if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                contentDescription = stringResource(
-                    if (expanded) R.string.collapse else R.string.expand
-                ),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(16.dp),
-            )
-            Icon(
-                Icons.Filled.Bolt,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(13.dp),
-            )
-            Text(
-                summary,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f).padding(start = 6.dp),
-            )
-        }
-        AnimatedVisibility(
-            visible = expanded,
-            enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
-            exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
-        ) {
-            // Expanded: full tool payloads (name, args, result) with wrapping
-            // so the user can see exactly what each tool call did. Selectable.
-            SelectionContainer {
-                Column(Modifier.padding(start = 22.dp, top = 2.dp, bottom = 4.dp)) {
-                    for (m in msgs) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
-                            verticalAlignment = Alignment.Top,
-                        ) {
-                            Icon(
-                                Icons.Filled.Bolt,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(13.dp).padding(top = 2.dp),
-                            )
-                            Text(
+            DisclosureButton(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("activityToggle"),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .padding(vertical = 6.dp),
+                ) {
+                    BasicText(
+                        if (expanded) "▾" else "▸",
+                        style = Hermes.type.label.copy(color = Hermes.colors.onSurfaceVariant),
+                    )
+                    BasicText(
+                        "⚡",
+                        style = Hermes.type.labelSmall.copy(color = Hermes.colors.onSurfaceVariant),
+                        modifier = Modifier.padding(start = 6.dp),
+                    )
+                    BasicText(
+                        summary,
+                        style = Hermes.type.labelSmall.copy(color = Hermes.colors.onSurfaceVariant),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).padding(start = 6.dp),
+                    )
+                }
+            }
+            DisclosedContent(
+                enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
+                exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
+            ) {
+                SelectionContainer {
+                    Column(Modifier.padding(start = 22.dp, top = 2.dp, bottom = 4.dp)) {
+                        for (m in msgs) {
+                            HermesDivider(modifier = Modifier.padding(vertical = 3.dp))
+                            BasicText(
                                 m.text,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(start = 6.dp),
+                                style = Hermes.type.mono.copy(color = Hermes.colors.onSurface),
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
                             )
                         }
                     }
@@ -735,40 +640,197 @@ private fun ActivityLog(msgs: List<UiMessage>, modifier: Modifier = Modifier) {
     }
 }
 
-/** Display name of a picked file for the attachment reference token. */
-private fun queryDisplayName(context: android.content.Context, uri: android.net.Uri): String? {
-    return try {
-        context.contentResolver.query(uri, null, null, null, null)?.use { c ->
-            val idx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-            if (c.moveToFirst() && idx >= 0) c.getString(idx) else null
+// ---------------------------------------------------------------------------
+// Minimal markdown rendering (no Material dependency): fences, bold, code,
+// links, headers, bullets, quotes. Plain text degrades gracefully.
+// ---------------------------------------------------------------------------
+
+private sealed interface MdBlock {
+    data class Text(val text: String) : MdBlock
+    data class Code(val lang: String, val code: String) : MdBlock
+}
+
+private fun splitMarkdownBlocks(text: String): List<MdBlock> {
+    var fences = text.split("```").size - 1
+    val closed = if (fences % 2 == 1) "$text\n```" else text
+    val out = mutableListOf<MdBlock>()
+    var rest = closed
+    while (true) {
+        val open = rest.indexOf("```")
+        if (open < 0) {
+            if (rest.isNotBlank()) out.add(MdBlock.Text(rest.trim()))
+            break
         }
-    } catch (_: Exception) {
-        null
+        if (rest.substring(0, open).isNotBlank()) {
+            out.add(MdBlock.Text(rest.substring(0, open).trim()))
+        }
+        val after = rest.substring(open + 3)
+        val close = after.indexOf("```")
+        if (close < 0) {
+            if (after.isNotBlank()) out.add(MdBlock.Text(after.trim()))
+            break
+        }
+        val body = after.substring(0, close)
+        val firstNl = body.indexOf('\n')
+        val lang = if (firstNl < 0) "" else body.substring(0, firstNl).trim()
+        val code = if (firstNl < 0) body.trim() else body.substring(firstNl + 1).trimEnd()
+        out.add(MdBlock.Code(lang, code))
+        rest = after.substring(close + 3)
+    }
+    return out
+}
+
+@Composable
+private fun HermesMarkdown(text: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        for (block in remember(text) { splitMarkdownBlocks(text) }) {
+            when (block) {
+                is MdBlock.Code -> HermesCodeBlock(language = block.lang, code = block.code)
+                is MdBlock.Text -> HermesRichParagraph(block.text)
+            }
+        }
     }
 }
 
-/** ChatGPT-like neutral user bubble: light gray / dark charcoal. */
-@Composable
-private fun userBubbleColor(): Color =
-    if (isSystemInDarkTheme()) Color(0xFF2F2F2F) else Color(0xFFECECEC)
+private val MdLink = Regex("""\[([^\]]+)\]\(([^)\s]+)[^)]*\)""")
 
 @Composable
-private fun userBubbleTextColor(): Color =
-    if (isSystemInDarkTheme()) Color(0xFFEDEDED) else Color(0xFF0D0D0D)
+private fun HermesRichParagraph(text: String) {
+    val uriHandler = LocalUriHandler.current
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        for (rawLine in text.lines()) {
+            val line = rawLine.trimEnd()
+            if (line.isBlank()) continue
+            val (marker, style, body) = when {
+                line.startsWith("### ") -> Triple("### ", Hermes.type.title.copy(color = Hermes.colors.onSurface), line.removePrefix("### "))
+                line.startsWith("## ") -> Triple("## ", Hermes.type.title.copy(color = Hermes.colors.onSurface), line.removePrefix("## "))
+                line.startsWith("# ") -> Triple("# ", Hermes.type.headline.copy(color = Hermes.colors.onSurface), line.removePrefix("# "))
+                line.startsWith("> ") -> Triple("> ", Hermes.type.body.copy(color = Hermes.colors.onSurfaceVariant), line.removePrefix("> "))
+                line.startsWith("- ") || line.startsWith("* ") -> Triple("• ", Hermes.type.body.copy(color = Hermes.colors.onSurface), line.drop(2))
+                Regex("""^\d+\. """).containsMatchIn(line) ->
+                    Triple("• ", Hermes.type.body.copy(color = Hermes.colors.onSurface), line.replaceFirst(Regex("""^\d+\. """), ""))
+                else -> Triple("", Hermes.type.body.copy(color = Hermes.colors.onSurface), line)
+            }
+            @Suppress("UNUSED_VARIABLE")
+            val unusedMarker = marker
+            ClickableText(
+                text = buildAnnotatedString {
+                    append(marker)
+                    var cursor = 0
+                    val combined = Regex("""(\*\*.+?\*\*)|(`[^`\n]+`)|(\[[^\]]+\]\([^)\s]+[^)]*\))""")
+                    for (m in combined.findAll(body)) {
+                        val start = m.range.first
+                        if (start > cursor) append(body.substring(cursor, start))
+                        val token = m.value
+                        when {
+                            token.startsWith("**") -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                                append(token.removePrefix("**").removeSuffix("**"))
+                            }
+                            token.startsWith("`") -> withStyle(
+                                SpanStyle(
+                                    fontFamily = FontFamily.Monospace,
+                                    background = Hermes.colors.surfaceVariant,
+                                )
+                            ) { append(token.trim('`')) }
+                            else -> {
+                                val lm = MdLink.matchEntire(token)
+                                if (lm != null) {
+                                    pushStringAnnotation("url", lm.groupValues[2])
+                                    withStyle(
+                                        SpanStyle(
+                                            color = Hermes.colors.primary,
+                                            textDecoration = TextDecoration.Underline,
+                                        )
+                                    ) { append(lm.groupValues[1]) }
+                                    pop()
+                                } else {
+                                    append(token)
+                                }
+                            }
+                        }
+                        cursor = m.range.last + 1
+                    }
+                    if (cursor < body.length) append(body.substring(cursor))
+                },
+                style = style,
+                onClick = { offset ->
+                    lastLinkAt(body, offset - marker.length)?.let { uriHandler.openUri(it) }
+                },
+            )
+        }
+    }
+}
 
-/** LINE-like peer bubble: white / dark gray. Markdown uses theme text colors. */
+/** URL tapped inside a rendered paragraph, or null. */
+private fun lastLinkAt(body: String, offset: Int): String? {
+    if (offset < 0) return null
+    var found: String? = null
+    for (m in MdLink.findAll(body)) {
+        if (offset in m.range) {
+            found = m.groupValues[2]
+            break
+        }
+    }
+    return found
+}
+
 @Composable
-private fun assistantBubbleColor(): Color =
-    if (isSystemInDarkTheme()) Color(0xFF242424) else Color.White
+private fun HermesCodeBlock(language: String, code: String) {
+    val clipboard = LocalClipboardManager.current
+    var copied by remember(code) { mutableStateOf(false) }
+    LaunchedEffect(copied) {
+        if (copied) {
+            kotlinx.coroutines.delay(1200)
+            copied = false
+        }
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.Black)
+            .padding(12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            BasicText(
+                language.ifBlank { "text" },
+                style = Hermes.type.mono.copy(color = Color(0xFF9E9E9E)),
+                modifier = Modifier.weight(1f),
+            )
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable {
+                        clipboard.setText(AnnotatedString(code))
+                        copied = true
+                    }
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+            ) {
+                BasicText(
+                    if (copied) stringResource(R.string.copied) else stringResource(R.string.copy),
+                    style = Hermes.type.labelSmall.copy(color = Color(0xFF9E9E9E)),
+                )
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        SelectionContainer {
+            BasicText(
+                code,
+                style = Hermes.type.mono.copy(color = Color(0xFFE8E8E8)),
+            )
+        }
+    }
+}
 
 /** Gemini-like gradient send button: blue to purple circle. */
 @Composable
 private fun GradientSendButton(enabled: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val background = if (enabled) {
-        Brush.horizontalGradient(listOf(Color(0xFF4285F4), Color(0xFF9B72CB)))
+        Brush.horizontalGradient(listOf(Hermes.colors.primary, Hermes.colors.accent))
     } else {
         Brush.horizontalGradient(
-            listOf(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.surfaceVariant)
+            listOf(Hermes.colors.surfaceVariant, Hermes.colors.surfaceVariant)
         )
     }
     Box(
@@ -779,95 +841,9 @@ private fun GradientSendButton(enabled: Boolean, onClick: () -> Unit, modifier: 
             .background(background)
             .clickable(enabled = enabled, onClick = onClick),
     ) {
-        Icon(
-            Icons.Filled.ArrowUpward,
-            contentDescription = stringResource(R.string.send),
-            tint = if (enabled) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+        BasicText(
+            "↑",
+            style = Hermes.type.title.copy(color = if (enabled) Hermes.colors.onPrimary else Hermes.colors.onSurfaceVariant),
         )
-    }
-}
-
-/**
- * Closes a trailing unclosed ``` fence so a still-streaming code block
- * already renders as a block instead of raw backticks.
- */
-private fun closeUnclosedFences(text: String): String {
-    val fences = text.split("```").size - 1
-    return if (fences % 2 == 1) text + "\n```" else text
-}
-
-@Composable
-private fun ColumnScope.ChatGptCodeFence(model: MarkdownComponentModel) {
-    val lang = model.node.findChildOfType(MarkdownTokenTypes.FENCE_LANG)
-        ?.getTextInNode(model.content)?.toString()?.trim().orEmpty()
-    val code = model.node.children
-        .filter { it.type == MarkdownTokenTypes.CODE_FENCE_CONTENT }
-        .joinToString("") { it.getTextInNode(model.content).toString() }
-        .trimEnd()
-        .ifEmpty {
-            // Indented code block (no fence): fall back to raw node text.
-            model.node.getTextInNode(model.content).toString().trim()
-        }
-    ChatGptCodeBlock(language = lang, code = code)
-}
-
-@Composable
-private fun ChatGptCodeBlock(language: String, code: String) {
-    val clipboard = LocalClipboardManager.current
-    var copied by remember(code) { mutableStateOf(false) }
-    LaunchedEffect(copied) {
-        if (copied) {
-            kotlinx.coroutines.delay(1200)
-            copied = false
-        }
-    }
-    Surface(
-        color = Color.Black,
-        contentColor = Color(0xFFE8E8E8),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-    ) {
-        Column {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 2.dp),
-            ) {
-                Text(
-                    language.ifBlank { "text" },
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp,
-                    color = Color(0xFF9E9E9E),
-                    modifier = Modifier.weight(1f),
-                )
-                IconButton(
-                    onClick = {
-                        clipboard.setText(AnnotatedString(code))
-                        copied = true
-                    },
-                    modifier = Modifier.size(32.dp),
-                ) {
-                    Icon(
-                        if (copied) Icons.Filled.Check else Icons.Filled.ContentCopy,
-                        contentDescription = stringResource(if (copied) R.string.copied else R.string.copy),
-                        tint = Color(0xFF9E9E9E),
-                        modifier = Modifier.size(15.dp),
-                    )
-                }
-            }
-            SelectionContainer {
-                Text(
-                    code,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 13.sp,
-                    lineHeight = 19.sp,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp)
-                        .padding(bottom = 10.dp),
-                )
-            }
-        }
     }
 }

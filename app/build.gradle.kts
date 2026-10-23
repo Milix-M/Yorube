@@ -131,6 +131,9 @@ val jacocoExcludes = listOf(
     // Robolectric executes but JaCoCo never marks covered.
     "**/ChatScreen*",
     "**/ConversationListScreen*",
+    // Hand-built design-system composables: same synthetic-probe reason.
+    // Behavior is still covered by Robolectric UI tests.
+    "**/ui/ds/*",
 )
 
 fun jacocoClassDirs(): FileCollection {
