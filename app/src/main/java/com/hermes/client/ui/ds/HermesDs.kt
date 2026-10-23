@@ -347,25 +347,28 @@ fun HermesTextField(
     singleLine: Boolean = true,
     maxLines: Int = 1,
 ) {
-    Column(modifier = modifier) {
-        if (label != null) {
-            BasicText(
-                text = label,
-                style = Hermes.type.labelSmall.copy(color = Hermes.colors.onSurfaceVariant),
-                modifier = Modifier.padding(bottom = 6.dp),
-            )
-        }
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            singleLine = singleLine,
-            maxLines = maxLines,
-            visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
-            keyboardOptions = keyboardOptions,
-            keyboardActions = keyboardActions,
-            cursorBrush = SolidColor(Hermes.colors.primary),
-            textStyle = Hermes.type.body.copy(color = Hermes.colors.onSurface),
-            decorationBox = { inner ->
+    // The BasicTextField itself is the root so test tags and focus land on
+    // the editable node (same contract as Material text fields).
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        singleLine = singleLine,
+        maxLines = maxLines,
+        visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
+        keyboardOptions = keyboardOptions,
+        keyboardActions = keyboardActions,
+        cursorBrush = SolidColor(Hermes.colors.primary),
+        textStyle = Hermes.type.body.copy(color = Hermes.colors.onSurface),
+        modifier = modifier,
+        decorationBox = { inner ->
+            Column {
+                if (label != null) {
+                    BasicText(
+                        text = label,
+                        style = Hermes.type.labelSmall.copy(color = Hermes.colors.onSurfaceVariant),
+                        modifier = Modifier.padding(bottom = 6.dp),
+                    )
+                }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -389,9 +392,9 @@ fun HermesTextField(
                         Box(Modifier.padding(start = 8.dp)) { trailing() }
                     }
                 }
-            },
-        )
-    }
+            }
+        },
+    )
 }
 
 // ---------------------------------------------------------------------------
