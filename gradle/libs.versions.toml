@@ -22,6 +22,7 @@ lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-com
 lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity-compose" }
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "compose-bom" }
+compose-unstyled = { module = "com.composables:composeunstyled", version = "1.49.9" }
 compose-ui = { module = "androidx.compose.ui:ui" }
 compose-ui-text = { module = "androidx.compose.ui:ui-text" }
 compose-foundation = { module = "androidx.compose.foundation:foundation" }
