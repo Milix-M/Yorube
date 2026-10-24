@@ -69,8 +69,8 @@
     <string name="err_checking">checking</string>
     <string name="err_health_caps">health=%1$s, capabilities failed: %2$s</string>
 
-    <string name="tool_started">▶ %1$s %2$s</string>
-    <string name="tool_finished">■ %1$s (%2$s s) %3$s</string>
+    <string name="tool_started">%1$s %2$s</string>
+    <string name="tool_finished">%1$s (%2$s s) %3$s</string>
     <string name="delegating">delegating: %1$s</string>
     <string name="child_done">child %1$s: %2$s</string>
 

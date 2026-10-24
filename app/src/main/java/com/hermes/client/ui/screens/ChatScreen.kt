@@ -277,6 +277,7 @@ private fun ChatTopBar(
     onOpenSettings: () -> Unit,
 ) {
     Toolbar(
+        modifier = Modifier.fillMaxWidth(),
         title = {
             Text(
                 title,

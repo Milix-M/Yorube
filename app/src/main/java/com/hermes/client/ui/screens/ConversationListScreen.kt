@@ -96,6 +96,7 @@ fun ConversationListScreen(
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             Toolbar(
+                modifier = Modifier.fillMaxWidth(),
                 title = {
                     Text(
                         "Hermes",
@@ -315,6 +316,7 @@ fun ConversationSearchScreen(
 
     Column(Modifier.fillMaxSize()) {
         Toolbar(
+            modifier = Modifier.fillMaxWidth(),
             title = {
                 Text(
                     stringResource(R.string.search_chats),
@@ -366,7 +368,7 @@ private fun SearchField(
     AppTextField(
         value = query,
         onValueChange = onQuery,
-        modifier = modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+        modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
         placeholder = stringResource(R.string.search_hint),
         leading = {
             Icon(

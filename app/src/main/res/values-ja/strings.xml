@@ -70,8 +70,8 @@
     <string name="err_checking">確認中</string>
     <string name="err_health_caps">health=%1$s、機能取得に失敗: %2$s</string>
 
-    <string name="tool_started">▶ %1$s %2$s</string>
-    <string name="tool_finished">■ %1$s (%2$s秒) %3$s</string>
+    <string name="tool_started">%1$s %2$s</string>
+    <string name="tool_finished">%1$s (%2$s秒) %3$s</string>
     <string name="delegating">委譲中: %1$s</string>
     <string name="child_done">子 %1$s: %2$s</string>
 

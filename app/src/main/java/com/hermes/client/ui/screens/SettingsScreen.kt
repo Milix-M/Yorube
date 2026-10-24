@@ -59,6 +59,7 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
 
     Column(Modifier.fillMaxSize()) {
         Toolbar(
+            modifier = Modifier.fillMaxWidth(),
             title = {
                 Text(
                     stringResource(R.string.settings),
