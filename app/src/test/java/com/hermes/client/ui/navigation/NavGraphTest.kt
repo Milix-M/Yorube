@@ -241,6 +241,37 @@ class NavGraphTest {
     }
 
     @Test
+    fun drawerSearchRow_opensChat() {
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                return when {
+                    (request.path ?: "").startsWith("/api/sessions/") ->
+                        MockResponse().setBody("""{"messages":[]}""")
+                    (request.path ?: "").startsWith("/api/sessions") ->
+                        MockResponse().setBody(
+                            """{"sessions":[{"id":"s1","title":"Hello"},{"id":"s2","title":"Other"}]}"""
+                        )
+                    else -> MockResponse().setBody("{}")
+                }
+            }
+        }
+        saveSettings()
+        compose.setContent {
+            HermesAppTheme {
+                NavGraph(null)
+            }
+        }
+        compose.onNodeWithTag("chatInput").assertIsDisplayed()
+        compose.onNodeWithTag("menuButton").performClick()
+        compose.onNodeWithTag("drawerSearch").performClick()
+        // Search screen shows the history; tapping a row opens that chat.
+        compose.onNodeWithTag("searchScreenInput").assertIsDisplayed()
+        waitFor("Other")
+        compose.onNodeWithText("Other").performClick()
+        compose.onNodeWithTag("chatInput").assertIsDisplayed()
+    }
+
+    @Test
     fun drawerSearch_opensSearchAndFilters() {
         server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
             override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {

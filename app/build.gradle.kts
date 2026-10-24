@@ -80,9 +80,8 @@ dependencies {
     implementation(libs.compose.animation)
     implementation(libs.compose.animation.core)
     implementation(libs.compose.ui.tooling.preview)
-    implementation(libs.compose.material.icons.core)
-    implementation(libs.compose.material.icons.extended)
-    implementation(libs.compose.unstyled)
+    implementation(libs.compose.material)
+    implementation(libs.icons.lucide)
     implementation(libs.navigation.compose)
     implementation(libs.coroutines.android)
     implementation(libs.okhttp)
@@ -133,9 +132,6 @@ val jacocoExcludes = listOf(
     // Robolectric executes but JaCoCo never marks covered.
     "**/ChatScreen*",
     "**/ConversationListScreen*",
-    // Hand-built design-system composables: same synthetic-probe reason.
-    // Behavior is still covered by Robolectric UI tests.
-    "**/ui/ds/*",
 )
 
 fun jacocoClassDirs(): FileCollection {
@@ -145,7 +141,8 @@ fun jacocoClassDirs(): FileCollection {
             include("com/hermes/client/**/*")
             exclude(jacocoExcludes)
         },
-        fileTree("$buildDir/tmp/kotlin-classes/debug") {
+        // AGP 9 runs unit tests against these outputs (not tmp/kotlin-classes).
+        fileTree("$buildDir/intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes") {
             include("com/hermes/client/**/*")
             exclude(jacocoExcludes)
         },

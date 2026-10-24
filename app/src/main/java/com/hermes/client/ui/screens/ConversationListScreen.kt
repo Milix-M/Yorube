@@ -1,9 +1,6 @@
 package com.hermes.client.ui.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,16 +13,19 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicText
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.AlertDialog
+import androidx.compose.material.CircularProgressIndicator
+import androidx.compose.material.FloatingActionButton
+import androidx.compose.material.Icon
+import androidx.compose.material.IconButton
+import androidx.compose.material.MaterialTheme
+import androidx.compose.material.Scaffold
+import androidx.compose.material.SnackbarHost
+import androidx.compose.material.SnackbarHostState
+import androidx.compose.material.Text
+import androidx.compose.material.TextButton
+import androidx.compose.material.TextField
+import androidx.compose.material.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -35,7 +35,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -47,18 +46,17 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.composables.icons.lucide.ArrowLeft
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Plus
+import com.composables.icons.lucide.RefreshCw
+import com.composables.icons.lucide.Search
+import com.composables.icons.lucide.Settings
+import com.composables.icons.lucide.Trash2
+import com.composables.icons.lucide.X
 import com.hermes.client.HermesApp
 import com.hermes.client.R
 import com.hermes.client.data.api.SessionInfo
-import com.hermes.client.ui.ds.Hermes
-import com.hermes.client.ui.ds.HermesDialog
-import com.hermes.client.ui.ds.HermesIconButton
-import com.hermes.client.ui.ds.HermesScaffold
-import com.hermes.client.ui.ds.HermesSnackbarHost
-import com.hermes.client.ui.ds.HermesTextField
-import com.hermes.client.ui.ds.HermesTopBar
-import com.hermes.client.ui.ds.HermesTypingDots
-import com.hermes.client.ui.ds.rememberHermesSnackbarState
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -74,7 +72,7 @@ fun ConversationListScreen(
                 ConversationListViewModel(app.container) as T
         }
     )
-    val snackbar = rememberHermesSnackbarState()
+    val snackbarHostState = remember { SnackbarHostState() }
     var pendingDelete by remember { mutableStateOf<String?>(null) }
     var query by remember { mutableStateOf("") }
 
@@ -89,56 +87,57 @@ fun ConversationListScreen(
         onDispose { lifecycle.removeObserver(observer) }
     }
     LaunchedEffect(vm.error) {
-        vm.error?.let { snackbar.show(it); vm.dismissError() }
+        vm.error?.let { snackbarHostState.showSnackbar(it); vm.dismissError() }
     }
 
-    HermesScaffold(
+    Scaffold(
         topBar = {
-            HermesTopBar(title = "Hermes") {
-                HermesIconButton(
-                    onClick = vm::refresh,
-                    desc = stringResource(R.string.refresh),
-                    modifier = Modifier.testTag("refreshButton"),
-                ) {
-                    Image(imageVector = Icons.Filled.Refresh, contentDescription = null)
-                }
-                HermesIconButton(
-                    onClick = onOpenSettings,
-                    desc = stringResource(R.string.settings_desc),
-                    modifier = Modifier.testTag("settingsButton"),
-                ) {
-                    Image(imageVector = Icons.Filled.Settings, contentDescription = null)
-                }
+            TopAppBar(
+                title = { Text("Hermes") },
+                actions = {
+                    IconButton(
+                        onClick = vm::refresh,
+                        modifier = Modifier.testTag("refreshButton"),
+                    ) {
+                        Icon(
+                            imageVector = Lucide.RefreshCw,
+                            contentDescription = stringResource(R.string.refresh),
+                        )
+                    }
+                    IconButton(
+                        onClick = onOpenSettings,
+                        modifier = Modifier.testTag("settingsButton"),
+                    ) {
+                        Icon(
+                            imageVector = Lucide.Settings,
+                            contentDescription = stringResource(R.string.settings_desc),
+                        )
+                    }
+                },
+                elevation = 0.dp,
+            )
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { onOpenChat(null, null) },
+                modifier = Modifier.testTag("newChat"),
+            ) {
+                Icon(
+                    imageVector = Lucide.Plus,
+                    contentDescription = stringResource(R.string.new_chat),
+                )
             }
         },
-        snackbar = { HermesSnackbarHost(snackbar) },
-    ) {
-        Box(Modifier.fillMaxSize()) {
-            Column(Modifier.fillMaxSize()) {
-                SearchField(query = query, onQuery = { query = it })
-                Box(Modifier.fillMaxSize().weight(1f)) {
-                    ConversationListBody(
-                        loading = vm.loading,
-                        sessions = vm.sessions.filterQuery(query),
-                        onOpenChat = onOpenChat,
-                        onAskDelete = { pendingDelete = it },
-                    )
-                }
-            }
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(20.dp)
-                    .size(56.dp)
-                    .clip(RoundedCornerShape(28.dp))
-                    .background(Hermes.colors.primary)
-                    .clickable { onOpenChat(null, null) }
-                    .testTag("newChat"),
-            ) {
-                Image(
-                    imageVector = Icons.Filled.Add,
-                    contentDescription = stringResource(R.string.new_chat),
+    ) { padding ->
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            SearchField(query = query, onQuery = { query = it })
+            Box(Modifier.fillMaxSize().weight(1f)) {
+                ConversationListBody(
+                    loading = vm.loading,
+                    sessions = vm.sessions.filterQuery(query),
+                    onOpenChat = onOpenChat,
+                    onAskDelete = { pendingDelete = it },
                 )
             }
         }
@@ -182,19 +181,25 @@ fun ConversationDrawerContent(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
         ) {
-            HermesIconButton(onCloseDrawer, desc = stringResource(R.string.back), modifier = Modifier.testTag("closeDrawer")) {
-                Image(imageVector = Icons.Filled.Close, contentDescription = null)
+            IconButton(
+                onClick = onCloseDrawer,
+                modifier = Modifier.testTag("closeDrawer"),
+            ) {
+                Icon(
+                    imageVector = Lucide.ArrowLeft,
+                    contentDescription = stringResource(R.string.back),
+                )
             }
         }
         // Primary drawer items: new chat, then chat search (opens the search screen).
         DrawerItemRow(
-            icon = { Image(imageVector = Icons.Filled.Add, contentDescription = null) },
+            icon = Lucide.Plus,
             label = stringResource(R.string.new_chat),
             testTag = "drawerNewChat",
             onClick = { onOpenChat(null, null) },
         )
         DrawerItemRow(
-            icon = { Image(imageVector = Icons.Filled.Search, contentDescription = null) },
+            icon = Lucide.Search,
             label = stringResource(R.string.search_chats),
             testTag = "drawerSearch",
             onClick = onOpenSearch,
@@ -214,23 +219,25 @@ fun ConversationDrawerContent(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
         ) {
-            HermesIconButton(
+            IconButton(
                 onClick = onOpenSettings,
-                desc = stringResource(R.string.settings_desc),
                 modifier = Modifier.testTag("drawerSettings").size(40.dp),
             ) {
-                Image(imageVector = Icons.Filled.Settings, contentDescription = null)
+                Icon(
+                    imageVector = Lucide.Settings,
+                    contentDescription = stringResource(R.string.settings_desc),
+                )
             }
-            BasicText(
+            Text(
                 stringResource(R.string.settings),
-                style = Hermes.type.labelSmall.copy(color = Hermes.colors.onSurfaceVariant),
+                style = MaterialTheme.typography.caption,
+                color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
             )
             Spacer(Modifier.weight(1f))
-            BasicText(
+            Text(
                 "v" + com.hermes.client.BuildConfig.VERSION_NAME,
-                style = Hermes.type.labelSmall.copy(
-                    color = Hermes.colors.onSurfaceVariant.copy(alpha = 0.6f)
-                ),
+                style = MaterialTheme.typography.caption,
+                color = MaterialTheme.colors.onSurface.copy(alpha = 0.4f),
             )
         }
     }
@@ -248,7 +255,7 @@ fun ConversationDrawerContent(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DrawerItemRow(
-    icon: @Composable () -> Unit,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     testTag: String,
     onClick: () -> Unit,
@@ -257,15 +264,18 @@ private fun DrawerItemRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
             .combinedClickable(onClick = onClick)
             .testTag(testTag)
             .padding(horizontal = 12.dp, vertical = 12.dp),
     ) {
-        Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) { icon() }
-        BasicText(
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+        )
+        Text(
             label,
-            style = Hermes.type.body.copy(color = Hermes.colors.onSurface),
+            style = MaterialTheme.typography.body1,
             modifier = Modifier.padding(start = 12.dp),
         )
     }
@@ -292,17 +302,26 @@ fun ConversationSearchScreen(
 
     LaunchedEffect(Unit) { vm.refresh() }
 
-    HermesScaffold(
+    Scaffold(
         topBar = {
-            HermesTopBar(
-                title = stringResource(R.string.search_chats),
-                onBack = onNavigateBack,
-                backDesc = stringResource(R.string.back),
-                backTestTag = "searchBack",
+            TopAppBar(
+                title = { Text(stringResource(R.string.search_chats)) },
+                navigationIcon = {
+                    IconButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier.testTag("searchBack"),
+                    ) {
+                        Icon(
+                            imageVector = Lucide.ArrowLeft,
+                            contentDescription = stringResource(R.string.back),
+                        )
+                    }
+                },
+                elevation = 0.dp,
             )
         },
-    ) {
-        Column(Modifier.fillMaxSize()) {
+    ) { padding ->
+        Column(Modifier.fillMaxSize().padding(padding)) {
             SearchField(query = query, onQuery = { query = it }, fieldTag = "searchScreenInput")
             Box(Modifier.fillMaxSize().weight(1f)) {
                 ConversationListBody(
@@ -332,14 +351,32 @@ private fun SearchField(
     modifier: Modifier = Modifier,
     fieldTag: String = "searchInput",
 ) {
-    HermesTextField(
+    TextField(
         value = query,
         onValueChange = onQuery,
-        placeholder = stringResource(R.string.search_hint),
-        singleLine = true,
         modifier = modifier
             .padding(horizontal = 12.dp, vertical = 8.dp)
             .testTag(fieldTag),
+        placeholder = { Text(stringResource(R.string.search_hint)) },
+        leadingIcon = {
+            Icon(
+                imageVector = Lucide.Search,
+                contentDescription = null,
+            )
+        },
+        trailingIcon = if (query.isNotEmpty()) {
+            {
+                IconButton(onClick = { onQuery("") }) {
+                    Icon(
+                        imageVector = Lucide.X,
+                        contentDescription = stringResource(R.string.cancel),
+                    )
+                }
+            }
+        } else {
+            null
+        },
+        singleLine = true,
     )
 }
 
@@ -356,7 +393,7 @@ private fun ConversationListBody(
     when {
         loading && sessions.isEmpty() ->
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                HermesTypingDots()
+                CircularProgressIndicator()
             }
         sessions.isEmpty() ->
             Column(
@@ -364,14 +401,16 @@ private fun ConversationListBody(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                Image(
-                    imageVector = Icons.Filled.Search,
+                Icon(
+                    imageVector = Lucide.Search,
                     contentDescription = null,
                     modifier = Modifier.size(40.dp),
+                    tint = MaterialTheme.colors.onSurface.copy(alpha = 0.4f),
                 )
-                BasicText(
+                Text(
                     stringResource(R.string.empty_conversations),
-                    style = Hermes.type.body.copy(color = Hermes.colors.onSurfaceVariant),
+                    style = MaterialTheme.typography.body2,
+                    color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
                     modifier = Modifier.padding(top = 12.dp),
                 )
             }
@@ -386,9 +425,10 @@ private fun ConversationListBody(
                     lastBucket = bucket
                     bucketActive = true
                     item(key = "header-$bucket") {
-                        BasicText(
+                        Text(
                             stringResource(bucket.titleRes),
-                            style = Hermes.type.labelSmall.copy(color = Hermes.colors.onSurfaceVariant),
+                            style = MaterialTheme.typography.caption,
+                            color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
                             modifier = Modifier.padding(start = 12.dp, top = 10.dp, bottom = 2.dp),
                         )
                     }
@@ -401,11 +441,6 @@ private fun ConversationListBody(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = if (compact) 0.dp else 4.dp, vertical = 1.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(
-                                if (selected) Hermes.colors.primaryContainer
-                                else androidx.compose.ui.graphics.Color.Transparent
-                            )
                             .combinedClickable(
                                 onClick = { onOpenChat(s.key, s.title) },
                                 onLongClick = { onAskDelete(s.key) },
@@ -415,26 +450,26 @@ private fun ConversationListBody(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
-                                BasicText(
+                                Text(
                                     s.title?.ifBlank { null } ?: stringResource(R.string.new_chat),
-                                    style = Hermes.type.body.copy(color = Hermes.colors.onSurface),
+                                    style = MaterialTheme.typography.body1,
+                                    color = if (selected) MaterialTheme.colors.primary
+                                    else MaterialTheme.colors.onSurface,
                                     maxLines = 1,
                                 )
                                 formatDateTime(s.updatedAt)?.let { date ->
-                                    BasicText(
+                                    Text(
                                         date,
-                                        style = Hermes.type.labelSmall.copy(color = Hermes.colors.onSurfaceVariant),
+                                        style = MaterialTheme.typography.caption,
+                                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
                                         maxLines = 1,
                                     )
                                 }
                             }
-                            HermesIconButton(
-                                onClick = { onAskDelete(s.key) },
-                                desc = stringResource(R.string.delete),
-                            ) {
-                                Image(
-                                    imageVector = Icons.Filled.Delete,
-                                    contentDescription = null,
+                            IconButton(onClick = { onAskDelete(s.key) }) {
+                                Icon(
+                                    imageVector = Lucide.Trash2,
+                                    contentDescription = stringResource(R.string.delete),
                                     modifier = Modifier.size(18.dp),
                                 )
                             }
@@ -448,20 +483,31 @@ private fun ConversationListBody(
 
 @Composable
 private fun DeleteDialog(label: String, onDismiss: () -> Unit, onConfirm: () -> Unit) {
-    HermesDialog(
-        visible = true,
-        onDismiss = onDismiss,
-        title = stringResource(R.string.delete_title),
-        confirmLabel = stringResource(R.string.delete),
-        onConfirm = onConfirm,
-        dismissLabel = stringResource(R.string.cancel),
-        onDismissAction = onDismiss,
-    ) {
-        BasicText(
-            label.take(40),
-            style = Hermes.type.body.copy(color = Hermes.colors.onSurface),
-        )
-    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.delete_title)) },
+        text = {
+            Text(
+                label.take(40),
+                style = MaterialTheme.typography.body1,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(
+                    stringResource(R.string.delete),
+                    color = MaterialTheme.colors.error,
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        },
+    )
 }
 
 /** Short date for conversation rows. Null when the server sent no timestamp. */

@@ -531,10 +531,10 @@ internal fun summarizeJsonObject(o: JsonObject): String {
 
 /** Render a JSON value compactly for one-line summaries. */
 internal fun jsonScalar(el: JsonElement): String = when (el) {
+    // JsonElement is sealed (primitive/array/object): exhaustive, no else needed.
     is JsonPrimitive -> if (el.isString) el.content.take(80) else el.toString()
     is JsonArray -> "[${el.size}]"
     is JsonObject -> "{${el.keys.take(3).joinToString(",")}}"
-    else -> "null"
 }
 
 internal fun compactPairs(o: JsonObject, max: Int = 5): String =
@@ -556,15 +556,15 @@ internal fun summarizeMachineJson(trimmed: String): String? {
         if (!isMachineJsonObject(el)) return null
         return summarizeJsonObject(el)
     }
-    if (el is JsonArray) {
-        if (el.isEmpty()) return null
-        val first = el.first() as? JsonObject ?: return null
-        if (first.keys.none { it == "url" || it == "link" || it == "href" || it == "title" }) return null
-        val head = (first["title"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.trim().orEmpty()
-        val links = if (head.isEmpty()) "${el.size} links" else "$head (+${el.size - 1})"
-        return "links: $links"
-    }
-    return null
+    // Anything starting with { or [ that parsed must be an array here:
+    // strict JSON has no other document type with those openings.
+    val arr = el as JsonArray
+    if (arr.isEmpty()) return null
+    val first = arr.first() as? JsonObject ?: return null
+    if (first.keys.none { it == "url" || it == "link" || it == "href" || it == "title" }) return null
+    val head = (first["title"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.trim().orEmpty()
+    val links = if (head.isEmpty()) "${arr.size} links" else "$head (+${arr.size - 1})"
+    return "links: $links"
 }
 
 /** Summarize a whole-message tag-wrapped dump (<foo>…</foo>). Null for prose. */
@@ -607,11 +607,9 @@ internal fun prettyMachineJson(trimmed: String, max: Int = 1500): String {
         return trimmed.take(max)
     }
     if (el !is JsonObject && el !is JsonArray) return trimmed.take(max)
-    val pretty = try {
-        PrettyJson.encodeToString(JsonElement.serializer(), el)
-    } catch (_: Exception) {
-        return trimmed.take(max)
-    }
+    // Strictly parsed elements always encode: exotic values (NaN/Infinity)
+    // cannot arise from strict parsing, so no fallback is needed here.
+    val pretty = PrettyJson.encodeToString(JsonElement.serializer(), el)
     return if (pretty.length <= max) pretty else pretty.take(max) + "…"
 }
 

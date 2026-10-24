@@ -8,6 +8,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.material.DrawerValue
+import androidx.compose.material.ModalDrawer
+import androidx.compose.material.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -28,7 +31,6 @@ import androidx.navigation.navArgument
 import com.hermes.client.HermesApp
 import com.hermes.client.ui.screens.ChatScreen
 import com.hermes.client.ui.screens.ConversationDrawerContent
-import com.hermes.client.ui.ds.HermesDrawer
 import com.hermes.client.ui.screens.ConversationListViewModel
 import com.hermes.client.ui.screens.ConversationSearchScreen
 import com.hermes.client.ui.screens.SettingsScreen
@@ -137,9 +139,11 @@ fun NavGraph(startSessionId: String?) {
             // the drawer. From another session, navigate home as usual.
             var homeNonce by rememberSaveable { mutableIntStateOf(0) }
             var drawerOpen by rememberSaveable { mutableStateOf(false) }
-            HermesDrawer(
-                open = drawerOpen,
-                onClose = { drawerOpen = false },
+            val drawerState = rememberDrawerState(DrawerValue.Closed)
+            LaunchedEffect(drawerOpen) {
+                if (drawerOpen) drawerState.open() else drawerState.close()
+            }
+            ModalDrawer(
                 drawerContent = {
                     ConversationDrawerContent(
                         selectedSessionId = sessionId,
@@ -161,6 +165,8 @@ fun NavGraph(startSessionId: String?) {
                         onCloseDrawer = { drawerOpen = false },
                     )
                 },
+                drawerState = drawerState,
+                gesturesEnabled = false,
             ) {
                 ChatScreen(
                     sessionId = sessionId,

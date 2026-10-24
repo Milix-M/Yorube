@@ -778,6 +778,20 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun loadHistory_foldsAssistantMarkup() = runVmTest {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"messages":[{"role":"assistant","content":"answer <untrusted_tool_result source=\"web_search\">bulk</untrusted_tool_result>"}]}"""
+            )
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, "s1")
+        awaitCondition { vm.messages.any { it.kind == MsgKind.TOOL } }
+        assertTrue(vm.messages.any { it.kind == MsgKind.ASSISTANT && it.text.trim() == "answer" })
+        assertTrue(vm.messages.none { it.text.contains("untrusted_tool_result") })
+    }
+
+    @Test
     fun jsonDelta_foldsIntoActivityLog() = runVmTest {
         server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
         server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))

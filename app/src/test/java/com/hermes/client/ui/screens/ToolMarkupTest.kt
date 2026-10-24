@@ -212,6 +212,11 @@ class ToolMarkupTest {
     }
 
     @Test
+    fun prettyMachineJson_malformedReturnsTrimmed() {
+        assertEquals("{\"a\":", prettyMachineJson("{\"a\":"))
+    }
+
+    @Test
     fun foldedRender_joinsSummaryAndDetail() {
         assertEquals("s", Folded("s").render())
         assertEquals("s\nd", Folded("s", "d").render())

@@ -25,7 +25,7 @@
     <string name="api_key">APIキー</string>
     <string name="model">モデル</string>
     <string name="provider_optional">プロバイダ (オプション)</string>
-    <string name="section_notifications">通知 (M3)</string>
+    <string name="section_notifications">通知</string>
     <string name="relay_optional">中継URL (オプション)</string>
     <string name="fcm_token">FCMトークン: %1$s…</string>
     <string name="fcm_token_none">FCMトークン: (まだなし)</string>
@@ -89,6 +89,8 @@
     <string name="attach">画像を添付</string>
     <string name="image_label">画像</string>
     <string name="empty_chat_title">何をお手伝いしますか?</string>
+    <string name="role_you">あなた</string>
+    <string name="role_assistant">Hermes</string>
     <string name="empty_chat_subtitle">サーバー上のHermesに作業を頼めます。</string>
     <string name="suggest_1">未コミットの変更を要約して</string>
     <string name="suggest_2">サーバーで動いているものを確認して</string>
