@@ -8,7 +8,11 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -19,7 +23,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.hermes.client.ui.screens.AppDrawer
 import com.hermes.client.ui.screens.ChatScreen
 import com.hermes.client.ui.screens.ConversationDrawerContent
 import com.hermes.client.ui.screens.ConversationSearchScreen
@@ -100,9 +103,14 @@ fun NavGraph(startSessionId: String?) {
             // the drawer. From another session, navigate home as usual.
             var homeNonce by rememberSaveable { mutableIntStateOf(0) }
             var drawerOpen by rememberSaveable { mutableStateOf(false) }
-            AppDrawer(
-                open = drawerOpen,
-                onClose = { drawerOpen = false },
+            val drawerState = rememberDrawerState(DrawerValue.Closed)
+            LaunchedEffect(drawerOpen) {
+                if (drawerOpen) drawerState.open() else drawerState.close()
+            }
+            LaunchedEffect(drawerState.currentValue) {
+                if (drawerState.isClosed) drawerOpen = false
+            }
+            ModalNavigationDrawer(
                 drawerContent = {
                     ConversationDrawerContent(
                         selectedSessionId = sessionId,
@@ -124,6 +132,8 @@ fun NavGraph(startSessionId: String?) {
                         onCloseDrawer = { drawerOpen = false },
                     )
                 },
+                drawerState = drawerState,
+                gesturesEnabled = false,
             ) {
                 ChatScreen(
                     sessionId = sessionId,

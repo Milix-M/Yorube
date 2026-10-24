@@ -13,7 +13,7 @@ plugins {
 
 android {
     namespace = "com.hermes.client"
-    compileSdk = 37
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.hermes.client"
@@ -80,8 +80,8 @@ dependencies {
     implementation(libs.compose.animation)
     implementation(libs.compose.animation.core)
     implementation(libs.compose.ui.tooling.preview)
+    implementation(libs.compose.material3)
     implementation(libs.icons.lucide)
-    implementation(libs.composables.ui)
     implementation(libs.navigation.compose)
     implementation(libs.coroutines.android)
     implementation(libs.okhttp)

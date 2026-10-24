@@ -4,7 +4,12 @@ import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,13 +23,32 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.ClickableText
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -38,9 +62,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -66,30 +90,6 @@ import com.composables.icons.lucide.Square
 import com.composables.icons.lucide.TriangleAlert
 import com.composables.icons.lucide.User
 import com.composables.icons.lucide.Zap
-import com.composeunstyled.theme.Theme
-import com.composables.ui.components.AlertDialog
-import com.composables.ui.components.Button
-import com.composables.ui.components.ButtonSize
-import com.composables.ui.components.ButtonStyle
-import com.composables.ui.components.Disclosure
-import com.composables.ui.components.DisclosureButton
-import com.composables.ui.components.DisclosurePanel
-import com.composables.ui.components.HorizontalSeparator
-import com.composables.ui.components.Icon
-import com.composables.ui.components.IconButton
-import com.composables.ui.components.IndeterminateProgressIndicator
-import com.composables.ui.components.Text
-import com.composables.ui.components.Toolbar
-import com.composables.ui.theme.backgroundColor
-import com.composables.ui.theme.colors
-import com.composables.ui.theme.destructiveColor
-import com.composables.ui.theme.mediumShape
-import com.composables.ui.theme.mutedColor
-import com.composables.ui.theme.onBackgroundColor
-import com.composables.ui.theme.onPanelColor
-import com.composables.ui.theme.panelColor
-import com.composables.ui.theme.primaryColor
-import com.composables.ui.theme.shapes
 import com.hermes.client.HermesApp
 import com.hermes.client.R
 
@@ -114,7 +114,7 @@ fun ChatScreen(
                 ChatViewModel(app.container, sessionId) as T
         }
     )
-    val snackbar = rememberAppSnackbarState()
+    val snackbar = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
     val clarifyAnswer = remember { mutableStateOf("") }
     // Folded blocks drive the list; hoist so auto-follow can target the last row.
@@ -122,7 +122,7 @@ fun ChatScreen(
     val blocks = remember(messageSnapshot) { buildChatBlocks(messageSnapshot) }
 
     LaunchedEffect(vm.error) {
-        vm.error?.let { snackbar.show(it); vm.dismissError() }
+        vm.error?.let { snackbar.showSnackbar(it); vm.dismissError() }
     }
     // Follow the stream only while the user stays at the bottom.
     LaunchedEffect(vm.messages.size) {
@@ -133,16 +133,33 @@ fun ChatScreen(
         }
     }
 
-    Column(Modifier.fillMaxSize()) {
-        ChatTopBar(
-            title = title?.ifBlank { null } ?: stringResource(R.string.new_chat),
-            onOpenDrawer = onOpenDrawer,
-            onOpenSettings = onOpenSettings,
-        )
-        if (vm.busy) {
-            IndeterminateProgressIndicator(modifier = Modifier.fillMaxWidth())
+    Scaffold(
+        topBar = {
+            Column {
+                ChatTopBar(
+                    title = title?.ifBlank { null } ?: stringResource(R.string.new_chat),
+                    onOpenDrawer = onOpenDrawer,
+                    onOpenSettings = onOpenSettings,
+                )
+                if (vm.busy) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+            }
+        },
+        snackbarHost = { SnackbarHost(snackbar) },
+        bottomBar = {
+            ChatInputBar(
+                input = vm.input,
+                busy = vm.busy,
+                statusLine = vm.statusLine,
+                onInputChange = { vm.input = it },
+                onSend = vm::onSend,
+                onSteer = vm::onSteer,
+                onStop = vm::onStop,
+            )
         }
-        Box(Modifier.fillMaxSize().weight(1f)) {
+    ) { padding ->
+        Box(Modifier.fillMaxSize().padding(padding)) {
             if (vm.messages.isEmpty() && !vm.busy) {
                 ChatEmptyState(modifier = Modifier.fillMaxSize())
             } else {
@@ -178,120 +195,96 @@ fun ChatScreen(
                     }
                 }
             }
-            AppSnackbarHost(snackbar)
         }
-        ChatInputBar(
-            input = vm.input,
-            busy = vm.busy,
-            statusLine = vm.statusLine,
-            onInputChange = { vm.input = it },
-            onSend = vm::onSend,
-            onSteer = vm::onSteer,
-            onStop = vm::onStop,
-        )
     }
 
     vm.approval?.let { req ->
         AlertDialog(
-            visible = true,
             onDismissRequest = { /* must choose */ },
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    stringResource(R.string.approval_title),
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                req.command?.let { cmd ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(
-                                Theme[colors][panelColor],
-                                Theme[shapes][mediumShape],
-                            )
-                            .padding(10.dp),
-                    ) {
-                        SelectionContainer {
-                            Text(
-                                cmd,
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 13.sp,
-                            )
-                        }
-                    }
-                }
-                req.description?.let { Text(it, fontSize = 15.sp) }
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    for (choice in req.choices) {
-                        Button(
-                            onClick = { vm.answerApproval(choice) },
-                            modifier = Modifier.fillMaxWidth(),
+            title = { Text(stringResource(R.string.approval_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    req.command?.let { cmd ->
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            shape = RoundedCornerShape(8.dp),
                         ) {
-                            Text(choice)
+                            SelectionContainer {
+                                Text(
+                                    cmd,
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontFamily = FontFamily.Monospace
+                                    ),
+                                    modifier = Modifier.padding(10.dp),
+                                )
+                            }
+                        }
+                    }
+                    req.description?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        for (choice in req.choices) {
+                            Button(
+                                onClick = { vm.answerApproval(choice) },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(choice)
+                            }
                         }
                     }
                 }
-            }
-        }
+            },
+            confirmButton = {},
+        )
     }
 
     vm.clarify?.let { prompt ->
         AlertDialog(
-            visible = true,
             onDismissRequest = { /* must answer */ },
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    stringResource(R.string.question_title),
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(prompt.prompt, fontSize = 15.sp)
-                AppTextField(
-                    value = clarifyAnswer.value,
-                    onValueChange = { clarifyAnswer.value = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = false,
-                    maxLines = 4,
-                    fieldTag = "clarifyInput",
-                )
-                Button(
+            title = { Text(stringResource(R.string.question_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(prompt.prompt, style = MaterialTheme.typography.bodyMedium)
+                    TextField(
+                        value = clarifyAnswer.value,
+                        onValueChange = { clarifyAnswer.value = it },
+                        modifier = Modifier.fillMaxWidth().testTag("clarifyInput"),
+                        maxLines = 4,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
                     onClick = {
                         vm.answerClarify(clarifyAnswer.value)
                         clarifyAnswer.value = ""
                     },
-                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(stringResource(R.string.send))
                 }
-            }
-        }
+            },
+        )
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ChatTopBar(
     title: String,
     onOpenDrawer: (() -> Unit)?,
     onOpenSettings: () -> Unit,
 ) {
-    Toolbar(
-        modifier = Modifier.fillMaxWidth(),
+    TopAppBar(
         title = {
             Text(
                 title,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         },
-        leading = if (onOpenDrawer != null) {
-            {
+        navigationIcon = {
+            if (onOpenDrawer != null) {
                 IconButton(
                     onClick = onOpenDrawer,
-                    style = ButtonStyle.Ghost,
                     modifier = Modifier.testTag("menuButton"),
                 ) {
                     Icon(
@@ -300,13 +293,10 @@ private fun ChatTopBar(
                     )
                 }
             }
-        } else {
-            null
         },
-        trailing = {
+        actions = {
             IconButton(
                 onClick = onOpenSettings,
-                style = ButtonStyle.Ghost,
                 modifier = Modifier.testTag("settingsButton"),
             ) {
                 Icon(
@@ -350,8 +340,8 @@ private fun ChatInputBar(
         if (busy || statusLine.isNotBlank()) {
             Text(
                 if (busy && statusLine.isBlank()) stringResource(R.string.thinking) else statusLine,
-                fontSize = 12.sp,
-                color = Theme[colors][mutedColor],
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 6.dp),
                 maxLines = 1,
             )
@@ -362,7 +352,6 @@ private fun ChatInputBar(
         ) {
             IconButton(
                 onClick = { attachLauncher.launch("image/*") },
-                style = ButtonStyle.Ghost,
                 modifier = Modifier.testTag("attachButton"),
             ) {
                 Icon(
@@ -370,23 +359,28 @@ private fun ChatInputBar(
                     contentDescription = stringResource(R.string.attach),
                 )
             }
-            AppTextField(
+            TextField(
                 value = input,
                 onValueChange = onInputChange,
-                modifier = Modifier.weight(1f),
-                placeholder = if (busy) stringResource(R.string.steer_hint)
-                else stringResource(R.string.message_hint),
-                singleLine = false,
+                modifier = Modifier.weight(1f).testTag("chatInput"),
+                placeholder = {
+                    Text(
+                        if (busy) stringResource(R.string.steer_hint)
+                        else stringResource(R.string.message_hint)
+                    )
+                },
                 maxLines = 5,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                onKeyboardSend = { if (busy) onSteer() else onSend() },
-                fieldTag = "chatInput",
+                keyboardActions = KeyboardActions(
+                    onSend = { if (busy) onSteer() else onSend() },
+                ),
+                shape = RoundedCornerShape(20.dp),
+                singleLine = false,
             )
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.size(8.dp))
             if (busy) {
                 IconButton(
                     onClick = onStop,
-                    style = ButtonStyle.Ghost,
                     modifier = Modifier.testTag("stopButton"),
                 ) {
                     Icon(
@@ -395,10 +389,9 @@ private fun ChatInputBar(
                     )
                 }
             }
-            Button(
+            FilledIconButton(
                 onClick = { if (busy) onSteer() else onSend() },
                 enabled = input.isNotBlank(),
-                style = ButtonStyle.Primary,
                 modifier = Modifier.size(48.dp).testTag("sendButton"),
             ) {
                 Icon(
@@ -433,13 +426,12 @@ private fun ChatEmptyState(modifier: Modifier = Modifier) {
             imageVector = Lucide.Bot,
             contentDescription = null,
             modifier = Modifier.size(40.dp),
-            tint = Theme[colors][primaryColor],
+            tint = MaterialTheme.colorScheme.primary,
         )
         Spacer(Modifier.height(16.dp))
         Text(
             stringResource(R.string.empty_chat_title),
-            fontSize = 22.sp,
-            fontWeight = FontWeight.SemiBold,
+            style = MaterialTheme.typography.headlineSmall,
         )
     }
 }
@@ -453,11 +445,14 @@ private fun ThinkingRow() {
             .padding(vertical = 8.dp)
             .testTag("thinkingIndicator"),
     ) {
-        IndeterminateProgressIndicator(modifier = Modifier.width(48.dp))
+        CircularProgressIndicator(
+            modifier = Modifier.size(16.dp),
+            strokeWidth = 2.dp,
+        )
         Text(
             stringResource(R.string.thinking),
-            fontSize = 14.sp,
-            color = Theme[colors][mutedColor],
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 8.dp),
         )
     }
@@ -469,7 +464,7 @@ private fun ThinkingRow() {
  */
 @Composable
 private fun MessageRow(msg: UiMessage, modifier: Modifier = Modifier) {
-    val muted = Theme[colors][mutedColor]
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
     when (msg.kind) {
         MsgKind.USER -> {
             Column(modifier.fillMaxWidth().padding(vertical = 6.dp)) {
@@ -482,7 +477,7 @@ private fun MessageRow(msg: UiMessage, modifier: Modifier = Modifier) {
                     )
                     Text(
                         stringResource(R.string.role_you),
-                        fontSize = 12.sp,
+                        style = MaterialTheme.typography.labelSmall,
                         color = muted,
                         modifier = Modifier.padding(start = 4.dp),
                     )
@@ -490,7 +485,7 @@ private fun MessageRow(msg: UiMessage, modifier: Modifier = Modifier) {
                 SelectionContainer {
                     Text(
                         msg.text,
-                        fontSize = 15.sp,
+                        style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
                     )
                 }
@@ -515,21 +510,17 @@ private fun MessageRow(msg: UiMessage, modifier: Modifier = Modifier) {
                     )
                     Text(
                         stringResource(R.string.role_assistant),
-                        fontSize = 12.sp,
+                        style = MaterialTheme.typography.labelSmall,
                         color = muted,
                         modifier = Modifier.padding(start = 4.dp).weight(1f),
                     )
-                    Button(
-                        onClick = {
-                            clipboard.setText(AnnotatedString(msg.text))
-                            copied = true
-                        },
-                        style = ButtonStyle.Ghost,
-                        buttonSize = ButtonSize.Small,
-                    ) {
+                    TextButton(onClick = {
+                        clipboard.setText(AnnotatedString(msg.text))
+                        copied = true
+                    }) {
                         Text(
                             if (copied) stringResource(R.string.copied) else stringResource(R.string.copy),
-                            fontSize = 12.sp,
+                            style = MaterialTheme.typography.labelSmall,
                         )
                     }
                 }
@@ -546,7 +537,7 @@ private fun MessageRow(msg: UiMessage, modifier: Modifier = Modifier) {
             // ActivityLog and never reach here. Plain muted line, never a box.
             Text(
                 msg.text,
-                fontSize = 12.sp,
+                style = MaterialTheme.typography.labelSmall,
                 color = muted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -561,13 +552,13 @@ private fun MessageRow(msg: UiMessage, modifier: Modifier = Modifier) {
                 Icon(
                     imageVector = Lucide.TriangleAlert,
                     contentDescription = null,
-                    tint = Theme[colors][destructiveColor],
+                    tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(16.dp),
                 )
                 Text(
                     msg.text,
-                    fontSize = 14.sp,
-                    color = Theme[colors][destructiveColor],
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.weight(1f).padding(start = 8.dp),
                 )
             }
@@ -603,8 +594,8 @@ internal fun buildChatBlocks(messages: List<UiMessage>): List<ChatBlock> {
 }
 
 /**
- * Tool/MCP activity folded into a single tappable summary row, using the
- * established Disclosure component. No chat bubble anywhere.
+ * Tool/MCP activity folded into a single tappable summary row.
+ * Collapsed: one summary line. Expanded: full parsed payloads.
  */
 @Composable
 private fun ActivityLog(msgs: List<UiMessage>, modifier: Modifier = Modifier) {
@@ -614,24 +605,18 @@ private fun ActivityLog(msgs: List<UiMessage>, modifier: Modifier = Modifier) {
     val collapsedSummary = if (msgs.size == 1) lastSummary else stringResource(
         R.string.activity_summary, msgs.size, lastSummary
     )
-    val muted = Theme[colors][mutedColor]
-    Disclosure(
-        expanded = expanded,
-        onExpandedChange = { expanded = it },
-        modifier = modifier.fillMaxWidth().padding(vertical = 2.dp),
-    ) {
-        DisclosureButton(
-            modifier = Modifier.fillMaxWidth().testTag("activityToggle"),
-            indicator = { exp ->
-                Icon(
-                    imageVector = if (exp) Lucide.ChevronDown else Lucide.ChevronRight,
-                    contentDescription = stringResource(
-                        if (exp) R.string.collapse else R.string.expand
-                    ),
-                    modifier = Modifier.size(16.dp),
-                    tint = muted,
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    Column(modifier = modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(
+                    onClick = { expanded = !expanded },
+                    role = Role.Button,
                 )
-            },
+                .testTag("activityToggle")
+                .padding(vertical = 6.dp),
         ) {
             Icon(
                 imageVector = Lucide.Zap,
@@ -641,39 +626,54 @@ private fun ActivityLog(msgs: List<UiMessage>, modifier: Modifier = Modifier) {
             )
             Text(
                 collapsedSummary,
-                fontSize = 12.sp,
+                style = MaterialTheme.typography.labelSmall,
                 color = muted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).padding(start = 6.dp),
             )
+            Icon(
+                imageVector = if (expanded) Lucide.ChevronDown else Lucide.ChevronRight,
+                contentDescription = stringResource(
+                    if (expanded) R.string.collapse else R.string.expand
+                ),
+                modifier = Modifier.size(16.dp),
+                tint = muted,
+            )
         }
-        DisclosurePanel {
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
+            exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
+        ) {
             SelectionContainer {
                 Column(Modifier.padding(start = 20.dp, top = 2.dp, bottom = 4.dp)) {
                     for (m in msgs) {
-                        HorizontalSeparator(modifier = Modifier.padding(vertical = 3.dp))
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 3.dp))
                         // Summary line in bold, then the full parsed payload below.
                         val firstNl = m.text.indexOf("\n")
                         if (firstNl >= 0) {
                             Text(
                                 m.text.substring(0, firstNl),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.SemiBold
+                                ),
                                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                             )
                             Text(
                                 m.text.substring(firstNl + 1),
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 12.sp,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontFamily = FontFamily.Monospace
+                                ),
                                 color = muted,
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
                             )
                         } else {
                             Text(
                                 m.text,
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 12.sp,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontFamily = FontFamily.Monospace
+                                ),
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
                             )
                         }
@@ -741,48 +741,24 @@ private val MdLink = Regex("""\[([^\]]+)\]\(([^)\s]+)[^)]*\)""")
 @Composable
 private fun ChatRichParagraph(text: String) {
     val uriHandler = LocalUriHandler.current
-    val onBackground = Theme[colors][onBackgroundColor]
-    val primary = Theme[colors][primaryColor]
-    val muted = Theme[colors][mutedColor]
+    val colors = MaterialTheme.colorScheme
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         for (rawLine in text.lines()) {
             val line = rawLine.trimEnd()
             if (line.isBlank()) continue
             val (marker, style, body) = when {
-                line.startsWith("### ") -> Triple(
-                    "### ",
-                    TextStyle(fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = onBackground),
-                    line.removePrefix("### ")
-                )
-                line.startsWith("## ") -> Triple(
-                    "## ",
-                    TextStyle(fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = onBackground),
-                    line.removePrefix("## ")
-                )
-                line.startsWith("# ") -> Triple(
-                    "# ",
-                    TextStyle(fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = onBackground),
-                    line.removePrefix("# ")
-                )
+                line.startsWith("### ") -> Triple("### ", MaterialTheme.typography.titleLarge, line.removePrefix("### "))
+                line.startsWith("## ") -> Triple("## ", MaterialTheme.typography.titleLarge, line.removePrefix("## "))
+                line.startsWith("# ") -> Triple("# ", MaterialTheme.typography.headlineSmall, line.removePrefix("# "))
                 line.startsWith("> ") -> Triple(
                     "> ",
-                    TextStyle(
-                        fontSize = 15.sp, fontStyle = FontStyle.Italic, color = muted
-                    ),
+                    MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
                     line.removePrefix("> ")
                 )
-                line.startsWith("- ") || line.startsWith("* ") -> Triple(
-                    "• ",
-                    TextStyle(fontSize = 15.sp, color = onBackground),
-                    line.drop(2)
-                )
+                line.startsWith("- ") || line.startsWith("* ") -> Triple("• ", MaterialTheme.typography.bodyLarge, line.drop(2))
                 Regex("""^\d+\. """).containsMatchIn(line) ->
-                    Triple(
-                        "• ",
-                        TextStyle(fontSize = 15.sp, color = onBackground),
-                        line.replaceFirst(Regex("""^\d+\. """), "")
-                    )
-                else -> Triple("", TextStyle(fontSize = 15.sp, color = onBackground), line)
+                    Triple("• ", MaterialTheme.typography.bodyLarge, line.replaceFirst(Regex("""^\d+\. """), ""))
+                else -> Triple("", MaterialTheme.typography.bodyLarge, line)
             }
             @Suppress("UNUSED_VARIABLE")
             val unusedMarker = marker
@@ -802,7 +778,7 @@ private fun ChatRichParagraph(text: String) {
                             token.startsWith("`") -> withStyle(
                                 SpanStyle(
                                     fontFamily = FontFamily.Monospace,
-                                    background = Theme[colors][panelColor],
+                                    background = colors.surfaceVariant,
                                 )
                             ) { append(token.trim('`')) }
                             else -> {
@@ -811,7 +787,7 @@ private fun ChatRichParagraph(text: String) {
                                     pushStringAnnotation("url", lm.groupValues[2])
                                     withStyle(
                                         SpanStyle(
-                                            color = primary,
+                                            color = colors.primary,
                                             textDecoration = TextDecoration.Underline,
                                         )
                                     ) { append(lm.groupValues[1]) }
@@ -825,7 +801,7 @@ private fun ChatRichParagraph(text: String) {
                     }
                     if (cursor < body.length) append(body.substring(cursor))
                 },
-                style = style,
+                style = style.copy(color = colors.onSurface),
                 onClick = { offset ->
                     lastLinkAt(body, offset - marker.length)?.let { uriHandler.openUri(it) }
                 },
@@ -857,36 +833,27 @@ private fun ChatCodeBlock(language: String, code: String) {
             copied = false
         }
     }
-    val muted = Theme[colors][mutedColor]
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-            .background(
-                Theme[colors][panelColor],
-                Theme[shapes][mediumShape],
-            )
-            .padding(12.dp),
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
     ) {
-        Column {
+        Column(Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     language.ifBlank { "text" },
-                    fontSize = 12.sp,
+                    style = MaterialTheme.typography.labelSmall,
                     color = muted,
                     modifier = Modifier.weight(1f),
                 )
-                Button(
-                    onClick = {
-                        clipboard.setText(AnnotatedString(code))
-                        copied = true
-                    },
-                    style = ButtonStyle.Ghost,
-                    buttonSize = ButtonSize.Small,
-                ) {
+                TextButton(onClick = {
+                    clipboard.setText(AnnotatedString(code))
+                    copied = true
+                }) {
                     Text(
                         if (copied) stringResource(R.string.copied) else stringResource(R.string.copy),
-                        fontSize = 12.sp,
+                        style = MaterialTheme.typography.labelSmall,
                     )
                 }
             }
@@ -894,8 +861,9 @@ private fun ChatCodeBlock(language: String, code: String) {
             SelectionContainer {
                 Text(
                     code,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 13.sp,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontFamily = FontFamily.Monospace
+                    ),
                 )
             }
         }

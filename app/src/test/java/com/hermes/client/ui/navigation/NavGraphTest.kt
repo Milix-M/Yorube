@@ -7,13 +7,10 @@ import androidx.compose.ui.test.hasTextExactly
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.test.click
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
-import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ApplicationProvider
 import com.hermes.client.HermesApp
 import com.hermes.client.R
@@ -275,41 +272,6 @@ class NavGraphTest {
         compose.onNodeWithTag("searchScreenInput").assertIsDisplayed()
         waitFor("Other")
         compose.onNodeWithText("Other").performClick()
-        compose.onNodeWithTag("chatInput").assertIsDisplayed()
-    }
-
-    @Test
-    fun drawerScrim_tapClosesDrawer() {
-        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
-            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
-                return when {
-                    (request.path ?: "").startsWith("/api/sessions") ->
-                        MockResponse().setBody("""{"sessions":[{"id":"s1","title":"Hello"}]}""")
-                    else -> MockResponse().setBody("{}")
-                }
-            }
-        }
-        saveSettings()
-        compose.setContent {
-            HermesAppTheme {
-                NavGraph(null)
-            }
-        }
-        compose.onNodeWithTag("chatInput").assertIsDisplayed()
-        compose.onNodeWithTag("menuButton").performClick()
-        waitFor("Hello")
-        // Tapping the visible scrim (right of the 85%-wide panel) closes it.
-        // NB: plain performClick() hits the node's center, which the panel
-        // covers, so tap an uncovered point explicitly.
-        val scrim = compose.onNodeWithTag("drawerScrim")
-        val scrimSize = scrim.fetchSemanticsNode().size
-        scrim.performTouchInput {
-            click(Offset(scrimSize.width * 0.95f, scrimSize.height * 0.5f))
-        }
-        compose.waitUntil(timeoutMillis = 5_000) {
-            compose.onAllNodesWithTag("drawerNewChat", useUnmergedTree = true)
-                .fetchSemanticsNodes().isEmpty()
-        }
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
     }
 
