@@ -24,7 +24,8 @@ jobs:
         run: |
           export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
           yes | sdkmanager --licenses > /dev/null
-          sdkmanager --install "platform-tools" "platforms;android-34" "platforms;android-35" "build-tools;34.0.0" "build-tools;35.0.0"
+          sdkmanager --install "platform-tools" "platforms;android-34" "platforms;android-35" "platforms;android-37.2-beta3" "build-tools;34.0.0" "build-tools;35.0.0" "build-tools;37.0.0"
+          cp -r "$ANDROID_SDK_ROOT/platforms/android-37.2-beta3" "$ANDROID_SDK_ROOT/platforms/android-37"
       - name: Run tests with 100% line coverage gate
         run: ./gradlew :app:jacocoTestReport :app:createDebugUnitTestCoverageReport :app:jacocoCoverageVerification --no-daemon --stacktrace
       - name: Upload test reports

@@ -12,20 +12,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material.AlertDialog
-import androidx.compose.material.CircularProgressIndicator
-import androidx.compose.material.FloatingActionButton
-import androidx.compose.material.Icon
-import androidx.compose.material.IconButton
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.Scaffold
-import androidx.compose.material.SnackbarHost
-import androidx.compose.material.SnackbarHostState
-import androidx.compose.material.Text
-import androidx.compose.material.TextButton
-import androidx.compose.material.TextField
-import androidx.compose.material.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -35,11 +23,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
@@ -53,7 +44,19 @@ import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.Settings
 import com.composables.icons.lucide.Trash2
-import com.composables.icons.lucide.X
+import com.composeunstyled.theme.Theme
+import com.composables.ui.components.AlertDialog
+import com.composables.ui.components.Button
+import com.composables.ui.components.ButtonStyle
+import com.composables.ui.components.Icon
+import com.composables.ui.components.IconButton
+import com.composables.ui.components.IndeterminateProgressIndicator
+import com.composables.ui.components.Text
+import com.composables.ui.components.Toolbar
+import com.composables.ui.theme.colors
+import com.composables.ui.theme.mutedColor
+import com.composables.ui.theme.onBackgroundColor
+import com.composables.ui.theme.primaryColor
 import com.hermes.client.HermesApp
 import com.hermes.client.R
 import com.hermes.client.data.api.SessionInfo
@@ -72,7 +75,7 @@ fun ConversationListScreen(
                 ConversationListViewModel(app.container) as T
         }
     )
-    val snackbarHostState = remember { SnackbarHostState() }
+    val snackbar = rememberAppSnackbarState()
     var pendingDelete by remember { mutableStateOf<String?>(null) }
     var query by remember { mutableStateOf("") }
 
@@ -87,16 +90,23 @@ fun ConversationListScreen(
         onDispose { lifecycle.removeObserver(observer) }
     }
     LaunchedEffect(vm.error) {
-        vm.error?.let { snackbarHostState.showSnackbar(it); vm.dismissError() }
+        vm.error?.let { snackbar.show(it); vm.dismissError() }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Hermes") },
-                actions = {
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize()) {
+            Toolbar(
+                title = {
+                    Text(
+                        "Hermes",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                },
+                trailing = {
                     IconButton(
                         onClick = vm::refresh,
+                        style = ButtonStyle.Ghost,
                         modifier = Modifier.testTag("refreshButton"),
                     ) {
                         Icon(
@@ -106,6 +116,7 @@ fun ConversationListScreen(
                     }
                     IconButton(
                         onClick = onOpenSettings,
+                        style = ButtonStyle.Ghost,
                         modifier = Modifier.testTag("settingsButton"),
                     ) {
                         Icon(
@@ -114,23 +125,7 @@ fun ConversationListScreen(
                         )
                     }
                 },
-                elevation = 0.dp,
             )
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { onOpenChat(null, null) },
-                modifier = Modifier.testTag("newChat"),
-            ) {
-                Icon(
-                    imageVector = Lucide.Plus,
-                    contentDescription = stringResource(R.string.new_chat),
-                )
-            }
-        },
-    ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
             SearchField(query = query, onQuery = { query = it })
             Box(Modifier.fillMaxSize().weight(1f)) {
                 ConversationListBody(
@@ -141,6 +136,20 @@ fun ConversationListScreen(
                 )
             }
         }
+        Button(
+            onClick = { onOpenChat(null, null) },
+            style = ButtonStyle.Primary,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(20.dp)
+                .testTag("newChat"),
+        ) {
+            Icon(
+                imageVector = Lucide.Plus,
+                contentDescription = stringResource(R.string.new_chat),
+            )
+        }
+        AppSnackbarHost(snackbar)
     }
 
     pendingDelete?.let { id ->
@@ -183,6 +192,7 @@ fun ConversationDrawerContent(
         ) {
             IconButton(
                 onClick = onCloseDrawer,
+                style = ButtonStyle.Ghost,
                 modifier = Modifier.testTag("closeDrawer"),
             ) {
                 Icon(
@@ -221,6 +231,7 @@ fun ConversationDrawerContent(
         ) {
             IconButton(
                 onClick = onOpenSettings,
+                style = ButtonStyle.Ghost,
                 modifier = Modifier.testTag("drawerSettings").size(40.dp),
             ) {
                 Icon(
@@ -230,14 +241,14 @@ fun ConversationDrawerContent(
             }
             Text(
                 stringResource(R.string.settings),
-                style = MaterialTheme.typography.caption,
-                color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
+                fontSize = 12.sp,
+                color = Theme[colors][mutedColor],
             )
             Spacer(Modifier.weight(1f))
             Text(
                 "v" + com.hermes.client.BuildConfig.VERSION_NAME,
-                style = MaterialTheme.typography.caption,
-                color = MaterialTheme.colors.onSurface.copy(alpha = 0.4f),
+                fontSize = 12.sp,
+                color = Theme[colors][mutedColor],
             )
         }
     }
@@ -255,7 +266,7 @@ fun ConversationDrawerContent(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DrawerItemRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     label: String,
     testTag: String,
     onClick: () -> Unit,
@@ -275,7 +286,7 @@ private fun DrawerItemRow(
         )
         Text(
             label,
-            style = MaterialTheme.typography.body1,
+            fontSize = 15.sp,
             modifier = Modifier.padding(start = 12.dp),
         )
     }
@@ -302,35 +313,36 @@ fun ConversationSearchScreen(
 
     LaunchedEffect(Unit) { vm.refresh() }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.search_chats)) },
-                navigationIcon = {
-                    IconButton(
-                        onClick = onNavigateBack,
-                        modifier = Modifier.testTag("searchBack"),
-                    ) {
-                        Icon(
-                            imageVector = Lucide.ArrowLeft,
-                            contentDescription = stringResource(R.string.back),
-                        )
-                    }
-                },
-                elevation = 0.dp,
-            )
-        },
-    ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
-            SearchField(query = query, onQuery = { query = it }, fieldTag = "searchScreenInput")
-            Box(Modifier.fillMaxSize().weight(1f)) {
-                ConversationListBody(
-                    loading = vm.loading,
-                    sessions = vm.sessions.filterQuery(query),
-                    onOpenChat = onOpenChat,
-                    onAskDelete = { pendingDelete = it },
+    Column(Modifier.fillMaxSize()) {
+        Toolbar(
+            title = {
+                Text(
+                    stringResource(R.string.search_chats),
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
                 )
-            }
+            },
+            leading = {
+                IconButton(
+                    onClick = onNavigateBack,
+                    style = ButtonStyle.Ghost,
+                    modifier = Modifier.testTag("searchBack"),
+                ) {
+                    Icon(
+                        imageVector = Lucide.ArrowLeft,
+                        contentDescription = stringResource(R.string.back),
+                    )
+                }
+            },
+        )
+        SearchField(query = query, onQuery = { query = it }, fieldTag = "searchScreenInput")
+        Box(Modifier.fillMaxSize().weight(1f)) {
+            ConversationListBody(
+                loading = vm.loading,
+                sessions = vm.sessions.filterQuery(query),
+                onOpenChat = onOpenChat,
+                onAskDelete = { pendingDelete = it },
+            )
         }
     }
 
@@ -351,32 +363,24 @@ private fun SearchField(
     modifier: Modifier = Modifier,
     fieldTag: String = "searchInput",
 ) {
-    TextField(
+    AppTextField(
         value = query,
         onValueChange = onQuery,
-        modifier = modifier
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-            .testTag(fieldTag),
-        placeholder = { Text(stringResource(R.string.search_hint)) },
-        leadingIcon = {
+        modifier = modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+        placeholder = stringResource(R.string.search_hint),
+        leading = {
             Icon(
                 imageVector = Lucide.Search,
                 contentDescription = null,
             )
         },
-        trailingIcon = if (query.isNotEmpty()) {
-            {
-                IconButton(onClick = { onQuery("") }) {
-                    Icon(
-                        imageVector = Lucide.X,
-                        contentDescription = stringResource(R.string.cancel),
-                    )
-                }
-            }
+        trailing = if (query.isNotEmpty()) {
+            { AppSearchClear(onClear = { onQuery("") }) }
         } else {
             null
         },
         singleLine = true,
+        fieldTag = fieldTag,
     )
 }
 
@@ -390,10 +394,11 @@ private fun ConversationListBody(
     selectedKey: String? = null,
     compact: Boolean = false,
 ) {
+    val muted = Theme[colors][mutedColor]
     when {
         loading && sessions.isEmpty() ->
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+                IndeterminateProgressIndicator(modifier = Modifier.width(64.dp))
             }
         sessions.isEmpty() ->
             Column(
@@ -405,12 +410,12 @@ private fun ConversationListBody(
                     imageVector = Lucide.Search,
                     contentDescription = null,
                     modifier = Modifier.size(40.dp),
-                    tint = MaterialTheme.colors.onSurface.copy(alpha = 0.4f),
+                    tint = muted,
                 )
                 Text(
                     stringResource(R.string.empty_conversations),
-                    style = MaterialTheme.typography.body2,
-                    color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
+                    fontSize = 14.sp,
+                    color = muted,
                     modifier = Modifier.padding(top = 12.dp),
                 )
             }
@@ -427,8 +432,8 @@ private fun ConversationListBody(
                     item(key = "header-$bucket") {
                         Text(
                             stringResource(bucket.titleRes),
-                            style = MaterialTheme.typography.caption,
-                            color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
+                            fontSize = 12.sp,
+                            color = muted,
                             modifier = Modifier.padding(start = 12.dp, top = 10.dp, bottom = 2.dp),
                         )
                     }
@@ -452,16 +457,16 @@ private fun ConversationListBody(
                             Column(Modifier.weight(1f)) {
                                 Text(
                                     s.title?.ifBlank { null } ?: stringResource(R.string.new_chat),
-                                    style = MaterialTheme.typography.body1,
-                                    color = if (selected) MaterialTheme.colors.primary
-                                    else MaterialTheme.colors.onSurface,
+                                    fontSize = 15.sp,
+                                    color = if (selected) Theme[colors][primaryColor]
+                                    else Theme[colors][onBackgroundColor],
                                     maxLines = 1,
                                 )
                                 formatDateTime(s.updatedAt)?.let { date ->
                                     Text(
                                         date,
-                                        style = MaterialTheme.typography.caption,
-                                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.6f),
+                                        fontSize = 12.sp,
+                                        color = muted,
                                         maxLines = 1,
                                     )
                                 }
@@ -484,30 +489,42 @@ private fun ConversationListBody(
 @Composable
 private fun DeleteDialog(label: String, onDismiss: () -> Unit, onConfirm: () -> Unit) {
     AlertDialog(
+        visible = true,
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.delete_title)) },
-        text = {
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                stringResource(R.string.delete_title),
+                fontSize = 17.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
             Text(
                 label.take(40),
-                style = MaterialTheme.typography.body1,
+                fontSize = 15.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-        },
-        confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text(
-                    stringResource(R.string.delete),
-                    color = MaterialTheme.colors.error,
-                )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Button(
+                    onClick = onDismiss,
+                    style = ButtonStyle.Ghost,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(stringResource(R.string.cancel))
+                }
+                Button(
+                    onClick = onConfirm,
+                    style = ButtonStyle.Destructive,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(stringResource(R.string.delete))
+                }
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.cancel))
-            }
-        },
-    )
+        }
+    }
 }
 
 /** Short date for conversation rows. Null when the server sent no timestamp. */

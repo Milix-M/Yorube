@@ -7,12 +7,16 @@ import androidx.compose.ui.test.hasTextExactly
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ApplicationProvider
 import com.hermes.client.HermesApp
+import com.hermes.client.R
 import com.hermes.client.data.store.ClientSettings
 import com.hermes.client.ui.theme.HermesAppTheme
 import kotlinx.coroutines.Dispatchers
@@ -85,13 +89,15 @@ class NavGraphTest {
             }
         }
         saveSettings()
+        val app = ApplicationProvider.getApplicationContext<Application>() as HermesApp
         compose.setContent {
             HermesAppTheme {
                 NavGraph(null)
             }
         }
-        // Home is the latest chat ("Hello" is also the top bar title).
+        // Launch always lands on the fresh home chat (never auto-forwards).
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
+        compose.onNodeWithText(app.getString(R.string.empty_chat_title)).assertIsDisplayed()
         // Past conversations live in the sidebar drawer.
         compose.onNodeWithTag("menuButton").performClick()
         waitFor("Other")
@@ -141,7 +147,7 @@ class NavGraphTest {
                 NavGraph(null)
             }
         }
-        // Home is the latest chat; history lives in the drawer.
+        // Home is a fresh chat; history lives in the drawer.
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
         compose.onNodeWithTag("menuButton").performClick()
         waitFor("Other")
@@ -180,7 +186,7 @@ class NavGraphTest {
     }
 
     @Test
-    fun homeShowsLatestChat() {
+    fun homeShowsFreshChat() {
         server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
             override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
                 return when {
@@ -197,20 +203,21 @@ class NavGraphTest {
             }
         }
         saveSettings()
+        val app = ApplicationProvider.getApplicationContext<Application>() as HermesApp
         compose.setContent {
             HermesAppTheme {
                 NavGraph(null)
             }
         }
-        // Launch lands on the latest conversation, not an empty chat.
-        // (Assistant markdown may split text nodes: match by substring.)
+        // Launch lands on a fresh home chat: the empty state shows and no
+        // conversation is auto-opened, even though history exists.
         compose.waitUntil(timeoutMillis = 15_000) {
-            compose.onAllNodesWithText("recent answer", substring = true)
+            compose.onAllNodesWithText(app.getString(R.string.empty_chat_title))
                 .fetchSemanticsNodes().isNotEmpty()
         }
         assertTrue(
             compose.onAllNodesWithText("recent answer", substring = true)
-                .fetchSemanticsNodes().isNotEmpty()
+                .fetchSemanticsNodes().isEmpty()
         )
     }
 
@@ -268,6 +275,41 @@ class NavGraphTest {
         compose.onNodeWithTag("searchScreenInput").assertIsDisplayed()
         waitFor("Other")
         compose.onNodeWithText("Other").performClick()
+        compose.onNodeWithTag("chatInput").assertIsDisplayed()
+    }
+
+    @Test
+    fun drawerScrim_tapClosesDrawer() {
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                return when {
+                    (request.path ?: "").startsWith("/api/sessions") ->
+                        MockResponse().setBody("""{"sessions":[{"id":"s1","title":"Hello"}]}""")
+                    else -> MockResponse().setBody("{}")
+                }
+            }
+        }
+        saveSettings()
+        compose.setContent {
+            HermesAppTheme {
+                NavGraph(null)
+            }
+        }
+        compose.onNodeWithTag("chatInput").assertIsDisplayed()
+        compose.onNodeWithTag("menuButton").performClick()
+        waitFor("Hello")
+        // Tapping the visible scrim (right of the 85%-wide panel) closes it.
+        // NB: plain performClick() hits the node's center, which the panel
+        // covers, so tap an uncovered point explicitly.
+        val scrim = compose.onNodeWithTag("drawerScrim")
+        val scrimSize = scrim.fetchSemanticsNode().size
+        scrim.performTouchInput {
+            click(Offset(scrimSize.width * 0.95f, scrimSize.height * 0.5f))
+        }
+        compose.waitUntil(timeoutMillis = 5_000) {
+            compose.onAllNodesWithTag("drawerNewChat", useUnmergedTree = true)
+                .fetchSemanticsNodes().isEmpty()
+        }
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
     }
 

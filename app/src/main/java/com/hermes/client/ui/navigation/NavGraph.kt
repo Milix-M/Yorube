@@ -8,30 +8,20 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.material.DrawerValue
-import androidx.compose.material.ModalDrawer
-import androidx.compose.material.rememberDrawerState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.hermes.client.HermesApp
+import com.hermes.client.ui.screens.AppDrawer
 import com.hermes.client.ui.screens.ChatScreen
 import com.hermes.client.ui.screens.ConversationDrawerContent
-import com.hermes.client.ui.screens.ConversationListViewModel
 import com.hermes.client.ui.screens.ConversationSearchScreen
 import com.hermes.client.ui.screens.SettingsScreen
 
@@ -56,41 +46,12 @@ private const val SlidePx = 32
 @Composable
 fun NavGraph(startSessionId: String?) {
     val navController = rememberNavController()
-    val app = LocalContext.current.applicationContext as HermesApp
-    // Home shows the latest conversation; explicit session ids (e.g. from a
-    // notification tap) always win. Sessions load async, so the start
-    // destination resolves once the list arrives; key() swaps the NavHost to
-    // the resolved start without pushing a back-stack entry.
-    val startVm: ConversationListViewModel = viewModel(
-        key = "home-start",
-        factory = object : ViewModelProvider.Factory {
-            @Suppress("UNCHECKED_CAST")
-            override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                ConversationListViewModel(app.container) as T
-        }
-    )
-    LaunchedEffect(Unit) { startVm.refresh() }
-    // Home shows the latest conversation once it arrives (explicit session
-    // ids, e.g. from a notification tap, always win). Ordinary forward
-    // navigation replaces the fresh home without growing the back stack,
-    // and only while the fresh home is actually showing.
-    val latest = startVm.sessions.firstOrNull()
-    var forwarded by rememberSaveable { mutableStateOf(false) }
-    val entry by navController.currentBackStackEntryAsState()
-    val onFreshHome = entry?.destination?.route?.startsWith(Routes.CHAT) == true &&
-        entry?.arguments?.getString("sessionId") == null
-    LaunchedEffect(latest?.key, onFreshHome) {
-        if (startSessionId == null && latest != null && !forwarded && onFreshHome) {
-            forwarded = true
-            navController.navigate(Routes.chat(latest.key, latest.title)) {
-                popUpTo(Routes.CHAT) { inclusive = true }
-            }
-        }
-    }
+    // Launch always lands on the home chat (a fresh conversation, or the
+    // notification's session when one was tapped). No auto-forwarding.
     NavHost(
         navController = navController,
         startDestination = Routes.chat(startSessionId),
-        // Material shared-axis-X: short slide with fade. Forward slides in
+        // Shared-axis-X: short slide with fade. Forward slides in
         // from the right, back pops from the left.
         enterTransition = {
             slideInHorizontally(
@@ -139,11 +100,9 @@ fun NavGraph(startSessionId: String?) {
             // the drawer. From another session, navigate home as usual.
             var homeNonce by rememberSaveable { mutableIntStateOf(0) }
             var drawerOpen by rememberSaveable { mutableStateOf(false) }
-            val drawerState = rememberDrawerState(DrawerValue.Closed)
-            LaunchedEffect(drawerOpen) {
-                if (drawerOpen) drawerState.open() else drawerState.close()
-            }
-            ModalDrawer(
+            AppDrawer(
+                open = drawerOpen,
+                onClose = { drawerOpen = false },
                 drawerContent = {
                     ConversationDrawerContent(
                         selectedSessionId = sessionId,
@@ -165,8 +124,6 @@ fun NavGraph(startSessionId: String?) {
                         onCloseDrawer = { drawerOpen = false },
                     )
                 },
-                drawerState = drawerState,
-                gesturesEnabled = false,
             ) {
                 ChatScreen(
                     sessionId = sessionId,
