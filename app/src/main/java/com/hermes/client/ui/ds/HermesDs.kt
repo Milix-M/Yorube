@@ -8,6 +8,8 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
@@ -19,6 +21,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -63,7 +66,12 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
+import com.composeunstyled.DialogProperties
+import com.composeunstyled.UnstyledButton
+import com.composeunstyled.UnstyledDialog
+import com.composeunstyled.UnstyledDialogPanel
+import com.composeunstyled.UnstyledScrim
+import com.composeunstyled.rememberDialogState
 import kotlinx.coroutines.delay
 
 data class HermesColors(
@@ -217,16 +225,21 @@ fun HermesIconButton(
     enabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
-    Box(
-        contentAlignment = Alignment.Center,
+    UnstyledButton(
+        onClick = onClick,
+        enabled = enabled,
+        shape = CircleShape,
+        backgroundColor = Color.Transparent,
+        contentColor = Hermes.colors.onSurface,
+        contentPadding = PaddingValues(0.dp),
         modifier = modifier
             .size(44.dp)
-            .clip(RoundedCornerShape(22.dp))
-            .clickable(enabled = enabled, onClick = onClick)
-            .alpha(if (enabled) 1f else 0.4f)
-            .then(if (desc != null) Modifier.semantics { contentDescription = desc } else Modifier),
+            .then(if (desc != null) Modifier.semantics { contentDescription = desc } else Modifier)
+            .alpha(if (enabled) 1f else 0.4f),
     ) {
-        content()
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+            content()
+        }
     }
 }
 
@@ -300,31 +313,36 @@ fun HermesButton(
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
             .background(bg)
-            .clickable(enabled = enabled, onClick = onClick)
-            .alpha(if (enabled) 1f else 0.5f)
-            .padding(horizontal = 18.dp, vertical = 13.dp),
+            .alpha(if (enabled) 1f else 0.5f),
     ) {
-        BasicText(
-            text = label,
-            style = Hermes.type.label.copy(
-                color = if (primary) Hermes.colors.onPrimary else Hermes.colors.onSurface
-            ),
-        )
+        UnstyledButton(
+            onClick = onClick,
+            enabled = enabled,
+            backgroundColor = Color.Transparent,
+            contentColor = if (primary) Hermes.colors.onPrimary else Hermes.colors.onSurface,
+            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 13.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            BasicText(
+                text = label,
+                style = Hermes.type.label,
+            )
+        }
     }
 }
 
 @Composable
 fun HermesTextButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+    UnstyledButton(
+        onClick = onClick,
+        backgroundColor = Color.Transparent,
+        contentColor = Hermes.colors.primary,
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+        modifier = modifier.clip(RoundedCornerShape(12.dp)),
     ) {
         BasicText(
             text = label,
-            style = Hermes.type.label.copy(color = Hermes.colors.primary),
+            style = Hermes.type.label,
         )
     }
 }
@@ -438,31 +456,44 @@ fun HermesDialog(
     onDismissAction: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    if (!visible) return
-    Dialog(onDismissRequest = { if (dismissOnOutside) onDismiss() else Unit }) {
-        Column(
-            modifier = modifier
-                .widthIn(max = 420.dp)
-                .clip(RoundedCornerShape(22.dp))
-                .background(Hermes.colors.surface)
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            BasicText(
-                text = title,
-                style = Hermes.type.title.copy(color = Hermes.colors.onSurface),
-            )
-            content()
-            Row(
-                horizontalArrangement = Arrangement.End,
-                modifier = Modifier.fillMaxWidth(),
+    // Existing OSS dialog primitive (focus trap, ESC/back handling, outside
+    // tap): the visual design stays 100% Hermes.
+    val state = rememberDialogState()
+    LaunchedEffect(visible) { state.visible = visible }
+    UnstyledDialog(
+        state = state,
+        properties = DialogProperties(
+            dismissOnBackPress = dismissOnOutside,
+            dismissOnClickOutside = dismissOnOutside,
+        ),
+        onDismiss = onDismiss,
+    ) {
+        UnstyledScrim(scrimColor = Hermes.colors.scrim)
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            UnstyledDialogPanel(
+                modifier = modifier.widthIn(max = 420.dp),
+                shape = RoundedCornerShape(22.dp),
+                backgroundColor = Hermes.colors.surface,
+                contentPadding = PaddingValues(20.dp),
             ) {
-                if (dismissLabel != null) {
-                    HermesTextButton(dismissLabel, onDismissAction ?: onDismiss)
-                    Spacer(Modifier.width(4.dp))
-                }
-                if (confirmLabel != null) {
-                    HermesButton(confirmLabel, onConfirm)
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    BasicText(
+                        text = title,
+                        style = Hermes.type.title.copy(color = Hermes.colors.onSurface),
+                    )
+                    content()
+                    Row(
+                        horizontalArrangement = Arrangement.End,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        if (dismissLabel != null) {
+                            HermesTextButton(dismissLabel, onDismissAction ?: onDismiss)
+                            Spacer(Modifier.width(4.dp))
+                        }
+                        if (confirmLabel != null) {
+                            HermesButton(confirmLabel, onConfirm)
+                        }
+                    }
                 }
             }
         }
