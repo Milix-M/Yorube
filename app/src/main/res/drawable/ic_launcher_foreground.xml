@@ -3,22 +3,15 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Minimal single-line paper plane, nose pointing north-east. -->
-    <path
-        android:fillColor="#00000000"
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="4.5"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:pathData="M34,68 L74,32 L60,74 L52,60 Z" />
-    <!-- Fold accent -->
-    <path
-        android:strokeColor="#B9C6FF"
-        android:strokeWidth="3"
-        android:strokeLineCap="round"
-        android:pathData="M74,32 L52,60" />
-    <!-- Small trailing sparkle -->
-    <path
-        android:fillColor="#B9C6FF"
-        android:pathData="M26,78 C26.8,81.8 29.7,84.7 33.5,85.5 C29.7,86.3 26.8,89.2 26,93 C25.2,89.2 22.3,86.3 18.5,85.5 C22.3,84.7 25.2,81.8 26,78 Z" />
+    <!-- Minimal monochrome mark: Material Symbols "auto_awesome" (Apache License 2.0,
+         Google Fonts) in solid white. Background tile is a separate near-black drawable. -->
+    <group
+        android:translateX="24"
+        android:translateY="24"
+        android:scaleX="2.5"
+        android:scaleY="2.5">
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="m19,9 -1.25,-2.75 L15,5 17.75,3.75 L19,1 l1.25,2.75 L23,5 l-2.75,1.25 Z m0,14 -1.25,-2.75 L15,19 l2.75,-1.25 L19,15 l1.25,2.75 L23,19 l-2.75,1.25 Z M9,20 l-2.5,-5.5 L1,12 l5.5,-2.5 L9,4 l2.5,5.5 L17,12 l-5.5,2.5 Z m0,-4.85 L10,13 l2.15,-1 L10,11 L9,8.85 L8,11 l-2.15,1 L8,13 Z M9,12 Z" />
+    </group>
 </vector>
