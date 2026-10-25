@@ -94,8 +94,9 @@ class NavGraphTest {
         waitFor("Hello")
         compose.onNodeWithText("Hello").performClick()
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
-        // Chat -> settings via gear (covers chat onOpenSettings navigation).
-        compose.onNodeWithTag("settingsButton").performClick()
+        // Chat -> settings via the drawer (covers drawer onOpenSettings navigation).
+        compose.onNodeWithTag("menuButton").performClick()
+        compose.onNodeWithTag("drawerSettings").performClick()
         waitFor("Settings")
         // Settings -> back to chat (covers settings onNavigateBack).
         compose.onNodeWithTag("backButton").performClick()

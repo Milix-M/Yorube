@@ -8,7 +8,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.background
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
@@ -16,9 +18,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -72,15 +76,27 @@ fun NavGraph(startSessionId: String?) {
     )
     LaunchedEffect(Unit) { startVm.refresh() }
     val latest = startVm.sessions.firstOrNull()
-    val startDestination = if (startSessionId != null || latest == null) {
-        Routes.chat(startSessionId)
-    } else {
-        Routes.chat(latest.key, latest.title)
+    // Freeze the start destination after its first resolution. Later list
+    // refreshes (e.g. a session created from a new chat) must never rebuild
+    // the NavHost mid-conversation and throw the user back home.
+    var frozenStart by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(startSessionId, latest?.key) {
+        if (frozenStart == null && (startSessionId != null || latest != null)) {
+            frozenStart = if (startSessionId != null || latest == null) {
+                Routes.chat(startSessionId)
+            } else {
+                Routes.chat(latest.key, latest.title)
+            }
+        }
     }
+    val startDestination = frozenStart ?: Routes.chat(startSessionId)
     key(startDestination) {
         NavHost(
             navController = navController,
             startDestination = startDestination,
+            // Draw the surface color behind transitions: without this the
+            // transparent NavHost shows the white windowBackground as a flash.
+            modifier = Modifier.background(MaterialTheme.colorScheme.surface),
         // Material shared-axis-X: short slide with fade. Forward slides in
         // from the right, back pops from the left.
         enterTransition = {
@@ -136,6 +152,7 @@ fun NavGraph(startSessionId: String?) {
                 drawerContent = {
                     ConversationDrawerContent(
                         selectedSessionId = sessionId,
+                        drawerState = drawerState,
                         onOpenChat = { id, chatTitle ->
                             scope.launch { drawerState.close() }
                             if (id == null && sessionId == null) {
@@ -159,7 +176,13 @@ fun NavGraph(startSessionId: String?) {
                     sessionId = sessionId,
                     title = title,
                     instanceNonce = homeNonce,
-                    onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                    recentSessions = startVm.sessions,
+                    onNavigateToFreshChat = {
+                        navController.navigate(Routes.chat(null, null)) {
+                            popUpTo(Routes.CHAT) { inclusive = true }
+                        }
+                    },
+                    onSessionCreated = { startVm.refresh() },
                     // At the home root there is nothing to pop: stay instead of a blank screen.
                     onNavigateBack = { if (navController.previousBackStackEntry != null) navController.popBackStack() },
                     onOpenDrawer = { scope.launch { drawerState.open() } },

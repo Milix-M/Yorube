@@ -1,7 +1,9 @@
 package com.hermes.client.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -11,10 +13,14 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,8 +33,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -38,27 +46,30 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -68,27 +79,36 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mikepenz.markdown.compose.components.MarkdownComponentModel
@@ -102,82 +122,120 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.hermes.client.HermesApp
 import com.hermes.client.R
+import com.hermes.client.data.api.SessionInfo
+import com.hermes.client.ui.theme.GeminiSparkAvatar
+import com.hermes.client.ui.theme.geminiHeadlineStyle
+import com.hermes.client.ui.theme.geminiHorizontalBrush
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
     sessionId: String?,
-    onOpenSettings: () -> Unit,
     onNavigateBack: () -> Unit = {},
     onOpenDrawer: (() -> Unit)? = null,
     title: String? = null,
     instanceNonce: Int = 0,
+    recentSessions: List<SessionInfo> = emptyList(),
+    onNavigateToFreshChat: () -> Unit = {},
+    onSessionCreated: (String) -> Unit = {},
 ) {
     val app = LocalContext.current.applicationContext as HermesApp
     val vm: ChatViewModel = viewModel(
         key = "chat-${sessionId.orEmpty()}-$instanceNonce",
         factory = object : ViewModelProvider.Factory {
-            @Suppress("UNCHECKED_CAST")
+            @Suppress("UnstableApiUsage", "UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
                 ChatViewModel(app.container, sessionId) as T
         }
     )
     val snackbar = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     val clarifyAnswer = remember { mutableStateOf("") }
-    // Folded blocks drive the list; hoist so auto-follow can target the last row.
     val messageSnapshot = vm.messages.toList()
     val blocks = remember(messageSnapshot) { buildChatBlocks(messageSnapshot) }
 
     LaunchedEffect(vm.error) {
         vm.error?.let { snackbar.showSnackbar(it); vm.dismissError() }
     }
-    // Follow the stream only while the user stays at the bottom.
+    // The jump button shows whenever the very bottom is off-screen.
+    // Tapping first lands on the newest user prompt, tapping again (already
+    // there) goes on to the bottom, so a reply below the prompt can never
+    // strand the user with no button visible.
+    val lastUserIndex = remember(blocks) { lastUserBlockIndex(blocks) }
+    val atLatestUser by remember(lastUserIndex) {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val lastVisible = info.visibleItemsInfo.lastOrNull()?.index
+            lastVisible != null && lastVisible >= lastUserIndex
+        }
+    }
+    val atBottom by remember {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val lastVisible = info.visibleItemsInfo.lastOrNull()?.index
+            lastVisible != null && lastVisible >= info.totalItemsCount - 1
+        }
+    }
+    // Open at the newest user message without animation (history only);
+    // follow the stream while busy. Fresh chats always follow the reply;
+    // opened histories only follow while the user stays at the bottom.
+    // Manual scrolls never trigger a jump.
+    val freshChat = remember(sessionId, instanceNonce) { sessionId.isNullOrBlank() }
+    var initialJumpDone by remember(sessionId, instanceNonce) { mutableStateOf(false) }
     LaunchedEffect(vm.messages.size) {
-        if (blocks.isNotEmpty()) {
+        if (blocks.isEmpty()) return@LaunchedEffect
+        if (!initialJumpDone && !vm.busy && !freshChat) {
+            listState.scrollToItem(lastUserBlockIndex(blocks))
+            initialJumpDone = true
+        } else if (vm.busy && (atLatestUser || freshChat)) {
             val thinking = vm.busy && vm.messages.none { it.kind == MsgKind.ASSISTANT }
             val last = blocks.size - 1 + if (thinking) 1 else 0
             listState.animateScrollToItem(last)
+        } else if (atLatestUser) {
+            listState.scrollToItem(blocks.size - 1)
         }
     }
 
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+    // Header title: route title wins; a fresh chat adopts the server title
+    // once known, falling back to the first user prompt.
+    val serverTitle = remember(vm.sessionId, recentSessions) {
+        recentSessions.find { it.key == vm.sessionId && vm.sessionId.isNotBlank() }
+            ?.title?.ifBlank { null }
+    }
+    val firstUser = remember(messageSnapshot) {
+        messageSnapshot.firstOrNull { it.kind == MsgKind.USER }
+            ?.text?.trim()?.take(32)?.ifBlank { null }
+    }
+    val displayTitle = title?.ifBlank { null }
+        ?: serverTitle
+        ?: firstUser
+        ?: stringResource(R.string.new_chat)
+
+    // A fresh chat becomes history as soon as the server assigns a session:
+    // refresh the list so the header (and drawer) learn its title.
+    LaunchedEffect(vm.sessionId) {
+        if (sessionId.isNullOrBlank() && vm.sessionId.isNotBlank()) {
+            onSessionCreated(vm.sessionId)
+        }
+    }
+
+    // A started conversation is history: system back opens a fresh chat.
+    // Fresh chats keep the default behavior (back exits).
+    BackHandler(enabled = vm.sessionId.isNotBlank() || !sessionId.isNullOrBlank()) {
+        onNavigateToFreshChat()
+    }
+
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        title?.ifBlank { null } ?: stringResource(R.string.new_chat),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-                navigationIcon = {
-                    if (onOpenDrawer != null) {
-                        IconButton(
-                            onClick = onOpenDrawer,
-                            modifier = Modifier.testTag("menuButton"),
-                        ) {
-                            Icon(
-                                Icons.Filled.Menu,
-                                contentDescription = stringResource(R.string.menu),
-                            )
-                        }
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = onOpenSettings,
-                        modifier = Modifier.testTag("settingsButton"),
-                    ) {
-                        Icon(
-                            Icons.Filled.Settings,
-                            contentDescription = stringResource(R.string.settings_desc),
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                ),
+            GeminiChatTopBar(
+                title = displayTitle,
+                scrollBehavior = scrollBehavior,
+                onOpenDrawer = onOpenDrawer,
             )
         },
         snackbarHost = { SnackbarHost(snackbar) },
@@ -185,23 +243,36 @@ fun ChatScreen(
             ChatInputBar(
                 input = vm.input,
                 busy = vm.busy,
-                statusLine = vm.statusLine,
                 onInputChange = { vm.input = it },
                 onSend = vm::onSend,
                 onSteer = vm::onSteer,
                 onStop = vm::onStop,
             )
-        }
+        },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             if (vm.messages.isEmpty() && !vm.busy) {
-                ChatEmptyState(modifier = Modifier.fillMaxSize())
+                if (vm.historyLoading) {
+                    ChatHistoryLoading(
+                        status = vm.statusLine,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    ChatEmptyState(modifier = Modifier.fillMaxSize())
+                }
             } else {
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize().testTag("chatList"),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 12.dp,
+                        // Keep the last row above the centered jump button so it
+                        // stays tappable while the button is visible.
+                        bottom = 88.dp,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     blocks.forEach { block ->
                         when (block) {
@@ -230,6 +301,32 @@ fun ChatScreen(
                     if (vm.busy && vm.messages.none { it.kind == MsgKind.ASSISTANT }) {
                         item(key = "thinking") { ThinkingRow() }
                     }
+                    item(key = "bottom-spacer") { Spacer(Modifier.height(8.dp)) }
+                }
+            }
+            if (!atBottom && blocks.isNotEmpty()) {
+                SmallFloatingActionButton(
+                    // First tap lands on the newest user prompt (animated);
+                    // a second tap while already there continues to the
+                    // bottom, so the reply below the prompt is reachable.
+                    onClick = {
+                        scope.launch {
+                            val thinking = vm.busy && vm.messages.none { it.kind == MsgKind.ASSISTANT }
+                            val last = blocks.size - 1 + if (thinking) 1 else 0
+                            if (atLatestUser) listState.animateScrollToItem(last)
+                            else listState.animateScrollToItem(lastUserBlockIndex(blocks))
+                        }
+                    },
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                        .padding(bottom = 12.dp)
+                        .testTag("scrollToBottom"),
+                ) {
+                    Icon(
+                        Icons.Filled.ArrowDownward,
+                        contentDescription = stringResource(R.string.scroll_to_bottom),
+                    )
                 }
             }
         }
@@ -239,27 +336,75 @@ fun ChatScreen(
         AlertDialog(
             onDismissRequest = { /* must choose */ },
             confirmButton = {},
+            icon = {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.linearGradient(
+                                listOf(Color(0xFFF9AB00), Color(0xFFD96570))
+                            )
+                        ),
+                ) {
+                    Icon(
+                        Icons.Filled.WarningAmber,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(26.dp),
+                    )
+                }
+            },
             title = { Text(stringResource(R.string.approval_title)) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        stringResource(R.string.approval_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     req.command?.let { cmd ->
                         Surface(
-                            tonalElevation = 2.dp,
-                            shape = RoundedCornerShape(12.dp),
+                            color = Color(0xFF0F0F0F),
+                            contentColor = Color(0xFFE8E8E8),
+                            shape = RoundedCornerShape(16.dp),
                             modifier = Modifier.fillMaxWidth(),
                         ) {
-                            SelectionContainer {
-                                Text(
-                                    cmd,
-                                    fontFamily = FontFamily.Monospace,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    modifier = Modifier.padding(10.dp),
-                                )
+                            Column {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Terminal,
+                                        contentDescription = null,
+                                        tint = Color(0xFF9E9E9E),
+                                        modifier = Modifier.size(14.dp),
+                                    )
+                                    Text(
+                                        "command",
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 11.sp,
+                                        color = Color(0xFF9E9E9E),
+                                        modifier = Modifier.padding(start = 6.dp),
+                                    )
+                                }
+                                SelectionContainer {
+                                    Text(
+                                        cmd,
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 13.sp,
+                                        lineHeight = 19.sp,
+                                        modifier = Modifier.padding(horizontal = 12.dp)
+                                            .padding(bottom = 12.dp),
+                                    )
+                                }
                             }
                         }
                     }
                     req.description?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         for (choice in req.choices) {
                             FilledTonalButton(
                                 onClick = { vm.answerApproval(choice) },
@@ -281,15 +426,18 @@ fun ChatScreen(
                     clarifyAnswer.value = ""
                 }) { Text(stringResource(R.string.send)) }
             },
+            icon = { GeminiSparkAvatar(size = 40.dp, iconSize = 22.dp) },
             title = { Text(stringResource(R.string.question_title)) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(prompt.prompt)
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(prompt.prompt, style = MaterialTheme.typography.bodyMedium)
                     androidx.compose.material3.OutlinedTextField(
                         value = clarifyAnswer.value,
                         onValueChange = { clarifyAnswer.value = it },
+                        placeholder = { Text(stringResource(R.string.clarify_hint)) },
                         modifier = Modifier.fillMaxWidth().testTag("clarifyInput"),
                         maxLines = 4,
+                        shape = RoundedCornerShape(16.dp),
                     )
                 }
             },
@@ -297,19 +445,65 @@ fun ChatScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GeminiChatTopBar(
+    title: String,
+    scrollBehavior: TopAppBarScrollBehavior,
+    onOpenDrawer: (() -> Unit)?,
+) {
+    TopAppBar(
+        title = {
+            AnimatedContent(
+                targetState = title.ifBlank { stringResource(R.string.new_chat) },
+                transitionSpec = {
+                    (fadeIn() + slideInVertically { it / 3 })
+                        .togetherWith(fadeOut() + slideOutVertically { -it / 3 })
+                },
+                label = "chatTitle",
+            ) { animatedTitle ->
+                Text(
+                    animatedTitle,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                )
+            }
+        },
+        navigationIcon = {
+            if (onOpenDrawer != null) {
+                IconButton(
+                    onClick = onOpenDrawer,
+                    modifier = Modifier.testTag("menuButton"),
+                ) {
+                    Icon(
+                        Icons.Filled.Menu,
+                        contentDescription = stringResource(R.string.menu),
+                    )
+                }
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            // Translucent so scrolled chat slides underneath without a hard edge.
+            // Text keeps its full-alpha color.
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+            scrolledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+        ),
+        scrollBehavior = scrollBehavior,
+    )
+}
+
 @Composable
 private fun ChatInputBar(
     input: String,
     busy: Boolean,
-    statusLine: String,
     onInputChange: (String) -> Unit,
     onSend: () -> Unit,
     onSteer: () -> Unit,
     onStop: () -> Unit,
 ) {
     val context = LocalContext.current
-    // The runs API has no binary upload: an attachment becomes a visible
-    // [image: name] reference token in the text the user actually sends.
+    val focusManager = LocalFocusManager.current
     val attachLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri ->
@@ -319,53 +513,34 @@ private fun ChatInputBar(
             onInputChange(if (input.isBlank()) token else "$input $token")
         }
     }
+    // Sending clears focus so the keyboard closes.
+    val sendAndClose: () -> Unit = { focusManager.clearFocus(); onSend() }
+    val steerAndClose: () -> Unit = { focusManager.clearFocus(); onSteer() }
     Column(
         Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
             .imePadding()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
-        if (busy) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
-            ) {
-                CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-                Text(
-                    if (statusLine.isNotBlank()) statusLine else stringResource(R.string.thinking),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 8.dp),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp))
-        } else if (statusLine.isNotBlank()) {
-            Text(
-                statusLine,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 6.dp),
-            )
-        }
         Surface(
-            shape = RoundedCornerShape(28.dp),
-            tonalElevation = 2.dp,
+            shape = RoundedCornerShape(32.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
             border = androidx.compose.foundation.BorderStroke(
                 1.dp,
-                MaterialTheme.colorScheme.outlineVariant,
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
             ),
+            shadowElevation = 2.dp,
+            tonalElevation = 2.dp,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                modifier = Modifier.padding(6.dp),
             ) {
                 IconButton(
                     onClick = { attachLauncher.launch("image/*") },
-                    modifier = Modifier.testTag("attachButton"),
+                    modifier = Modifier.testTag("attachButton").size(44.dp),
                 ) {
                     Icon(
                         Icons.Filled.Add,
@@ -381,12 +556,13 @@ private fun ChatInputBar(
                         Text(
                             if (busy) stringResource(R.string.steer_hint)
                             else stringResource(R.string.message_hint),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                         )
                     },
-                    maxLines = 5,
+                    maxLines = 6,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                     keyboardActions = KeyboardActions(
-                        onSend = { if (busy) onSteer() else onSend() },
+                        onSend = { if (busy) steerAndClose() else sendAndClose() },
                     ),
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,
@@ -397,22 +573,15 @@ private fun ChatInputBar(
                     ),
                 )
                 if (busy) {
-                    // ChatGPT-like stop + steer-send side by side.
-                    IconButton(
+                    // While running, the send button itself becomes the stop button.
+                    CircleStopButton(
                         onClick = onStop,
                         modifier = Modifier.testTag("stopButton"),
-                    ) {
-                        Icon(Icons.Filled.Stop, contentDescription = stringResource(R.string.stop))
-                    }
-                    GradientSendButton(
-                        enabled = input.isNotBlank(),
-                        onClick = onSteer,
-                        modifier = Modifier.testTag("sendButton"),
                     )
                 } else {
                     GradientSendButton(
                         enabled = input.isNotBlank(),
-                        onClick = onSend,
+                        onClick = sendAndClose,
                         modifier = Modifier.testTag("sendButton"),
                     )
                 }
@@ -423,16 +592,17 @@ private fun ChatInputBar(
 
 @Composable
 private fun ChatEmptyState(modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        // Gemini-like hero: gradient app mark + single headline. No subtitle, no suggestion chips.
+    Box(modifier = modifier) {
+        AuroraBackground(Modifier.fillMaxSize())
+        Column(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
-                .size(72.dp)
+                .size(76.dp)
                 .clip(CircleShape)
                 .background(
                     Brush.linearGradient(
@@ -444,38 +614,223 @@ private fun ChatEmptyState(modifier: Modifier = Modifier) {
                 painter = painterResource(R.drawable.ic_hero_spark),
                 contentDescription = null,
                 tint = Color.White,
-                modifier = Modifier.size(34.dp),
+                modifier = Modifier.size(36.dp),
             )
         }
         Spacer(Modifier.height(20.dp))
         Text(
             stringResource(R.string.empty_chat_title),
-            style = MaterialTheme.typography.headlineSmall.copy(
-                brush = Brush.horizontalGradient(
-                    listOf(Color(0xFF4285F4), Color(0xFF9B72CB), Color(0xFFD96570))
+            style = geminiHeadlineStyle(),
+        )
+        }
+    }
+}
+
+/**
+ * Gemini-style living background for the home screen: slow-drifting color
+ * orbs plus a twinkling starfield. Kept faint so text stays readable on
+ * light and dark themes.
+ */
+@Composable
+private fun AuroraBackground(modifier: Modifier = Modifier) {
+    val drift = rememberInfiniteTransition(label = "aurora")
+    val ax by drift.animateFloat(
+        initialValue = -1f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(9000),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "ax",
+    )
+    val ay by drift.animateFloat(
+        initialValue = 1f,
+        targetValue = -1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(11000),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "ay",
+    )
+    // Loops seamlessly: per-star speeds are whole cycles per loop.
+    val t by drift.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(6000),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "twinkle",
+    )
+    val stars = remember {
+        val rnd = kotlin.random.Random(42)
+        List(46) {
+            Star(
+                x = rnd.nextFloat(),
+                y = rnd.nextFloat(),
+                r = 1f + rnd.nextFloat() * 2.2f,
+                phase = rnd.nextFloat(),
+                speed = 1 + rnd.nextInt(3),
+                tint = if (rnd.nextFloat() < 0.5f) 0xFF8AB4F8 else 0xFFC58AF9,
+            )
+        }
+    }
+    Box(modifier = modifier) {
+        AuroraOrb(
+            color = Color(0xFF4285F4),
+            size = 420.dp,
+            align = Alignment.TopStart,
+            dx = { ax * 90.dp.toPx() },
+            dy = { ay * 70.dp.toPx() },
+        )
+        AuroraOrb(
+            color = Color(0xFF9B72CB),
+            size = 460.dp,
+            align = Alignment.BottomEnd,
+            dx = { ax * -110.dp.toPx() },
+            dy = { ay * -80.dp.toPx() },
+        )
+        AuroraOrb(
+            color = Color(0xFFD96570),
+            size = 300.dp,
+            align = Alignment.CenterEnd,
+            dx = { ax * 70.dp.toPx() },
+            dy = { ay * 110.dp.toPx() },
+        )
+        Canvas(Modifier.fillMaxSize()) {
+            for (s in stars) {
+                val twinkle = 0.5f + 0.5f * kotlin.math.sin(
+                    (t * s.speed + s.phase) * 2f * kotlin.math.PI.toFloat()
                 )
-            ),
+                drawCircle(
+                    color = Color(s.tint).copy(alpha = 0.10f + 0.45f * twinkle),
+                    radius = s.r.dp.toPx(),
+                    center = Offset(s.x * size.width, s.y * size.height),
+                )
+            }
+        }
+    }
+}
+
+/** One soft drifting color orb. */
+@Composable
+private fun AuroraOrb(
+    color: Color,
+    size: androidx.compose.ui.unit.Dp,
+    align: Alignment,
+    dx: Density.() -> Float,
+    dy: Density.() -> Float,
+) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = align,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(size)
+                .offset { IntOffset(dx().roundToInt(), dy().roundToInt()) }
+                .background(
+                    Brush.radialGradient(
+                        listOf(color.copy(alpha = 0.20f), Color.Transparent)
+                    ),
+                    CircleShape,
+                ),
+        )
+    }
+}
+
+/** A twinkling speck in the home starfield. Tint stored as ARGB long. */
+private data class Star(
+    val x: Float,
+    val y: Float,
+    val r: Float,
+    val phase: Float,
+    val speed: Int,
+    val tint: Long,
+)
+
+@Composable
+private fun ChatHistoryLoading(status: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        CircularProgressIndicator()
+        Spacer(Modifier.height(12.dp))
+        Text(
+            status.ifBlank { stringResource(R.string.thinking) },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
 
 @Composable
 private fun ThinkingRow() {
+    // A shuffled pool: a different opener every run, cycling through
+    // several messages while a long thinking phase continues.
+    val messages = remember {
+        listOf(
+            R.string.thinking,
+            R.string.thinking_2,
+            R.string.thinking_3,
+            R.string.thinking_4,
+            R.string.thinking_5,
+        ).shuffled()
+    }
+    var index by remember { mutableStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(2800)
+            index = (index + 1) % messages.size
+        }
+    }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp)
+            .padding(vertical = 10.dp)
             .testTag("thinkingIndicator"),
     ) {
-        TypingDots()
-        Text(
-            stringResource(R.string.thinking),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 8.dp),
-        )
+        Column {
+            AnimatedContent(
+                targetState = messages[index],
+                transitionSpec = { fadeIn() togetherWith fadeOut() },
+                label = "thinkingText",
+            ) { res ->
+                ShimmerText(stringResource(res))
+            }
+            Spacer(Modifier.height(6.dp))
+            TypingDots()
+        }
     }
+}
+
+@Composable
+private fun ShimmerText(text: String) {
+    val t = rememberInfiniteTransition(label = "shimmer")
+    val alpha by t.animateFloat(
+        initialValue = 0.45f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "alpha",
+    )
+    Text(
+        text,
+        style = MaterialTheme.typography.bodyMedium.copy(
+            brush = Brush.horizontalGradient(
+                listOf(
+                    MaterialTheme.colorScheme.primary.copy(alpha = alpha),
+                    Color(0xFF9B72CB).copy(alpha = alpha),
+                )
+            ),
+            fontWeight = FontWeight.Medium,
+        ),
+    )
 }
 
 /** Gemini-like typing indicator: three dots wave in sequence. */
@@ -483,7 +838,7 @@ private fun ThinkingRow() {
 private fun TypingDots() {
     val t = rememberInfiniteTransition(label = "typing")
     Row(
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         for (i in 0 until 3) {
@@ -519,18 +874,24 @@ private fun TypingDots() {
 private fun MessageRow(msg: UiMessage, showCursor: Boolean, modifier: Modifier = Modifier) {
     when (msg.kind) {
         MsgKind.USER -> {
-            Box(modifier.fillMaxWidth().padding(start = 48.dp, top = 4.dp, bottom = 4.dp), contentAlignment = Alignment.CenterEnd) {
+            Box(modifier.fillMaxWidth().padding(start = 56.dp, top = 4.dp, bottom = 4.dp), contentAlignment = Alignment.CenterEnd) {
                 Surface(
                     color = userBubbleColor(),
                     contentColor = userBubbleTextColor(),
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(
+                        topStart = 22.dp,
+                        topEnd = 22.dp,
+                        bottomStart = 22.dp,
+                        bottomEnd = 6.dp,
+                    ),
+                    shadowElevation = 1.dp,
                     modifier = Modifier.widthIn(max = 340.dp),
                 ) {
                     SelectionContainer {
                         Text(
                             msg.text,
                             style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 11.dp),
                         )
                     }
                 }
@@ -545,54 +906,63 @@ private fun MessageRow(msg: UiMessage, showCursor: Boolean, modifier: Modifier =
                     copied = false
                 }
             }
-            // Same markdown components for every message; the model carries the text.
             val components = remember {
                 markdownComponents(
                     codeFence = { ChatGptCodeFence(it) },
                     codeBlock = { ChatGptCodeFence(it) },
                 )
             }
-            Row(modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp)) {
-                Surface(
-                    color = assistantBubbleColor(),
-                    shape = RoundedCornerShape(18.dp),
-                    modifier = Modifier.weight(1f, fill = false),
-                ) {
-                    Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                        if (msg.text.isNotBlank()) {
+            Column(modifier.fillMaxWidth().padding(top = 6.dp, bottom = 6.dp)) {
+                if (msg.text.isNotBlank()) {
+                        SelectionContainer {
                             Markdown(
                                 content = closeUnclosedFences(msg.text),
                                 components = components,
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         }
-                        if (showCursor) {
+                    }
+                    if (showCursor) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 "▍",
                                 style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            TypingDots()
+                        }
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 2.dp),
+                    ) {
+                        IconButton(
+                            onClick = {
+                                clipboard.setText(AnnotatedString(msg.text))
+                                copied = true
+                            },
+                            modifier = Modifier.size(32.dp),
+                        ) {
+                            Icon(
+                                if (copied) Icons.Filled.Check else Icons.Filled.ContentCopy,
+                                contentDescription = stringResource(if (copied) R.string.copied else R.string.copy),
+                                tint = if (copied) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                        AnimatedVisibility(visible = copied) {
+                            Text(
+                                stringResource(R.string.copied),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
                             )
                         }
                     }
-                }
-                IconButton(
-                    onClick = {
-                        clipboard.setText(AnnotatedString(msg.text))
-                        copied = true
-                    },
-                ) {
-                    Icon(
-                        if (copied) Icons.Filled.Check else Icons.Filled.ContentCopy,
-                        contentDescription = stringResource(if (copied) R.string.copied else R.string.copy),
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
             }
         }
         MsgKind.TOOL, MsgKind.STATUS -> {
-            // Defensive fallback: tool/status messages are normally grouped into
-            // ActivityLog and never reach here. Render as a plain one-line row
-            // with no bubble so nothing ever shows a chat box.
             Text(
                 msg.text,
                 style = MaterialTheme.typography.labelSmall,
@@ -603,28 +973,36 @@ private fun MessageRow(msg: UiMessage, showCursor: Boolean, modifier: Modifier =
             )
         }
         MsgKind.ERROR -> {
-            Surface(
-                color = MaterialTheme.colorScheme.errorContainer,
-                shape = RoundedCornerShape(12.dp),
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                ),
                 modifier = modifier.fillMaxWidth().padding(vertical = 4.dp),
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(10.dp)) {
+                Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(14.dp)) {
                     Icon(
                         Icons.Filled.Close,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.size(16.dp),
+                        modifier = Modifier.size(18.dp).padding(top = 2.dp),
                     )
                     Text(
                         msg.text,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.padding(start = 8.dp),
+                        modifier = Modifier.padding(start = 10.dp),
                     )
                 }
             }
         }
     }
+}
+
+/** Index of the newest user message block; falls back to the last block. */
+private fun lastUserBlockIndex(blocks: List<ChatBlock>): Int {
+    val i = blocks.indexOfLast { it is ChatBlock.Single && it.msg.kind == MsgKind.USER }
+    return if (i >= 0) i else blocks.size - 1
 }
 
 /** Consecutive TOOL/STATUS rows are folded into one Activity block. */
@@ -655,8 +1033,8 @@ internal fun buildChatBlocks(messages: List<UiMessage>): List<ChatBlock> {
 }
 
 /**
- * Tool/MCP activity folded into a single line with no chat bubble.
- * Collapsed: one tappable summary row. Expanded: plain one-line rows.
+ * Gemini-style activity card: tonal rounded card with spark header.
+ * Collapsed: one tappable summary row. Expanded: full timeline.
  */
 @Composable
 private fun ActivityLog(msgs: List<UiMessage>, modifier: Modifier = Modifier) {
@@ -666,67 +1044,93 @@ private fun ActivityLog(msgs: List<UiMessage>, modifier: Modifier = Modifier) {
     } else {
         stringResource(R.string.activity_summary, msgs.size, msgs.last().text)
     }
-    Column(modifier = modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .clickable { expanded = !expanded }
-                .testTag("activityToggle")
-                .padding(vertical = 6.dp),
-        ) {
-            Icon(
-                if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                contentDescription = stringResource(
-                    if (expanded) R.string.collapse else R.string.expand
-                ),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(16.dp),
-            )
-            Icon(
-                Icons.Filled.Bolt,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(13.dp),
-            )
-            Text(
-                summary,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f).padding(start = 6.dp),
-            )
-        }
-        AnimatedVisibility(
-            visible = expanded,
-            enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
-            exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
-        ) {
-            // Expanded: full tool payloads (name, args, result) with wrapping
-            // so the user can see exactly what each tool call did. Selectable.
-            SelectionContainer {
-                Column(Modifier.padding(start = 22.dp, top = 2.dp, bottom = 4.dp)) {
-                    for (m in msgs) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
-                            verticalAlignment = Alignment.Top,
-                        ) {
-                            Icon(
-                                Icons.Filled.Bolt,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(13.dp).padding(top = 2.dp),
-                            )
-                            Text(
-                                m.text,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(start = 6.dp),
-                            )
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
+        shape = RoundedCornerShape(18.dp),
+        border = androidx.compose.foundation.BorderStroke(
+            0.5.dp,
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+        ),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { expanded = !expanded }
+                    .testTag("activityToggle")
+                    .padding(vertical = 6.dp),
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(22.dp)
+                        .clip(CircleShape)
+                        .background(geminiHorizontalBrush()),
+                ) {
+                    Icon(
+                        Icons.Filled.AutoAwesome,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(13.dp),
+                    )
+                }
+                Text(
+                    summary,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f).padding(start = 8.dp),
+                )
+                Icon(
+                    if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                    contentDescription = stringResource(
+                        if (expanded) R.string.collapse else R.string.expand
+                    ),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
+                exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
+            ) {
+                SelectionContainer {
+                    Column(Modifier.padding(start = 4.dp, top = 2.dp, bottom = 6.dp)) {
+                        for ((index, m) in msgs.withIndex()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.Top,
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.primary),
+                                    )
+                                    if (index != msgs.size - 1) {
+                                        Box(
+                                            modifier = Modifier
+                                                .width(2.dp)
+                                                .height(14.dp)
+                                                .background(
+                                                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+                                                ),
+                                        )
+                                    }
+                                }
+                                Text(
+                                    m.text,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.padding(start = 8.dp),
+                                )
+                            }
                         }
                     }
                 }
@@ -747,34 +1151,49 @@ private fun queryDisplayName(context: android.content.Context, uri: android.net.
     }
 }
 
-/** ChatGPT-like neutral user bubble: light gray / dark charcoal. */
+/** Gemini-style user bubble: soft blue-gray pill. */
 @Composable
 private fun userBubbleColor(): Color =
-    if (isSystemInDarkTheme()) Color(0xFF2F2F2F) else Color(0xFFECECEC)
+    if (isSystemInDarkTheme()) Color(0xFF2F3033) else Color(0xFFE9EEF6)
 
 @Composable
 private fun userBubbleTextColor(): Color =
-    if (isSystemInDarkTheme()) Color(0xFFEDEDED) else Color(0xFF0D0D0D)
+    if (isSystemInDarkTheme()) Color(0xFFEDEDED) else Color(0xFF1F1F1F)
 
-/** LINE-like peer bubble: white / dark gray. Markdown uses theme text colors. */
+/** Stop button: same round slot and gradient as the send button. */
 @Composable
-private fun assistantBubbleColor(): Color =
-    if (isSystemInDarkTheme()) Color(0xFF242424) else Color.White
+private fun CircleStopButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .background(Brush.linearGradient(listOf(Color(0xFF4285F4), Color(0xFF9B72CB))))
+            .clickable(onClick = onClick),
+    ) {
+        Icon(
+            Icons.Filled.Stop,
+            contentDescription = stringResource(R.string.stop),
+            tint = Color.White,
+            modifier = Modifier.size(18.dp),
+        )
+    }
+}
 
-/** Gemini-like gradient send button: blue to purple circle. */
+/** Gemini-like gradient send button: blue to violet circle with soft shadow. */
 @Composable
 private fun GradientSendButton(enabled: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val background = if (enabled) {
-        Brush.horizontalGradient(listOf(Color(0xFF4285F4), Color(0xFF9B72CB)))
+        Brush.linearGradient(listOf(Color(0xFF4285F4), Color(0xFF9B72CB)))
     } else {
-        Brush.horizontalGradient(
+        Brush.linearGradient(
             listOf(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.surfaceVariant)
         )
     }
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
-            .size(48.dp)
+            .size(44.dp)
             .clip(CircleShape)
             .background(background)
             .clickable(enabled = enabled, onClick = onClick),
@@ -783,6 +1202,7 @@ private fun GradientSendButton(enabled: Boolean, onClick: () -> Unit, modifier: 
             Icons.Filled.ArrowUpward,
             contentDescription = stringResource(R.string.send),
             tint = if (enabled) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(22.dp),
         )
     }
 }
@@ -805,7 +1225,6 @@ private fun ColumnScope.ChatGptCodeFence(model: MarkdownComponentModel) {
         .joinToString("") { it.getTextInNode(model.content).toString() }
         .trimEnd()
         .ifEmpty {
-            // Indented code block (no fence): fall back to raw node text.
             model.node.getTextInNode(model.content).toString().trim()
         }
     ChatGptCodeBlock(language = lang, code = code)
@@ -822,17 +1241,22 @@ private fun ChatGptCodeBlock(language: String, code: String) {
         }
     }
     Surface(
-        color = Color.Black,
+        color = Color(0xFF0F0F0F),
         contentColor = Color(0xFFE8E8E8),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        shape = RoundedCornerShape(18.dp),
+        border = androidx.compose.foundation.BorderStroke(
+            0.5.dp,
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+        ),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
     ) {
         Column {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 2.dp),
+                    .background(Color.White.copy(alpha = 0.06f))
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
             ) {
                 Text(
                     language.ifBlank { "text" },
@@ -846,12 +1270,12 @@ private fun ChatGptCodeBlock(language: String, code: String) {
                         clipboard.setText(AnnotatedString(code))
                         copied = true
                     },
-                    modifier = Modifier.size(32.dp),
+                    modifier = Modifier.size(30.dp),
                 ) {
                     Icon(
                         if (copied) Icons.Filled.Check else Icons.Filled.ContentCopy,
                         contentDescription = stringResource(if (copied) R.string.copied else R.string.copy),
-                        tint = Color(0xFF9E9E9E),
+                        tint = if (copied) Color(0xFFA8C7FA) else Color(0xFF9E9E9E),
                         modifier = Modifier.size(15.dp),
                     )
                 }
@@ -864,8 +1288,8 @@ private fun ChatGptCodeBlock(language: String, code: String) {
                     lineHeight = 19.sp,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp)
-                        .padding(bottom = 10.dp),
+                        .padding(horizontal = 14.dp)
+                        .padding(top = 8.dp, bottom = 12.dp),
                 )
             }
         }

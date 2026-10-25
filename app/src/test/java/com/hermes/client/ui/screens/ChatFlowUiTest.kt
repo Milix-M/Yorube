@@ -9,6 +9,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import com.hermes.client.HermesApp
@@ -91,7 +92,7 @@ class ChatFlowUiTest {
 
         compose.setContent {
             HermesAppTheme {
-                ChatScreen(sessionId = null, onOpenSettings = {}, onNavigateBack = {})
+                ChatScreen(sessionId = null, onNavigateBack = {})
             }
         }
         compose.onNodeWithTag("chatInput").performTextInput("hi")
@@ -107,11 +108,18 @@ class ChatFlowUiTest {
         for (attempt in 0 until 20) {
             val toggles = compose.onAllNodesWithTag("activityToggle", useUnmergedTree = true)
             val count = toggles.fetchSemanticsNodes().size
+            // Pin the list to the bottom first: the centered jump button only
+            // shows while scrolled up, and it can swallow taps meant for the
+            // last toggle without raising an error.
+            try {
+                if (count > 0) toggles[count - 1].performScrollTo()
+            } catch (_: Throwable) {
+            }
             var allClicked = true
             for (i in expandedToggles until count) {
                 try {
                     toggles[i].performClick()
-                } catch (_: Exception) {
+                } catch (_: Throwable) {
                     allClicked = false
                     break
                 }
@@ -151,7 +159,7 @@ class ChatFlowUiTest {
 
         compose.setContent {
             HermesAppTheme {
-                ChatScreen(sessionId = null, onOpenSettings = {}, onNavigateBack = {})
+                ChatScreen(sessionId = null, onNavigateBack = {})
             }
         }
         compose.onNodeWithTag("chatInput").performTextInput("hi")
@@ -182,7 +190,7 @@ class ChatFlowUiTest {
 
         compose.setContent {
             HermesAppTheme {
-                ChatScreen(sessionId = null, onOpenSettings = {}, onNavigateBack = {})
+                ChatScreen(sessionId = null, onNavigateBack = {})
             }
         }
         compose.onNodeWithTag("chatInput").performTextInput("hi")
@@ -215,7 +223,7 @@ class ChatFlowUiTest {
 
         compose.setContent {
             HermesAppTheme {
-                ChatScreen(sessionId = null, onOpenSettings = {}, onNavigateBack = {})
+                ChatScreen(sessionId = null, onNavigateBack = {})
             }
         }
         compose.onNodeWithTag("chatInput").performTextInput("hi")

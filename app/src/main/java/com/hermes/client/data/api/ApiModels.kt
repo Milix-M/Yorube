@@ -222,3 +222,36 @@ fun extractModelIds(root: JsonElement): List<String> {
     val arr = (obj["data"] as? JsonArray) ?: (obj["models"] as? JsonArray) ?: return emptyList()
     return arr.mapNotNull { (it as? JsonObject)?.str("id", "name") }
 }
+
+/** Timestamp keys observed across session list shapes (snake/camel, activity/creation). */
+private val SessionTimestampKeys = listOf(
+    "updated_at", "updatedAt", "updated",
+    "last_message_at", "lastMessageAt",
+    "last_active", "lastActiveAt", "last_activity",
+    "modified_at", "modifiedAt",
+    "created_at", "createdAt",
+    "timestamp", "time",
+)
+
+/**
+ * Lenient timestamp lookup for one raw session entry. Accepts epoch
+ * seconds/millis/micros as numbers or strings, plus ISO-8601 strings.
+ * Returns null when the entry carries nothing usable.
+ */
+internal fun extractSessionTimestamp(o: JsonObject): Double? {
+    for (key in SessionTimestampKeys) {
+        val v = o[key] as? JsonPrimitive ?: continue
+        if (v.isString) {
+            val raw = v.content.trim()
+            if (raw.isEmpty()) continue
+            try {
+                return java.time.Instant.parse(raw).epochSecond.toDouble()
+            } catch (_: Exception) {
+            }
+            raw.toDoubleOrNull()?.let { return it }
+            continue
+        }
+        (v.longOrNull?.toDouble() ?: v.doubleOrNull)?.let { return it }
+    }
+    return null
+}

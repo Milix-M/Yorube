@@ -3,6 +3,7 @@ package com.hermes.client.data.store
 import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -23,6 +24,7 @@ data class ClientSettings(
     val firebaseSenderId: String = "",
     val cfClientId: String = "",
     val cfClientSecret: String = "",
+    val pinnedSessionIds: Set<String> = emptySet(),
 ) {
     val isConfigured: Boolean get() = baseUrl.isNotBlank() && apiKey.isNotBlank()
     val firebaseConfigured: Boolean get() =
@@ -44,6 +46,7 @@ class SettingsStore(private val context: Context) {
         val FB_SENDER = stringPreferencesKey("fb_sender")
         val CF_ID = stringPreferencesKey("cf_client_id")
         val CF_SECRET = stringPreferencesKey("cf_client_secret")
+        val PINNED = stringSetPreferencesKey("pinned_sessions")
     }
 
     val settings: Flow<ClientSettings> = context.settingsDataStore.data.map { p ->
@@ -60,6 +63,7 @@ class SettingsStore(private val context: Context) {
             firebaseSenderId = p[Keys.FB_SENDER] ?: "",
             cfClientId = p[Keys.CF_ID] ?: "",
             cfClientSecret = p[Keys.CF_SECRET] ?: "",
+            pinnedSessionIds = p[Keys.PINNED] ?: emptySet(),
         )
     }
 
@@ -82,7 +86,8 @@ class SettingsStore(private val context: Context) {
             p[Keys.FB_API_KEY] = value.firebaseApiKey.trim()
             p[Keys.FB_SENDER] = value.firebaseSenderId.trim()
             p[Keys.CF_ID] = value.cfClientId.trim()
-            p[Keys.CF_SECRET] = value.cfClientSecret.trim() } }
+            p[Keys.CF_SECRET] = value.cfClientSecret.trim()
+            p[Keys.PINNED] = value.pinnedSessionIds } }
 
     suspend fun saveFcmToken(token: String) { context.settingsDataStore.edit { p -> p[Keys.FCM_TOKEN] = token } }
 }

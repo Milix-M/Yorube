@@ -13,8 +13,12 @@ import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
+import com.hermes.client.data.api.HermesJson
+import kotlinx.serialization.json.jsonObject
+import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -179,7 +183,57 @@ class ChatViewModelTest {
         vm.input = "hi"
         vm.onSend()
         awaitCondition { vm.error != null }
-        assertTrue(vm.error!!.contains("409"))
+        assertTrue(vm.error!!.contains("another surface"))
+    }
+
+    @Test
+    fun steerAfterRunEnded_keepsInput() = runVmTest {
+        val eventsHits = java.util.concurrent.atomic.AtomicInteger(0)
+        val holdStream = java.util.concurrent.atomic.AtomicBoolean(true)
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): okhttp3.mockwebserver.MockResponse = when {
+                request.method == "POST" && request.path == "/v1/runs" ->
+                    MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}""")
+                request.method == "GET" && request.path == "/v1/runs/r1" ->
+                    MockResponse().setBody("""{"run_id":"r1","status":"running","session_id":"s1"}""")
+                request.method == "GET" && request.path == "/v1/runs/r1/events" -> {
+                    if (eventsHits.getAndIncrement() == 0) {
+                        events(
+                            frame("message.delta", """{"event":"message.delta","delta":"hi"}""")
+                        )
+                    } else {
+                        // Hold the resubscription open while the run is active.
+                        while (holdStream.get()) Thread.sleep(100)
+                        MockResponse().setBody(": keepalive\n\n")
+                    }
+                }
+                // The run is already gone server-side: not a dead conversation.
+                request.method == "POST" && request.path == "/v1/runs/r1/steer" ->
+                    MockResponse().setResponseCode(404).setBody("""{}""")
+                else -> MockResponse().setBody("{}")
+            }
+        }
+        try {
+            val c = containerWithSettings()
+            val vm = ChatViewModel(c, null)
+            try {
+                vm.input = "hi"
+                vm.onSend()
+                // The run is active and streaming.
+                awaitCondition { vm.busy && vm.messages.any { it.kind == MsgKind.ASSISTANT } }
+                vm.input = "again"
+                vm.onSteer()
+                awaitCondition { !vm.busy && vm.error != null }
+                assertTrue(vm.error!!.contains("already ended"))
+                // The unsent text is handed back so it can be resent.
+                assertEquals("again", vm.input)
+            } finally {
+                // Stop background subscription work so later tests get a clean Main dispatcher.
+                vm.viewModelScope.cancel()
+            }
+        } finally {
+            holdStream.set(false)
+        }
     }
 
     @Test
@@ -500,6 +554,53 @@ class ChatViewModelTest {
         awaitCondition { vm.messages.size == 2 }
         assertEquals(MsgKind.USER, vm.messages[0].kind)
         assertEquals(MsgKind.ASSISTANT, vm.messages[1].kind)
+    }
+
+    @Test
+    fun replyAfterHistory_showsStreamedAnswer() = runVmTest {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"messages":[{"role":"user","content":"q"},{"role":"assistant","content":"a"}]}"""
+            )
+        )
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running","session_id":"s1"}"""))
+        server.enqueue(
+            events(
+                frame("message.delta", """{"event":"message.delta","delta":"followed up"}"""),
+                frame("run.completed", """{"event":"run.completed","output":"done"}"""),
+            )
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, "s1")
+        awaitCondition { vm.messages.size == 2 }
+        vm.input = "more"
+        vm.onSend()
+        awaitCondition { !vm.busy }
+        assertTrue(vm.messages.any { it.kind == MsgKind.ASSISTANT && it.text.contains("followed up") })
+    }
+
+    @Test
+    fun replyAfterHistory_terminalOnlyAnswerShows() = runVmTest {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"messages":[{"role":"user","content":"q"},{"role":"assistant","content":"a"}]}"""
+            )
+        )
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running","session_id":"s1"}"""))
+        server.enqueue(
+            events(
+                frame("run.completed", """{"event":"run.completed","output":"late answer"}"""),
+            )
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, "s1")
+        awaitCondition { vm.messages.size == 2 }
+        vm.input = "more"
+        vm.onSend()
+        awaitCondition { !vm.busy }
+        assertTrue(vm.messages.any { it.kind == MsgKind.ASSISTANT && it.text.contains("late answer") })
     }
 
     @Test
@@ -906,5 +1007,90 @@ class ChatViewModelTest {
         awaitCondition { !vm.busy }
         assertTrue(vm.messages.none { it.kind == MsgKind.ASSISTANT })
         assertTrue(vm.messages.any { it.kind == MsgKind.TOOL && it.text == "markup: <result>" })
+    }
+
+    @Test
+    fun parsePendingControl_parsesApproval() {
+        val parsed = parsePendingControl(
+            HermesJson.parseToJsonElement(
+                """{"request_id":"r1","execution_generation":3,"command":"rm","description":"d","choices":["once","deny"]}"""
+            ).jsonObject
+        )
+        assertTrue(parsed is PendingControl.Approval)
+        val req = (parsed as PendingControl.Approval).request
+        assertEquals("r1", req.requestId)
+        assertEquals(3L, req.executionGeneration)
+        assertEquals("rm", req.command)
+        assertEquals(listOf("once", "deny"), req.choices)
+    }
+
+    @Test
+    fun parsePendingControl_parsesClarifyAndRejectsJunk() {
+        val clarify = parsePendingControl(
+            HermesJson.parseToJsonElement(
+                """{"request_id":"c1","execution_generation":2,"prompt":"which?"}"""
+            ).jsonObject
+        )
+        assertTrue(clarify is PendingControl.Clarify)
+        assertEquals("which?", (clarify as PendingControl.Clarify).prompt)
+        assertNull(parsePendingControl(HermesJson.parseToJsonElement("""{"foo":1}""").jsonObject))
+        assertNull(parsePendingControl(HermesJson.parseToJsonElement("""{}""").jsonObject))
+    }
+
+    @Test
+    fun approvalConflict_restoresPendingControl() = runVmTest {
+        val eventsHits = java.util.concurrent.atomic.AtomicInteger(0)
+        val holdStream = java.util.concurrent.atomic.AtomicBoolean(true)
+        val pendingApproval =
+            """{"request_id":"r1","execution_generation":3,"command":"rm","description":"d","choices":["once","deny"]}"""
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.method == "POST" && request.path == "/v1/runs" ->
+                    MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}""")
+                request.method == "GET" && request.path == "/v1/runs/r1" ->
+                    MockResponse().setBody(
+                        """{"run_id":"r1","status":"running","session_id":"s1","pending_controls":[$pendingApproval]}"""
+                    )
+                request.method == "GET" && request.path == "/v1/runs/r1/events" -> {
+                    if (eventsHits.getAndIncrement() == 0) {
+                        events(
+                            frame(
+                                "approval.request",
+                                """{"event":"approval.request","request_id":"r1","execution_generation":3,"command":"rm","description":"d"}""",
+                            )
+                        )
+                    } else {
+                        // Hold the resubscription open while the run waits.
+                        while (holdStream.get()) Thread.sleep(100)
+                        MockResponse().setBody(": keepalive\n\n")
+                    }
+                }
+                request.method == "POST" && request.path == "/v1/runs/r1/approval" ->
+                    MockResponse().setResponseCode(409)
+                        .setBody("""{"error":{"message":"stale","code":"admission_conflict"}}""")
+                else -> MockResponse().setBody("{}")
+            }
+        }
+        try {
+            val c = containerWithSettings()
+            val vm = ChatViewModel(c, null)
+            try {
+                vm.input = "hi"
+                vm.onSend()
+                awaitCondition { vm.approval != null }
+                assertEquals("rm", vm.approval!!.command)
+                vm.answerApproval("once")
+                // The 409 recovery re-reads state and re-shows the waiting control.
+                awaitCondition { vm.approval != null }
+                assertNull(vm.error)
+                assertEquals("rm", vm.approval!!.command)
+                assertEquals("s1", vm.sessionId)
+            } finally {
+                // Stop background subscription work so later tests get a clean Main dispatcher.
+                vm.viewModelScope.cancel()
+            }
+        } finally {
+            holdStream.set(false)
+        }
     }
 }

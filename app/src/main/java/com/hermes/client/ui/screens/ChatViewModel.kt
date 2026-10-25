@@ -17,6 +17,8 @@ import com.hermes.client.data.api.HermesJson
 import com.hermes.client.data.api.HistoryMessage
 import com.hermes.client.data.api.RunCreateRequest
 import com.hermes.client.data.api.RunEvent
+import com.hermes.client.data.api.long
+import com.hermes.client.data.api.str
 import java.util.UUID
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -58,6 +60,8 @@ class ChatViewModel(
         private set
     var sessionId by mutableStateOf(initialSessionId.orEmpty())
         private set
+    var historyLoading by mutableStateOf(false)
+        private set
 
     private var runId: String? = null
     private var eventsJob: Job? = null
@@ -74,6 +78,7 @@ class ChatViewModel(
     fun loadHistory(id: String) {
         viewModelScope.launch {
             statusLine = s(R.string.st_loading)
+            historyLoading = true
             try {
                 val api = container.api()
                 val history = api.getSessionMessages(id)
@@ -106,6 +111,8 @@ class ChatViewModel(
             } catch (e: Exception) {
                 statusLine = ""
                 error = friendlyError(e)
+            } finally {
+                historyLoading = false
             }
         }
     }
@@ -128,7 +135,21 @@ class ChatViewModel(
                 container.api().steerRun(id, text)
                 statusLine = s(R.string.st_steered)
             } catch (e: Exception) {
-                error = friendlyError(e)
+                if (isRunGone(e)) {
+                    // The run already ended server-side (finished, expired or
+                    // unknown): finish locally and hand the text back instead
+                    // of blaming the conversation.
+                    busy = false
+                    runId = null
+                    approval = null
+                    clarify = null
+                    statusLine = ""
+                    input = text
+                    error = s(R.string.err_run_gone)
+                } else {
+                    val msg = friendlyError(e)
+                    if (isSessionGone(e)) abandonRun(msg) else error = msg
+                }
             }
         }
     }
@@ -140,9 +161,48 @@ class ChatViewModel(
                 container.api().stopRun(id)
                 statusLine = s(R.string.st_stopping)
             } catch (e: Exception) {
-                error = friendlyError(e)
+                if (isRunGone(e)) {
+                    // Nothing left to stop: settle locally without an error.
+                    busy = false
+                    runId = null
+                    approval = null
+                    clarify = null
+                    statusLine = s(R.string.st_cancelled)
+                } else {
+                    val msg = friendlyError(e)
+                    if (isSessionGone(e)) abandonRun(msg) else error = msg
+                }
             }
         }
+    }
+
+    /**
+     * The session can no longer be used (deleted or owned by another
+     * surface): release the run locally instead of leaving the chat stuck
+     * busy behind an error toast.
+     */
+    private fun abandonRun(message: String) {
+        busy = false
+        runId = null
+        approval = null
+        clarify = null
+        statusLine = ""
+        error = message
+    }
+
+    private fun isSessionGone(e: Exception): Boolean =
+        e is HermesApiException && (e.code == "permission_denied" || e.code == "not_found")
+
+    /**
+     * The targeted run is gone server-side (finished, expired or unknown).
+     * The conversation itself may still be fine, so this must not be
+     * reported as a dead conversation. Bare 404s (e.g. proxy pages without
+     * a machine code) count as well.
+     */
+    private fun isRunGone(e: Exception): Boolean {
+        if (e !is HermesApiException) return false
+        if (e.code == "not_found" || e.code == "unknown_execution") return true
+        return e.status == 404 && e.code == null
     }
 
     fun answerApproval(choice: String) {
@@ -153,8 +213,15 @@ class ChatViewModel(
             try {
                 container.api().answerApproval(id, ApprovalAnswer(req.requestId, req.executionGeneration, choice))
                 statusLine = s(R.string.st_approved, choice)
+            } catch (e: HermesApiException) {
+                // Stale generations recover via DESIGN §9.4 first: a 409 here
+                // usually means the answer missed, not that the session died.
+                if (e.status == 409 && recoverPendingControl(id)) {
+                    return@launch
+                }
+                if (isSessionGone(e)) abandonRun(friendlyError(e)) else error = friendlyError(e)
             } catch (e: Exception) {
-                error = friendlyError(e)
+                if (isSessionGone(e)) abandonRun(friendlyError(e)) else error = friendlyError(e)
             }
         }
     }
@@ -169,10 +236,58 @@ class ChatViewModel(
                     ClarifyRequest(prompt.requestId, prompt.executionGeneration, answer),
                 )
                 statusLine = s(R.string.st_answered)
+            } catch (e: HermesApiException) {
+                // Same §9.4 recovery as approvals: the answer may have
+                // missed its generation while a control still waits.
+                if (e.status == 409 && recoverPendingControl(prompt.runId)) {
+                    return@launch
+                }
+                if (isSessionGone(e)) abandonRun(friendlyError(e)) else error = friendlyError(e)
             } catch (e: Exception) {
-                error = friendlyError(e)
+                if (isSessionGone(e)) abandonRun(friendlyError(e)) else error = friendlyError(e)
             }
         }
+    }
+
+    /**
+     * DESIGN §9.4 recovery: re-read the run and re-surface the latest pending
+     * approval/clarify control (if any) so the conversation can continue
+     * instead of stalling. Returns true when a control was restored.
+     */
+    private suspend fun recoverPendingControl(id: String): Boolean {
+        return try {
+            val status = container.api().getRun(id)
+            status.sessionId?.ifBlank { null }?.let { sessionId = it }
+            if (surfacePendingControls(id, status.pendingControls)) return true
+            // A concurrent resubscription may have restored the same control first.
+            approval != null || clarify != null
+        } catch (_: Exception) {
+            approval != null || clarify != null
+        }
+    }
+
+    /**
+     * Show the latest pending approval/clarify control from a run status,
+     * e.g. after a reconnect that missed the original request event.
+     * Never clobbers a dialog the user is already answering.
+     * Returns true when something was surfaced.
+     */
+    private fun surfacePendingControls(id: String, controls: List<JsonObject>): Boolean {
+        if (approval != null || clarify != null) return false
+        val parsed = controls.mapNotNull(::parsePendingControl)
+        if (parsed.isEmpty()) return false
+        // Approval blocks the run: prefer it over clarify, latest wins.
+        parsed.filterIsInstance<PendingControl.Approval>().lastOrNull()?.let {
+            approval = it.request
+            statusLine = s(R.string.st_waiting_approval)
+            return true
+        }
+        parsed.filterIsInstance<PendingControl.Clarify>().lastOrNull()?.let {
+            clarify = ClarifyPrompt(id, it.requestId, it.executionGeneration, it.prompt)
+            statusLine = s(R.string.st_question)
+            return true
+        }
+        return false
     }
 
     fun dismissError() {
@@ -357,6 +472,9 @@ class ChatViewModel(
                 }
             }
             status.sessionId?.ifBlank { null }?.let { sessionId = it }
+            // A drop may have swallowed the approval/clarify request event
+            // while the run still waits: re-surface it from status.
+            surfacePendingControls(id, status.pendingControls)
         } catch (e: Exception) {
             busy = false
             runId = null
@@ -375,7 +493,7 @@ class ChatViewModel(
                 "unknown_execution" ->
                     s(R.string.err_unknown_exec)
                 "permission_denied", "not_found" ->
-                    s(R.string.err_foreign, e.status)
+                    s(R.string.err_foreign)
                 "runtime_draining", "storage_unavailable" ->
                     s(R.string.err_draining, e.status)
                 else -> s(R.string.err_server, e.status, e.message.take(200))
@@ -575,4 +693,41 @@ internal fun foldForLog(text: String): String {
     val split = splitUserFacing(text)
     return (listOf(split.visible.trim()).filter { it.isNotEmpty() } + split.folded)
         .joinToString(" · ").take(200)
+}
+
+/** A still-waiting run control read back from a run status (DESIGN §9.4). */
+internal sealed interface PendingControl {
+    data class Approval(val request: ApprovalRequest) : PendingControl
+    data class Clarify(val requestId: String, val executionGeneration: Long, val prompt: String) : PendingControl
+}
+
+/**
+ * Lenient parse of one `pending_controls` entry. Approval-shaped entries
+ * (command/choices/type) win over clarify-shaped ones (prompt/question).
+ * Returns null when the entry carries nothing answerable.
+ */
+internal fun parsePendingControl(o: JsonObject): PendingControl? {
+    val requestId = o.str("request_id", "prompt_id", "id").orEmpty()
+    val generation = o.long("execution_generation", "generation") ?: 0L
+    val command = o.str("command")
+    val choices = (o["choices"] as? JsonArray)
+        ?.mapNotNull { (it as? JsonPrimitive)?.content }
+        ?.takeIf { it.isNotEmpty() }
+    if (command != null || choices != null ||
+        o.str("type").equals("approval", ignoreCase = true)
+    ) {
+        if (requestId.isBlank() && command == null) return null
+        return PendingControl.Approval(
+            ApprovalRequest(
+                requestId = requestId,
+                executionGeneration = generation,
+                command = command,
+                description = o.str("description"),
+                choices = choices ?: listOf("once", "deny"),
+            )
+        )
+    }
+    val prompt = o.str("prompt", "question", "text") ?: return null
+    if (requestId.isBlank() && prompt.isBlank()) return null
+    return PendingControl.Clarify(requestId, generation, prompt)
 }

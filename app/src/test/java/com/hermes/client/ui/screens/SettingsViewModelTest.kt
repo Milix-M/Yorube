@@ -171,6 +171,34 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun test_reportsOkFlag() = runVmTest {
+        val url = server.url("").toString().removeSuffix("/")
+        val c = container()
+        c.settingsStore.save(ClientSettings(baseUrl = url, apiKey = "k"))
+        awaitStored(c, url)
+        server.enqueue(MockResponse().setBody("""{"status":"ok"}"""))
+        server.enqueue(
+            MockResponse().setBody("""{"features":{"run_stop":true},"endpoints":{}}""")
+        )
+        val vm = SettingsViewModel(c)
+        vm.baseUrl = url
+        vm.apiKey = "k"
+        assertEquals(null, vm.testOk)
+        vm.test()
+        awaitCondition { !vm.testing && vm.testResult.isNotEmpty() }
+        assertEquals(true, vm.testOk)
+    }
+
+    @Test
+    fun test_notConfigured_reportsNotOk() = runVmTest {
+        val vm = SettingsViewModel(container())
+        assertEquals(null, vm.testOk)
+        vm.test()
+        awaitCondition { !vm.testing && vm.testResult.isNotEmpty() }
+        assertEquals(false, vm.testOk)
+    }
+
+    @Test
     fun test_apiThrows() = runVmTest {
         val c = container()
         c.settingsStore.save(ClientSettings(baseUrl = "notaurl", apiKey = "k"))
