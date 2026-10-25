@@ -2,7 +2,9 @@ package com.hermes.client.data.api
 
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -201,9 +203,19 @@ class HermesApi(
         val call = client.newCall(get("/v1/runs/$runId/events"))
         val response = try {
             call.execute()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             close(e)
             return@callbackFlow
+        }
+        // The blocking reader below cannot notice cancellation on its own:
+        // drop the socket as soon as this producer goes away (resubscribe,
+        // collector gone) so the read unblocks and no duplicate SSE
+        // subscription lingers on the server.
+        val completionHook = coroutineContext[Job]?.invokeOnCompletion {
+            try { response.close() } catch (_: Exception) { }
+            try { call.cancel() } catch (_: Exception) { }
         }
         if (!response.isSuccessful) {
             val body = try { response.body?.string() ?: "" } catch (_: Exception) { "" }
@@ -254,8 +266,17 @@ class HermesApi(
             // collector can poll the run status and re-subscribe instead of hanging.
             if (!terminated) close()
         } catch (e: Exception) {
-            close(e)
+            // Our own cancel-close above also lands here as an IOException
+            // while the channel is already gone: don't report it as a failure.
+            // Cancellation during collection also lands here: propagate it
+            // without reporting as a stream failure.
+            if (e is CancellationException) {
+                try { close() } catch (_: Exception) { }
+                throw e
+            }
+            if (isClosedForSend) close() else close(e)
         } finally {
+            try { completionHook?.dispose() } catch (_: Exception) { }
             try { response.close() } catch (_: Exception) { }
         }
         awaitClose { call.cancel() }
@@ -336,7 +357,11 @@ class HermesApi(
     companion object {
         fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(0, TimeUnit.SECONDS) // SSE streams stay open
+            // The server sends an SSE keepalive comment every ~10s (DESIGN §8),
+            // so 60s without a byte means a half-open socket (NAT timeout,
+            // Doze, tunnel restart): time out here so the caller can poll the
+            // run status and resubscribe instead of hanging forever.
+            .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
             .build()

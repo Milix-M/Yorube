@@ -80,6 +80,13 @@ class HermesApiTest {
     }
 
     @Test
+    fun defaultClient_hasBoundedReadTimeout() {
+        // Infinite read timeouts hang forever on half-open mobile sockets;
+        // the server keepalives every ~10s, so 60s only fires on dead ones.
+        assertEquals(60_000, HermesApi.defaultClient().readTimeoutMillis)
+    }
+
+    @Test
     fun runEvents_parsesDeltaAndTerminal() = runTest {
         val body = "event: message.delta\n" +
             "data: {\"event\":\"message.delta\",\"delta\":\"hi\"}\n" +
@@ -378,5 +385,172 @@ class HermesApiTest {
         assertTrue(api.getSessionMessages("s").isEmpty())
         server.enqueue(MockResponse().setBody("[\"oops\"]"))
         assertEquals(0, api.getSessionMessages("s").size)
+    }
+
+    @Test
+    fun listSessions_coversAllShapes() = runTest {
+        // Direct array shape.
+        server.enqueue(MockResponse().setBody("""[{"id":"a"}]"""))
+        assertEquals(listOf("a"), api.listSessions().map { it.key })
+        // Data key shape.
+        server.enqueue(MockResponse().setBody("""{"data":[{"id":"b"}]}"""))
+        assertEquals(listOf("b"), api.listSessions().map { it.key })
+        // Non-object item skipped.
+        server.enqueue(MockResponse().setBody("""{"sessions":[123, {"id":"c"}]}"""))
+        assertEquals(listOf("c"), api.listSessions().map { it.key })
+        // Invalid item (type mismatch) is skipped via catch.
+        server.enqueue(MockResponse().setBody("""{"sessions":[{"id":123}]}"""))
+        assertTrue(api.listSessions().isEmpty())
+        // Timestamp present (no fallback lookup).
+        server.enqueue(MockResponse().setBody("""{"sessions":[{"id":"d","updated_at":123.0}]}"""))
+        assertEquals(listOf("d"), api.listSessions().map { it.key })
+    }
+
+    @Test
+    fun getSessionMessages_coversShapes() = runTest {
+        // Direct array.
+        server.enqueue(MockResponse().setBody("""[{"role":"user","content":"hi"}]"""))
+        assertEquals(1, api.getSessionMessages("s").size)
+        // Data key.
+        server.enqueue(MockResponse().setBody("""{"data":[{"role":"user","content":"hi"}]}"""))
+        assertEquals(1, api.getSessionMessages("s").size)
+        // Messages key with non-object skipped, blank text skipped.
+        server.enqueue(
+            MockResponse().setBody("""{"messages":[123, {"role":"user","content":""}, {"role":"user","content":"hi"}]}""")
+        )
+        assertEquals(1, api.getSessionMessages("s").size)
+        // Content fallback via text/output keys when content blank.
+        server.enqueue(
+            MockResponse().setBody("""{"messages":[{"role":"user","text":"fallback"}]}""")
+        )
+        assertEquals("fallback", api.getSessionMessages("s").first().text)
+        // No text at all -> skipped.
+        server.enqueue(
+            MockResponse().setBody("""{"messages":[{"role":"user"}]}""")
+        )
+        assertTrue(api.getSessionMessages("s").isEmpty())
+    }
+
+    @Test
+    fun runEvents_cancellationException_propagates() = runTest {
+        val cancelling = okhttp3.OkHttpClient.Builder()
+            .addInterceptor { throw kotlinx.coroutines.CancellationException("cancel") }
+            .build()
+        val cancellingApi = HermesApi(
+            baseUrl = server.url("").toString().removeSuffix("/"),
+            apiKey = "k",
+            client = cancelling,
+        )
+        try {
+            cancellingApi.runEvents("r1").toList()
+            fail("expected CancellationException")
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            assertTrue((e.message ?: "").isNotEmpty())
+        }
+    }
+
+    @Test
+    fun getCapabilities_and_options() = runTest {
+        server.enqueue(MockResponse().setBody("""{"features":{},"endpoints":{}}"""))
+        api.getCapabilities()
+        assertEquals("/v1/capabilities", server.takeRequest().path)
+        server.enqueue(MockResponse().setBody("""{"providers":[]}"""))
+        api.getModelOptions(refresh = true)
+        assertEquals("/api/model/options?refresh=1", server.takeRequest().path)
+        server.enqueue(MockResponse().setBody("""{"providers":[]}"""))
+        api.getModelOptions(refresh = false)
+        assertEquals("/api/model/options", server.takeRequest().path)
+    }
+
+    @Test
+    fun deleteSession_sendsDelete() = runTest {
+        server.enqueue(MockResponse().setBody("{}"))
+        api.deleteSession("s1")
+        assertEquals("/api/sessions/s1", server.takeRequest().path)
+    }
+
+    @Test
+    fun forkSession_handlesShapes() = runTest {
+        server.enqueue(MockResponse().setBody("""{"session_id":"a"}"""))
+        assertEquals("a", api.forkSession("s", "t"))
+        server.enqueue(MockResponse().setBody("""{"id":"b"}"""))
+        assertEquals("b", api.forkSession("s"))
+        server.enqueue(MockResponse().setBody("""{"nope":1}"""))
+        assertEquals(null, api.forkSession("s"))
+        server.enqueue(MockResponse().setBody("notjson"))
+        assertEquals(null, api.forkSession("s"))
+    }
+
+    @Test
+    fun errorEnvelope_primitiveAndEmpty() = runTest {
+        server.enqueue(MockResponse().setResponseCode(400).setBody("""{"error":123}"""))
+        try {
+            api.getRun("r")
+            fail("expected HermesApiException")
+        } catch (e: HermesApiException) {
+            assertEquals(400, e.status)
+        }
+        server.enqueue(MockResponse().setResponseCode(400).setBody(""))
+        try {
+            api.getRun("r")
+            fail("expected HermesApiException")
+        } catch (e: HermesApiException) {
+            assertEquals("empty response", e.message)
+        }
+        server.enqueue(MockResponse().setResponseCode(400).setBody("""{"error":{"code":"c"}}"""))
+        try {
+            api.getRun("r")
+            fail("expected HermesApiException")
+        } catch (e: HermesApiException) {
+            assertEquals("c", e.code)
+        }
+    }
+
+    @Test
+    fun getModelIds_coversModelsKey() = runTest {
+        server.enqueue(MockResponse().setBody("""{"models":[{"id":"m1"}]}"""))
+        assertEquals(listOf("m1"), api.getModelIds())
+    }
+
+    @Test
+    fun checkHealth_falseOnBlank() = runTest {
+        server.enqueue(MockResponse().setBody("""{"status":"bad"}"""))
+        assertEquals(false, api.checkHealth())
+        server.enqueue(MockResponse().setResponseCode(500).setBody("x"))
+        assertEquals(false, api.checkHealth())
+    }
+
+    @Test
+    fun runEvents_readCancellation_isSwallowedAsCancel() = runTest {
+        val cancellingReadClient = okhttp3.OkHttpClient.Builder()
+            .addInterceptor { chain ->
+                val req = chain.request()
+                val body = object : okhttp3.ResponseBody() {
+                    override fun contentType(): okhttp3.MediaType? = null
+                    override fun contentLength(): Long = 0
+                    override fun source(): okio.BufferedSource {
+                        throw kotlinx.coroutines.CancellationException("read cancel")
+                    }
+                }
+                okhttp3.Response.Builder()
+                    .request(req)
+                    .protocol(okhttp3.Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body(body)
+                    .build()
+            }
+            .build()
+        val cancellingReadApi = HermesApi(
+            baseUrl = server.url("").toString().removeSuffix("/"),
+            apiKey = "k",
+            client = cancellingReadClient,
+        )
+        // Cancellation inside the producer closes the channel without an
+        // error (callbackFlow treats CancellationException as cancel, not
+        // failure). The producer still executes the CancellationException
+        // branch for line coverage; the collector sees an empty stream.
+        val events = cancellingReadApi.runEvents("r1").toList()
+        assertTrue(events.isEmpty())
     }
 }
