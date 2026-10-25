@@ -3,15 +3,15 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Minimal monochrome mark: Material Symbols "auto_awesome" (Apache License 2.0,
-         Google Fonts) in solid white. Background tile is a separate near-black drawable. -->
-    <group
-        android:translateX="24"
-        android:translateY="24"
-        android:scaleX="2.5"
-        android:scaleY="2.5">
-        <path
-            android:fillColor="#FFFFFF"
-            android:pathData="m19,9 -1.25,-2.75 L15,5 17.75,3.75 L19,1 l1.25,2.75 L23,5 l-2.75,1.25 Z m0,14 -1.25,-2.75 L15,19 l2.75,-1.25 L19,15 l1.25,2.75 L23,19 l-2.75,1.25 Z M9,20 l-2.5,-5.5 L1,12 l5.5,-2.5 L9,4 l2.5,5.5 L17,12 l-5.5,2.5 Z m0,-4.85 L10,13 l2.15,-1 L10,11 L9,8.85 L8,11 l-2.15,1 L8,13 Z M9,12 Z" />
-    </group>
+    <!-- Sparkle kept, restyled: soft glow + crisp white core + 2 satellites.
+         Safe zone: all glyphs inside the central 72dp circle. -->
+    <!-- Outer glow -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.18"
+        android:pathData="M54,23 C57,44 64,50 85,54 C64,58 57,64 54,85 C51,64 44,58 23,54 C44,50 51,44 54,23 Z" />
+    <!-- Main 4-point star -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,30 C56.3,45.5 62.5,51.7 78,54 C62.5,56.3 56.3,62.5 54,78 C51.7,62.5 45.5,56.3 30,54 C45.5,51.7 51.7,45.5 54,30 Z" />
 </vector>
