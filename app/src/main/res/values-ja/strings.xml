@@ -68,6 +68,7 @@
     <string name="err_foreign">この会話は利用できません（削除されたか他の画面のものです）。新しい会話を始めてください。</string>
     <string name="err_draining">サーバーが混雑・停止中です (%1$d)。待って再試行してください。</string>
     <string name="err_server">サーバー誤り %1$d: %2$s</string>
+    <string name="err_network">接続が切れました（%1$s）。会話を開き直して続けてください。</string>
     <string name="err_run_gone">実行は既に終了していたため、送信されませんでした。</string>
     <string name="err_health_key">Base URLとAPIキーが必要です。</string>
     <string name="err_checking">確認中</string>

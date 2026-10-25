@@ -177,4 +177,68 @@ class RunEventsTest {
         assertEquals(42L, n.long("missing", "n"))
         assertEquals(42L, n.long("n"))
     }
+
+    @Test
+    fun bool_readsFirstPresent() {
+        val t = buildJsonObject { put("b", true) }
+        assertEquals(true, t.bool("missing", "b"))
+        assertEquals(null, obj("a" to "x").bool("missing"))
+        assertEquals(null, obj("a" to "x").bool())
+        val s = obj("a" to "x")
+        assertEquals(null, s.bool("a"))
+    }
+
+    @Test
+    fun interim_withoutAlreadyStreamed_defaultsFalse() {
+        val e = parseRunEvent(
+            "message.interim",
+            buildJsonObject { put("text", "working") }
+        ) as RunEvent.Interim
+        assertEquals("working", e.text)
+        assertEquals(false, e.alreadyStreamed)
+    }
+
+    @Test
+    fun humanPreview_bothBlankFallsThrough() {
+        assertEquals(
+            """{"output":"","error":""}""",
+            humanPreview("""{"output":"","error":""}""")
+        )
+        assertEquals(
+            """{"output":"  ","error":"  "}""".take(200),
+            humanPreview("""{"output":"  ","error":"  "}""")
+        )
+    }
+
+    @Test
+    fun humanPreview_longJsonOutput_truncates() {
+        val longOut = "y".repeat(500)
+        val shown = humanPreview("""{"output":"$longOut"}""")
+        assertTrue(shown.length <= 200)
+        assertTrue(shown.length == 200)
+    }
+
+    @Test
+    fun parseRunEvent_coversAllBranches() {
+        // Delta empty.
+        assertEquals(RunEvent.Delta(""), parseRunEvent("message.delta", JsonObject(emptyMap())))
+        // Tool started empty.
+        assertEquals(RunEvent.ToolStarted("", ""), parseRunEvent("tool.started", JsonObject(emptyMap())))
+        // Subagent start/complete empty.
+        assertEquals(RunEvent.SubagentStarted(""), parseRunEvent("subagent.start", JsonObject(emptyMap())))
+        assertEquals(
+            RunEvent.SubagentCompleted("", ""),
+            parseRunEvent("subagent.complete", JsonObject(emptyMap()))
+        )
+        // Clarify with missing prompt -> empty.
+        val c = parseRunEvent("clarify.request", JsonObject(emptyMap())) as RunEvent.ClarifyRequested
+        assertEquals("", c.prompt)
+        // Approval with missing fields.
+        val a = parseRunEvent("approval.request", JsonObject(emptyMap())) as RunEvent.ApprovalRequested
+        assertEquals("", a.request.requestId)
+        // Terminal missing fields.
+        val t = parseRunEvent("run.failed", JsonObject(emptyMap())) as RunEvent.Terminal
+        assertEquals("failed", t.status)
+        assertEquals(null, t.output)
+    }
 }

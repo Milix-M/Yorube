@@ -19,6 +19,7 @@ import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
+import okhttp3.mockwebserver.SocketPolicy
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -718,6 +719,125 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun streamNotFound_reportsRunGone_notForeign() = runVmTest {
+        // The run expired server-side (404 not_found on the SSE stream) while
+        // the session itself is still usable: must surface as an ended run,
+        // never as err_foreign ("another surface").
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running","session_id":"s1"}"""))
+        server.enqueue(
+            MockResponse().setResponseCode(404)
+                .setBody("""{"error":{"message":"x","code":"not_found"}}""")
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { vm.error != null }
+        assertTrue("error=${vm.error}", vm.error!!.contains("already ended"))
+        assertTrue("error=${vm.error}", !vm.error!!.contains("another surface"))
+        assertEquals(false, vm.busy)
+        assertEquals("s1", vm.sessionId)
+    }
+
+    @Test
+    fun streamRunNotFoundCode_reportsRunGone() = runVmTest {
+        // DESIGN §13 documents the run-level code as run_not_found: same
+        // handling as not_found, never err_foreign.
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        server.enqueue(
+            MockResponse().setResponseCode(404)
+                .setBody("""{"error":{"message":"x","code":"run_not_found"}}""")
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { vm.error != null }
+        assertTrue("error=${vm.error}", vm.error!!.contains("already ended"))
+        assertTrue("error=${vm.error}", !vm.error!!.contains("another surface"))
+        assertEquals(false, vm.busy)
+    }
+
+    @Test
+    fun pollNotFound_reportsRunGone_notForeign() = runVmTest {
+        // Stream drops cleanly, then the status poll finds the run gone:
+        // still an ended run, not a dead conversation.
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running","session_id":"s1"}"""))
+        server.enqueue(MockResponse().setBody(""))
+        server.enqueue(
+            MockResponse().setResponseCode(404)
+                .setBody("""{"error":{"message":"x","code":"not_found"}}""")
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { vm.error != null }
+        assertTrue("error=${vm.error}", vm.error!!.contains("already ended"))
+        assertTrue("error=${vm.error}", !vm.error!!.contains("another surface"))
+        assertEquals(false, vm.busy)
+        assertEquals("s1", vm.sessionId)
+    }
+
+    @Test
+    fun approvalRunGone_reportsRunGone_notForeign() = runVmTest {
+        var eventsServed = 0
+        var getRuns = 0
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                return when {
+                    request.path == "/v1/runs" && request.method == "POST" ->
+                        MockResponse().setResponseCode(202)
+                            .setBody("""{"run_id":"r1","status":"queued"}""")
+                    request.path == "/v1/runs/r1" -> {
+                        if (getRuns++ == 0) {
+                            MockResponse().setBody("""{"run_id":"r1","status":"running","session_id":"s1"}""")
+                        } else {
+                            MockResponse().setBody("""{"run_id":"r1","status":"running","session_id":"s1"}""")
+                                .setBodyDelay(5, TimeUnit.SECONDS)
+                        }
+                    }
+                    request.path == "/v1/runs/r1/events" -> {
+                        eventsServed++
+                        if (eventsServed == 1) {
+                            events(
+                                frame(
+                                    "approval.request",
+                                    """{"event":"approval.request","request_id":"r1","execution_generation":3,"command":"rm"}""",
+                                ),
+                            )
+                        } else {
+                            events()
+                        }
+                    }
+                    request.path == "/v1/runs/r1/approval" ->
+                        MockResponse().setResponseCode(404)
+                            .setBody("""{"error":{"message":"x","code":"not_found"}}""")
+                    else -> MockResponse().setBody("{}")
+                }
+            }
+        }
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        try {
+            vm.input = "hi"
+            vm.onSend()
+            awaitCondition { vm.approval != null }
+            vm.answerApproval("once")
+            awaitCondition { vm.error != null }
+            assertTrue("error=${vm.error}", vm.error!!.contains("already ended"))
+            assertTrue("error=${vm.error}", !vm.error!!.contains("another surface"))
+            assertEquals("s1", vm.sessionId)
+        } finally {
+            vm.viewModelScope.cancel()
+            testScheduler.advanceUntilIdle()
+        }
+    }
+
+    @Test
     fun streamFailure_reconnectsAndCompletes() = runVmTest {
         server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
         server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
@@ -758,7 +878,10 @@ class ChatViewModelTest {
     @Test
     fun retriesExhausted_reportsStreamEnd() = runVmTest {
         server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
-        repeat(4) {
+        // One status read for the initial subscribe plus one per reconnect
+        // poll, each followed by an empty stream: 16 rounds exhaust the
+        // MAX_RECONNECT_ATTEMPTS budget (15 resubscribes).
+        repeat(16) {
             server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
             server.enqueue(MockResponse().setBody(""))
         }
@@ -769,6 +892,38 @@ class ChatViewModelTest {
         awaitCondition(timeoutMs = 25_000) { vm.error != null }
         assertTrue(vm.error!!.isNotBlank())
         assertEquals(false, vm.busy)
+    }
+
+    @Test
+    fun reconnectPollTransientFailure_retriesAndCompletes() = runVmTest {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        server.enqueue(MockResponse().setBody(""))
+        // The status poll itself hits a transient transport failure (the same
+        // abort that killed the stream). The poll retry must recover instead
+        // of killing the run with a raw socket error.
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        server.enqueue(
+            events(frame("run.completed", """{"event":"run.completed","output":"recovered"}"""))
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { !vm.busy }
+        assertNull("error=${vm.error}", vm.error)
+        assertTrue(vm.messages.any { it.text == "recovered" })
+    }
+
+    @Test
+    fun reconnectBackoff_isCappedAndBudgeted() {
+        assertEquals(1000L, reconnectDelayMs(0))
+        assertEquals(2000L, reconnectDelayMs(1))
+        assertEquals(4000L, reconnectDelayMs(2))
+        assertEquals(8000L, reconnectDelayMs(3))
+        assertEquals(8000L, reconnectDelayMs(14))
+        assertEquals(15, MAX_RECONNECT_ATTEMPTS)
     }
 
     @Test
@@ -1091,6 +1246,296 @@ class ChatViewModelTest {
             }
         } finally {
             holdStream.set(false)
+        }
+    }
+
+    @Test
+    fun loadHistory_404_reportsForeign() = runVmTest {
+        server.enqueue(
+            MockResponse().setResponseCode(404)
+                .setBody("""{"error":{"message":"gone","code":"not_found"}}""")
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, "s1")
+        awaitCondition { vm.error != null }
+        assertTrue(vm.error!!.contains("unavailable") || vm.error!!.contains("利用できません"))
+    }
+
+    @Test
+    fun createRun_runNotFound_reportsGone() = runVmTest {
+        server.enqueue(
+            MockResponse().setResponseCode(404)
+                .setBody("""{"error":{"message":"gone","code":"run_not_found"}}""")
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { vm.error != null }
+        assertTrue(vm.error!!.contains("already ended") || vm.error!!.contains("終了"))
+    }
+
+    private suspend fun TestScope.approvalVmWithHold(
+        holdStream: java.util.concurrent.atomic.AtomicBoolean,
+        approvalResponse: MockResponse,
+    ): ChatViewModel {
+        val eventsHits = java.util.concurrent.atomic.AtomicInteger(0)
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.method == "POST" && request.path == "/v1/runs" ->
+                    MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}""")
+                request.method == "GET" && request.path == "/v1/runs/r1" ->
+                    MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
+                request.method == "GET" && request.path == "/v1/runs/r1/events" -> {
+                    if (eventsHits.getAndIncrement() == 0) {
+                        events(
+                            frame(
+                                "approval.request",
+                                """{"event":"approval.request","request_id":"r1","execution_generation":3,"command":"rm"}""",
+                            )
+                        )
+                    } else {
+                        while (holdStream.get()) Thread.sleep(100)
+                        MockResponse().setBody(": keepalive\n\n")
+                    }
+                }
+                request.method == "POST" && request.path == "/v1/runs/r1/approval" -> approvalResponse
+                else -> MockResponse().setBody("{}")
+            }
+        }
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { vm.approval != null }
+        return vm
+    }
+
+    @Test
+    fun answerApproval_runGone_reportsGone() = runVmTest {
+        val hold = java.util.concurrent.atomic.AtomicBoolean(true)
+        try {
+            val vm = approvalVmWithHold(
+                hold,
+                MockResponse().setResponseCode(404)
+                    .setBody("""{"error":{"message":"gone","code":"run_not_found"}}"""),
+            )
+            try {
+                vm.answerApproval("once")
+                awaitCondition { vm.error != null }
+                assertTrue(vm.error!!.contains("already ended") || vm.error!!.contains("終了"))
+                assertEquals(false, vm.busy)
+            } finally {
+                vm.viewModelScope.cancel()
+            }
+        } finally {
+            hold.set(false)
+        }
+    }
+
+    @Test
+    fun answerApproval_unknownExecution_reportsUnknown() = runVmTest {
+        val hold = java.util.concurrent.atomic.AtomicBoolean(true)
+        try {
+            val vm = approvalVmWithHold(
+                hold,
+                MockResponse().setResponseCode(404)
+                    .setBody("""{"error":{"message":"gone","code":"unknown_execution"}}"""),
+            )
+            try {
+                vm.answerApproval("once")
+                awaitCondition { vm.error != null }
+                assertTrue(vm.error!!.isNotBlank())
+            } finally {
+                vm.viewModelScope.cancel()
+            }
+        } finally {
+            hold.set(false)
+        }
+    }
+
+    @Test
+    fun answerClarify_runGone_reportsGone() = runVmTest {
+        val eventsHits = java.util.concurrent.atomic.AtomicInteger(0)
+        val hold = java.util.concurrent.atomic.AtomicBoolean(true)
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.method == "POST" && request.path == "/v1/runs" ->
+                    MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}""")
+                request.method == "GET" && request.path == "/v1/runs/r1" ->
+                    MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
+                request.method == "GET" && request.path == "/v1/runs/r1/events" -> {
+                    if (eventsHits.getAndIncrement() == 0) {
+                        events(
+                            frame(
+                                "clarify.request",
+                                """{"event":"clarify.request","request_id":"c1","execution_generation":2,"prompt":"which?"}""",
+                            )
+                        )
+                    } else {
+                        while (hold.get()) Thread.sleep(100)
+                        MockResponse().setBody(": keepalive\n\n")
+                    }
+                }
+                request.method == "POST" && request.path == "/v1/runs/r1/clarify" ->
+                    MockResponse().setResponseCode(404)
+                        .setBody("""{"error":{"message":"gone","code":"run_not_found"}}""")
+                else -> MockResponse().setBody("{}")
+            }
+        }
+        try {
+            val c = containerWithSettings()
+            val vm = ChatViewModel(c, null)
+            try {
+                vm.input = "hi"
+                vm.onSend()
+                awaitCondition { vm.clarify != null }
+                vm.answerClarify("x")
+                awaitCondition { vm.error != null }
+                assertTrue(vm.error!!.contains("already ended") || vm.error!!.contains("終了"))
+            } finally {
+                vm.viewModelScope.cancel()
+            }
+        } finally {
+            hold.set(false)
+        }
+    }
+
+    @Test
+    fun reconnect_streamRunGone_reportsGone() = runVmTest {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        server.enqueue(
+            MockResponse().setResponseCode(404)
+                .setBody("""{"error":{"message":"gone","code":"run_not_found"}}""")
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { vm.error != null }
+        assertTrue(vm.error!!.contains("already ended") || vm.error!!.contains("終了"))
+        assertEquals(false, vm.busy)
+    }
+
+    @Test
+    fun reconnect_streamUnrecoverable_failsFast() = runVmTest {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        server.enqueue(
+            MockResponse().setResponseCode(403)
+                .setBody("""{"error":{"message":"denied","code":"permission_denied"}}""")
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { vm.error != null }
+        assertTrue(vm.error!!.isNotBlank())
+        assertEquals(false, vm.busy)
+    }
+
+    @Test
+    fun reconnect_pollRunGone_reportsGone() = runVmTest {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        server.enqueue(MockResponse().setBody(""))
+        server.enqueue(
+            MockResponse().setResponseCode(404)
+                .setBody("""{"error":{"message":"gone","code":"run_not_found"}}""")
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { vm.error != null }
+        assertTrue(vm.error!!.contains("already ended") || vm.error!!.contains("終了"))
+    }
+
+    @Test
+    fun reconnect_pollUnrecoverable_reportsForeign() = runVmTest {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        server.enqueue(MockResponse().setBody(""))
+        server.enqueue(
+            MockResponse().setResponseCode(403)
+                .setBody("""{"error":{"message":"denied","code":"permission_denied"}}""")
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { vm.error != null }
+        assertTrue(vm.error!!.contains("unavailable") || vm.error!!.contains("利用できません") || vm.error!!.contains("403"))
+    }
+
+    @Test
+    fun reconnect_pollTransientExhausted_reportsNetwork() = runVmTest {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        server.enqueue(MockResponse().setBody(""))
+        repeat(3) {
+            server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START))
+        }
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition(timeoutMs = 25_000) { vm.error != null }
+        assertTrue("error=${vm.error}", vm.error!!.contains("Connection lost") || vm.error!!.contains("接続が切れ"))
+    }
+
+    @Test
+    fun reconnect_causeRunGone_pollBlip_reportsGone() = runVmTest {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
+        server.enqueue(
+            MockResponse().setResponseCode(404)
+                .setBody("""{"error":{"message":"gone","code":"not_found"}}""")
+        )
+        // Poll would also fail, but cause already RunGone so it short-circuits
+        // before polling. Enqueue a fallback in case of retry.
+        server.enqueue(MockResponse().setResponseCode(500).setBody("x"))
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { vm.error != null }
+        assertTrue(vm.error!!.contains("already ended") || vm.error!!.contains("終了"))
+    }
+
+    @Test
+    fun steer_ioError_reportsNetwork() = runVmTest {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.method == "POST" && request.path == "/v1/runs" ->
+                    MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}""")
+                request.method == "GET" && request.path == "/v1/runs/r1" ->
+                    MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
+                // Hold the stream open briefly: no reconnect runs while the
+                // steer error is asserted, so nothing overwrites it.
+                request.method == "GET" && request.path == "/v1/runs/r1/events" ->
+                    MockResponse().setHeadersDelay(5, java.util.concurrent.TimeUnit.SECONDS)
+                request.method == "POST" && request.path == "/v1/runs/r1/steer" ->
+                    MockResponse().setBody("partial")
+                        .setSocketPolicy(SocketPolicy.DISCONNECT_DURING_RESPONSE_BODY)
+                else -> MockResponse().setBody("{}")
+            }
+        }
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        try {
+            vm.input = "hi"
+            vm.onSend()
+            awaitCondition { vm.busy }
+            awaitCondition { server.requestCount >= 3 }
+            vm.input = "again"
+            vm.onSteer()
+            awaitCondition { vm.error != null }
+            assertTrue("error=${vm.error}", vm.error!!.contains("Connection lost") || vm.error!!.contains("接続が切れ"))
+        } finally {
+            vm.viewModelScope.cancel()
+            testScheduler.advanceUntilIdle()
         }
     }
 }

@@ -47,7 +47,7 @@ object Routes {
 
     fun chat(sessionId: String?, title: String? = null): String {
         val params = listOfNotNull(
-            sessionId?.ifBlank { null }?.let { "sessionId=$it" },
+            sessionId?.ifBlank { null }?.let { "sessionId=${Uri.encode(it)}" },
             title?.ifBlank { null }?.let { "title=${Uri.encode(it)}" },
         )
         return if (params.isEmpty()) CHAT else "$CHAT?${params.joinToString("&")}"
@@ -64,8 +64,11 @@ fun NavGraph(startSessionId: String?) {
     val app = LocalContext.current.applicationContext as HermesApp
     // Home shows the latest conversation; explicit session ids (e.g. from a
     // notification tap) always win. Sessions load async, so the start
-    // destination resolves once the list arrives; key() swaps the NavHost to
-    // the resolved start without pushing a back-stack entry.
+    // destination resolves once the list arrives, then we navigate to it
+    // (popUpTo inclusive so home has no back-stack entry). Using navigate()
+    // instead of key(startDestination) recreation because NavHost
+    // startDestination with query params does not parse args (they arrive
+    // null), while navigate() with the same route parses correctly.
     val startVm: ConversationListViewModel = viewModel(
         key = "home-start",
         factory = object : ViewModelProvider.Factory {
@@ -89,11 +92,19 @@ fun NavGraph(startSessionId: String?) {
             }
         }
     }
-    val startDestination = frozenStart ?: Routes.chat(startSessionId)
-    key(startDestination) {
-        NavHost(
-            navController = navController,
-            startDestination = startDestination,
+    // Navigate to the resolved start once (popUpTo inclusive so back from
+    // home exits, not to an empty fresh chat).
+    LaunchedEffect(frozenStart) {
+        val target = frozenStart
+        if (target != null && target != Routes.CHAT) {
+            navController.navigate(target) {
+                popUpTo(Routes.CHAT) { inclusive = true }
+            }
+        }
+    }
+    NavHost(
+        navController = navController,
+        startDestination = Routes.CHAT,
             // Draw the surface color behind transitions: without this the
             // transparent NavHost shows the white windowBackground as a flash.
             modifier = Modifier.background(MaterialTheme.colorScheme.surface),
@@ -201,7 +212,6 @@ fun NavGraph(startSessionId: String?) {
         }
         composable(Routes.SETTINGS) {
             SettingsScreen(onNavigateBack = { navController.popBackStack() })
-        }
         }
     }
 }

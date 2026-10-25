@@ -17,10 +17,14 @@ import com.hermes.client.data.api.HermesJson
 import com.hermes.client.data.api.HistoryMessage
 import com.hermes.client.data.api.RunCreateRequest
 import com.hermes.client.data.api.RunEvent
+import com.hermes.client.data.api.RunStatusResponse
 import com.hermes.client.data.api.long
 import com.hermes.client.data.api.str
+import java.io.IOException
 import java.util.UUID
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -40,6 +44,18 @@ data class ClarifyPrompt(
     val executionGeneration: Long,
     val prompt: String,
 )
+
+/**
+ * Total SSE resubscribes allowed per run before the stream is declared dead.
+ * Drops are routine on mobile networks and proxied tunnels (Cloudflare
+ * idle kills, NAT timeouts, Doze, the DESIGN §8 five-minute transport
+ * buffer), so the budget covers a long agent run instead of dying on the
+ * first blips.
+ */
+internal const val MAX_RECONNECT_ATTEMPTS = 15
+
+/** Reconnect backoff before each status poll: 1s, 2s, 4s, then 8s capped. */
+internal fun reconnectDelayMs(attempt: Int): Long = 1000L * (1L shl attempt.coerceIn(0, 3))
 
 class ChatViewModel(
     private val container: AppContainer,
@@ -110,7 +126,13 @@ class ChatViewModel(
                 statusLine = ""
             } catch (e: Exception) {
                 statusLine = ""
-                error = friendlyError(e)
+                // Session endpoint: any 404 means the session itself is gone
+                // (deleted or never existed), regardless of the machine code.
+                error = if (e is HermesApiException && e.status == 404) {
+                    s(R.string.err_foreign)
+                } else {
+                    friendlyError(e)
+                }
             } finally {
                 historyLoading = false
             }
@@ -201,8 +223,20 @@ class ChatViewModel(
      */
     private fun isRunGone(e: Exception): Boolean {
         if (e !is HermesApiException) return false
-        if (e.code == "not_found" || e.code == "unknown_execution") return true
+        if (e.code == "not_found" || e.code == "run_not_found" || e.code == "unknown_execution") return true
         return e.status == 404 && e.code == null
+    }
+
+    /**
+     * Message for a gone run: the run ended server-side but the session
+     * itself is still usable, so never blame the conversation. An unknown
+     * outcome keeps its stronger warning (do not blindly resend).
+     */
+    private fun runGoneError(e: Exception): String {
+        if (e is HermesApiException && e.code == "unknown_execution") {
+            return s(R.string.err_unknown_exec)
+        }
+        return s(R.string.err_run_gone)
     }
 
     fun answerApproval(choice: String) {
@@ -219,9 +253,23 @@ class ChatViewModel(
                 if (e.status == 409 && recoverPendingControl(id)) {
                     return@launch
                 }
-                if (isSessionGone(e)) abandonRun(friendlyError(e)) else error = friendlyError(e)
+                if (isRunGone(e)) {
+                    // The run already ended: drop the dialog locally without
+                    // blaming the conversation (the session is still usable).
+                    busy = false
+                    runId = null
+                    clarify = null
+                    statusLine = ""
+                    error = runGoneError(e)
+                } else if (isSessionGone(e)) abandonRun(friendlyError(e)) else error = friendlyError(e)
             } catch (e: Exception) {
-                if (isSessionGone(e)) abandonRun(friendlyError(e)) else error = friendlyError(e)
+                if (isRunGone(e)) {
+                    busy = false
+                    runId = null
+                    clarify = null
+                    statusLine = ""
+                    error = runGoneError(e)
+                } else if (isSessionGone(e)) abandonRun(friendlyError(e)) else error = friendlyError(e)
             }
         }
     }
@@ -242,9 +290,21 @@ class ChatViewModel(
                 if (e.status == 409 && recoverPendingControl(prompt.runId)) {
                     return@launch
                 }
-                if (isSessionGone(e)) abandonRun(friendlyError(e)) else error = friendlyError(e)
+                if (isRunGone(e)) {
+                    busy = false
+                    runId = null
+                    approval = null
+                    statusLine = ""
+                    error = runGoneError(e)
+                } else if (isSessionGone(e)) abandonRun(friendlyError(e)) else error = friendlyError(e)
             } catch (e: Exception) {
-                if (isSessionGone(e)) abandonRun(friendlyError(e)) else error = friendlyError(e)
+                if (isRunGone(e)) {
+                    busy = false
+                    runId = null
+                    approval = null
+                    statusLine = ""
+                    error = runGoneError(e)
+                } else if (isSessionGone(e)) abandonRun(friendlyError(e)) else error = friendlyError(e)
             }
         }
     }
@@ -362,6 +422,10 @@ class ChatViewModel(
                 var terminalSeen = false
                 api.runEvents(id).collect { event -> if (handleEvent(id, event)) terminalSeen = true }
                 if (!terminalSeen) reconnectOrFinish(id, attempt)
+            } catch (e: CancellationException) {
+                // Resubscribe, Stop, or scope teardown: not a stream failure,
+                // never route into the reconnect path.
+                throw e
             } catch (e: Exception) {
                 reconnectOrFinish(id, attempt, cause = e)
             }
@@ -445,8 +509,59 @@ class ChatViewModel(
         foldMarkupOutOfReplies()
     }
 
+    /**
+     * HTTP 401/403 and ownership failures cannot heal by polling: fail fast
+     * instead of burning the reconnect budget and masking the real error
+     * behind a later socket message. Run-level 404s (not_found/run_not_found
+     * or a bare 404) are NOT included here: the run expired server-side but
+     * the session itself is still usable, so they surface as an ended run
+     * (isRunGone) instead of err_foreign.
+     */
+    private fun isUnrecoverable(e: Exception): Boolean =
+        e is HermesApiException && (e.status == 401 || e.status == 403 ||
+            e.code == "permission_denied")
+
+    /**
+     * Status poll with a short retry for transport-level blips (the same
+     * abort that killed the stream often still lingers for a second).
+     * HTTP answers, including 5xx, are authoritative and not retried here.
+     */
+    private suspend fun getRunWithRetry(id: String): RunStatusResponse {
+        var last: Exception? = null
+        repeat(3) { i ->
+            try {
+                return container.api().getRun(id)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: HermesApiException) {
+                throw e
+            } catch (e: Exception) {
+                last = e
+                if (i < 2) delay(1000)
+            }
+        }
+        throw last!!
+    }
+
     private suspend fun reconnectOrFinish(id: String, attempt: Int, cause: Exception? = null) {
-        if (attempt >= 3) {
+        // The run is gone server-side but the session is still usable:
+        // report it as an ended run, never as a dead conversation.
+        if (cause != null && isRunGone(cause)) {
+            busy = false
+            runId = null
+            statusLine = ""
+            error = runGoneError(cause)
+            return
+        }
+        // Permanent auth/ownership failures fail fast.
+        if (cause != null && isUnrecoverable(cause)) {
+            busy = false
+            runId = null
+            statusLine = ""
+            error = friendlyError(cause)
+            return
+        }
+        if (attempt >= MAX_RECONNECT_ATTEMPTS) {
             busy = false
             runId = null
             statusLine = ""
@@ -454,34 +569,51 @@ class ChatViewModel(
             return
         }
         statusLine = s(R.string.st_reconnecting)
-        try {
-            val status = container.api().getRun(id)
-            when (status.status) {
-                "completed", "failed", "cancelled", "interrupted" -> {
-                    finishTerminal(
-                        RunEvent.Terminal(status.status, status.output, status.error, status.pendingSteer)
-                    )
-                    return
-                }
-                "unknown" -> {
-                    busy = false
-                    runId = null
-                    statusLine = ""
-                    error = s(R.string.st_unknown_restart)
-                    return
-                }
-            }
-            status.sessionId?.ifBlank { null }?.let { sessionId = it }
-            // A drop may have swallowed the approval/clarify request event
-            // while the run still waits: re-surface it from status.
-            surfacePendingControls(id, status.pendingControls)
+        // Spread retries so half-open sockets and tight empty-stream loops
+        // (the §8 transport buffer expires after 5 min) don't spin.
+        // delay() is also the cancellation point: teardown during the wait
+        // throws here instead of polling pointlessly.
+        delay(reconnectDelayMs(attempt))
+        val status = try {
+            getRunWithRetry(id)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             busy = false
             runId = null
             statusLine = ""
-            error = friendlyError(cause ?: e)
+            // A run-level 404/unknown_execution from the poll means the run
+            // expired server-side (the session is still usable): report it as
+            // an ended run, never as err_foreign. A permanent auth/ownership
+            // answer replaces the stale stream cause; a transient poll blip
+            // keeps the original stream cause.
+            error = when {
+                e is HermesApiException && isRunGone(e) -> runGoneError(e)
+                cause != null && isRunGone(cause) -> runGoneError(cause)
+                e is HermesApiException && isUnrecoverable(e) -> friendlyError(e)
+                else -> friendlyError(cause ?: e)
+            }
             return
         }
+        when (status.status) {
+            "completed", "failed", "cancelled", "interrupted" -> {
+                finishTerminal(
+                    RunEvent.Terminal(status.status, status.output, status.error, status.pendingSteer)
+                )
+                return
+            }
+            "unknown" -> {
+                busy = false
+                runId = null
+                statusLine = ""
+                error = s(R.string.st_unknown_restart)
+                return
+            }
+        }
+        status.sessionId?.ifBlank { null }?.let { sessionId = it }
+        // A drop may have swallowed the approval/clarify request event
+        // while the run still waits: re-surface it from status.
+        surfacePendingControls(id, status.pendingControls)
         subscribe(id, attempt = attempt + 1)
     }
 
@@ -492,6 +624,10 @@ class ChatViewModel(
                     s(R.string.err_conflict, e.status)
                 "unknown_execution" ->
                     s(R.string.err_unknown_exec)
+                "run_not_found" ->
+                    // Run-level 404: the run expired server-side, but the
+                    // session itself is still usable. Never err_foreign.
+                    s(R.string.err_run_gone)
                 "permission_denied", "not_found" ->
                     s(R.string.err_foreign)
                 "runtime_draining", "storage_unavailable" ->
@@ -500,6 +636,12 @@ class ChatViewModel(
             }
         }
         if (e is IllegalArgumentException) return e.message ?: "Bad settings."
+        // Raw socket text (e.g. "Software caused connection abort") means
+        // nothing to users: label it as a dropped connection instead.
+        if (e is IOException) {
+            val raw = (e.message ?: e.javaClass.simpleName).take(120)
+            return s(R.string.err_network, raw)
+        }
         return (e.message ?: e.javaClass.simpleName).take(200)
     }
 

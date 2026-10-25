@@ -67,6 +67,7 @@
     <string name="err_foreign">This conversation is unavailable (deleted or owned by another surface). Start a new chat.</string>
     <string name="err_draining">Server is busy or draining (%1$d). Wait and retry.</string>
     <string name="err_server">Server error %1$d: %2$s</string>
+    <string name="err_network">Connection lost (%1$s). Reopen the conversation to continue.</string>
     <string name="err_run_gone">The run already ended; nothing was sent.</string>
     <string name="err_health_key">Base URL and API key are required.</string>
     <string name="err_checking">checking</string>

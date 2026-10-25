@@ -290,5 +290,17 @@ class DataClassContractsTest {
         val unknown = RunEvent.Unknown("x")
         assertEquals(unknown, unknown.copy())
         assertTrue(unknown.toString().contains("x"))
+        val reasoning = RunEvent.Reasoning("r")
+        assertEquals(reasoning, reasoning.copy())
+        assertTrue(reasoning.toString().contains("r"))
+        val approval = RunEvent.ApprovalRequested(ApprovalRequest("r", 1L))
+        assertEquals(approval, approval.copy())
+        assertTrue(approval.toString().contains("r"))
+        val clarify = RunEvent.ClarifyRequested("c", 2L, "p")
+        assertEquals(clarify, clarify.copy())
+        val (cid, gen, prompt) = clarify
+        assertEquals("c", cid)
+        assertEquals(2L, gen)
+        assertEquals("p", prompt)
     }
 }
