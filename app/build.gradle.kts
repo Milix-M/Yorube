@@ -19,8 +19,8 @@ android {
         applicationId = "com.hermes.client"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "0.7.1"
+        versionCode = 4
+        versionName = "0.8.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -75,11 +75,8 @@ dependencies {
     implementation(libs.activity.compose)
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
-    implementation(libs.compose.ui.text)
-    implementation(libs.compose.foundation)
-    implementation(libs.compose.animation)
-    implementation(libs.compose.animation.core)
     implementation(libs.compose.ui.tooling.preview)
+    implementation(libs.compose.material3)
     implementation(libs.compose.material.icons.core)
     implementation(libs.compose.material.icons.extended)
     implementation(libs.navigation.compose)
@@ -87,6 +84,8 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.serialization.json)
     implementation(libs.datastore.preferences)
+    implementation(libs.markdown.renderer)
+    implementation(libs.markdown.renderer.m3)
     // FCM only. No google-services plugin: FirebaseApp is initialized
     // manually from Settings (FirebaseConfig), so the build works without
     // google-services.json. See data/fcm/FirebaseInit.kt.
@@ -132,9 +131,6 @@ val jacocoExcludes = listOf(
     // Robolectric executes but JaCoCo never marks covered.
     "**/ChatScreen*",
     "**/ConversationListScreen*",
-    // Hand-built design-system composables: same synthetic-probe reason.
-    // Behavior is still covered by Robolectric UI tests.
-    "**/ui/ds/*",
 )
 
 fun jacocoClassDirs(): FileCollection {

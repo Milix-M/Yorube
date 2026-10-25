@@ -275,15 +275,18 @@ class HermesApi(
             } ?: return emptyList()
             arr.mapNotNull { item ->
                 val o = item as? JsonObject ?: return@mapNotNull null
-                val id = o.str("id", "session_id") ?: ""
-                val title = o.str("title", "name")
-                if (id.isBlank() && title.isNullOrBlank()) return@mapNotNull null
-                SessionInfo(
-                    id = o.str("id") ?: "",
-                    sessionId = o.str("session_id") ?: "",
-                    title = title,
-                    updatedAt = parseSessionDate(o),
-                )
+                try {
+                    val info = HermesJson.decodeFromString<SessionInfo>(o.toString())
+                    // Servers vary on the timestamp field name; fall back to
+                    // lenient keys so history sections keep working.
+                    if (info.updatedAt == null) {
+                        extractSessionTimestamp(o)?.let { info.copy(updatedAt = it) } ?: info
+                    } else {
+                        info
+                    }
+                } catch (_: Exception) {
+                    null
+                }
             }
         } catch (_: Exception) {
             emptyList()

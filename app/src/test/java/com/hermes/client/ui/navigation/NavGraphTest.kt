@@ -2,7 +2,6 @@ package com.hermes.client.ui.navigation
 
 import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.hasTextExactly
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -77,9 +76,7 @@ class NavGraphTest {
                     (request.path ?: "").startsWith("/api/sessions/") ->
                         MockResponse().setBody("""{"messages":[]}""")
                     (request.path ?: "").startsWith("/api/sessions") ->
-                        MockResponse().setBody(
-                            """{"sessions":[{"id":"s1","title":"Hello"},{"id":"s2","title":"Other"}]}"""
-                        )
+                        MockResponse().setBody("""{"sessions":[{"id":"s1","title":"Hello"}]}""")
                     else -> MockResponse().setBody("{}")
                 }
             }
@@ -90,16 +87,16 @@ class NavGraphTest {
                 NavGraph(null)
             }
         }
-        // Home is the latest chat ("Hello" is also the top bar title).
+        // Home is a fresh chat.
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
         // Past conversations live in the sidebar drawer.
         compose.onNodeWithTag("menuButton").performClick()
-        waitFor("Other")
-        // Open the other row, which is unambiguous.
-        compose.onNodeWithText("Other").performClick()
+        waitFor("Hello")
+        compose.onNodeWithText("Hello").performClick()
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
-        // Chat -> settings via gear (covers chat onOpenSettings navigation).
-        compose.onNodeWithTag("settingsButton").performClick()
+        // Chat -> settings via the drawer (covers drawer onOpenSettings navigation).
+        compose.onNodeWithTag("menuButton").performClick()
+        compose.onNodeWithTag("drawerSettings").performClick()
         waitFor("Settings")
         // Settings -> back to chat (covers settings onNavigateBack).
         compose.onNodeWithTag("backButton").performClick()
@@ -128,9 +125,7 @@ class NavGraphTest {
                     (request.path ?: "").startsWith("/api/sessions/") ->
                         MockResponse().setBody("""{"messages":[]}""")
                     (request.path ?: "").startsWith("/api/sessions") ->
-                        MockResponse().setBody(
-                            """{"sessions":[{"id":"s1","title":"Hello"},{"id":"s2","title":"Other"}]}"""
-                        )
+                        MockResponse().setBody("""{"sessions":[{"id":"s1","title":"Hello"}]}""")
                     else -> MockResponse().setBody("{}")
                 }
             }
@@ -141,11 +136,11 @@ class NavGraphTest {
                 NavGraph(null)
             }
         }
-        // Home is the latest chat; history lives in the drawer.
+        // Home is a fresh chat; history lives in the drawer.
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
         compose.onNodeWithTag("menuButton").performClick()
-        waitFor("Other")
-        compose.onNodeWithText("Other").performClick()
+        waitFor("Hello")
+        compose.onNodeWithText("Hello").performClick()
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
         // Open ChatGPT-like drawer and start a new chat from it.
         compose.onNodeWithTag("menuButton").performClick()
@@ -203,15 +198,8 @@ class NavGraphTest {
             }
         }
         // Launch lands on the latest conversation, not an empty chat.
-        // (Assistant markdown may split text nodes: match by substring.)
-        compose.waitUntil(timeoutMillis = 15_000) {
-            compose.onAllNodesWithText("recent answer", substring = true)
-                .fetchSemanticsNodes().isNotEmpty()
-        }
-        assertTrue(
-            compose.onAllNodesWithText("recent answer", substring = true)
-                .fetchSemanticsNodes().isNotEmpty()
-        )
+        waitFor("recent answer")
+        compose.onNodeWithText("recent answer").assertIsDisplayed()
     }
 
     @Test
@@ -235,8 +223,9 @@ class NavGraphTest {
         compose.onNodeWithTag("menuButton").performClick()
         compose.onNodeWithTag("drawerNewChat").performClick()
         // Already on a fresh home chat: only the drawer closes, no transition.
-        // (Closed drawer content stays composed off-screen, so assert hidden.)
-        compose.onNodeWithTag("drawerNewChat").assertIsNotDisplayed()
+        compose.waitUntil(timeoutMillis = 10_000) {
+            compose.onAllNodesWithTag("closeDrawer").fetchSemanticsNodes().isEmpty()
+        }
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
     }
 

@@ -181,30 +181,34 @@ class HermesApiTest {
     }
 
     @Test
-    fun listSessions_mixedDateShapes() = runTest {
+    fun listSessions_acceptsVariantTimestamps() = runTest {
+        val nowSec = System.currentTimeMillis() / 1000.0
+        val nowMs = System.currentTimeMillis()
         server.enqueue(
             MockResponse().setBody(
                 """{"sessions":[
-                    {"id":"a","updated_at":1700000000},
-                    {"id":"b","updatedAt":1700000000000},
-                    {"id":"c","created_at":"2026-10-24T00:00:00Z"},
-                    {"id":"d"},
-                    {"id":"","title":""},
-                    "junk"
+                    {"id":"s1","updated_at":$nowSec},
+                    {"id":"s2","updatedAt":$nowSec},
+                    {"id":"s3","updated_at":$nowMs},
+                    {"id":"s4","last_message_at":"2026-10-24T12:00:00Z"}
                 ]}"""
             )
         )
         val sessions = api.listSessions()
-        assertEquals(listOf("a", "b", "c", "d"), sessions.map { it.key })
-        assertEquals(1_700_000_000.0, sessions[0].updatedAt!!, 0.001)
-        assertEquals(1_700_000_000.0, sessions[1].updatedAt!!, 1.0)
-        assertEquals(1_792_800_000.0, sessions[2].updatedAt!!, 1.0)
-        assertEquals(null, sessions[3].updatedAt)
+        assertEquals(listOf("s1", "s2", "s3", "s4"), sessions.map { it.key })
+        assertEquals(nowSec, sessions[0].updatedAt!!, 1.0)
+        assertEquals(nowSec, sessions[1].updatedAt!!, 1.0)
+        // Millis pass through raw; bucket/date formatters normalize them.
+        assertEquals(nowMs.toDouble(), sessions[2].updatedAt!!, 1.0)
+        assertEquals(
+            java.time.Instant.parse("2026-10-24T12:00:00Z").epochSecond.toDouble(),
+            sessions[3].updatedAt!!,
+            0.0,
+        )
     }
 
     @Test
-    fun getSessionMessages_mixedContent() = runTest {
-        server.enqueue(
+    fun getSessionMessages_mixedContent() = runTest {        server.enqueue(
             MockResponse().setBody(
                 """{"messages":[
                     {"role":"user","content":"hi"},

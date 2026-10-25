@@ -36,7 +36,7 @@ class ChatScreenTest {
         clearSettings()
         compose.setContent {
             HermesAppTheme {
-                ChatScreen(sessionId = null, onOpenSettings = {}, onNavigateBack = {})
+                ChatScreen(sessionId = null, onNavigateBack = {})
             }
         }
         compose.onNodeWithTag("chatInput").performTextInput("hello")
@@ -53,7 +53,7 @@ class ChatScreenTest {
         val app = ApplicationProvider.getApplicationContext<Application>() as HermesApp
         compose.setContent {
             HermesAppTheme {
-                ChatScreen(sessionId = null, onOpenSettings = {}, onNavigateBack = {})
+                ChatScreen(sessionId = null, onNavigateBack = {})
             }
         }
         // Suggestion chips were removed: only the headline remains, no subtitle.

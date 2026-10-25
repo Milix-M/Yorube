@@ -3,7 +3,6 @@ package com.hermes.client.data.api
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -63,34 +62,6 @@ class ApiModelsTest {
         assertEquals("s1", withId.key)
         assertEquals("s2", withSessionId.key)
     }
-
-    @Test
-    fun parseSessionDate_scalesAndKeys() {
-        val sec = 1_700_000_000.0
-        assertEquals(sec, parseDate("{\"updated_at\":$sec}")!!, 0.0)
-        assertEquals(sec, parseDate("{\"updated_at\":${sec * 1000.0}}")!!, 0.001)
-        assertEquals(sec, parseDate("{\"updated_at\":${sec * 1_000_000.0}}")!!, 1.0)
-        assertEquals(sec, parseDate("{\"updatedAt\":$sec}")!!, 0.0)
-        assertEquals(sec, parseDate("{\"created_at\":$sec}")!!, 0.0)
-        assertEquals(null, parseDate("{}"))
-        assertEquals(null, parseDate("{\"updated_at\":null}"))
-        assertEquals(null, parseDate("{\"updated_at\":\"\"}"))
-        assertEquals(null, parseDate("{\"updated_at\":\"not a date\"}"))
-        assertEquals(null, parseDate("{\"updated_at\":true}"))
-    }
-
-    @Test
-    fun parseSessionDate_isoStrings() {
-        val epoch = parseSessionDate(
-            HermesJson.parseToJsonElement("{\"updated_at\":\"2026-10-24T00:00:00Z\"}").jsonObject
-        )
-        assertEquals(1_792_800_000.0, epoch!!, 1.0)
-        // Numeric strings also work.
-        assertEquals(1_700_000_000.0, parseDate("{\"updated_at\":\"1700000000\"}")!!, 0.001)
-    }
-
-    private fun parseDate(raw: String) =
-        parseSessionDate(HermesJson.parseToJsonElement(raw).jsonObject)
 
     @Test
     fun messageText_edgeCases() {

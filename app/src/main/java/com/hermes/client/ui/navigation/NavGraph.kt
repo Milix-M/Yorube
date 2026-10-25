@@ -8,13 +8,21 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.background
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -22,16 +30,15 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.hermes.client.HermesApp
 import com.hermes.client.ui.screens.ChatScreen
 import com.hermes.client.ui.screens.ConversationDrawerContent
-import com.hermes.client.ui.ds.HermesDrawer
 import com.hermes.client.ui.screens.ConversationListViewModel
 import com.hermes.client.ui.screens.ConversationSearchScreen
 import com.hermes.client.ui.screens.SettingsScreen
+import kotlinx.coroutines.launch
 
 object Routes {
     const val CHAT = "chat"
@@ -68,26 +75,28 @@ fun NavGraph(startSessionId: String?) {
         }
     )
     LaunchedEffect(Unit) { startVm.refresh() }
-    // Home shows the latest conversation once it arrives (explicit session
-    // ids, e.g. from a notification tap, always win). Ordinary forward
-    // navigation replaces the fresh home without growing the back stack,
-    // and only while the fresh home is actually showing.
     val latest = startVm.sessions.firstOrNull()
-    var forwarded by rememberSaveable { mutableStateOf(false) }
-    val entry by navController.currentBackStackEntryAsState()
-    val onFreshHome = entry?.destination?.route?.startsWith(Routes.CHAT) == true &&
-        entry?.arguments?.getString("sessionId") == null
-    LaunchedEffect(latest?.key, onFreshHome) {
-        if (startSessionId == null && latest != null && !forwarded && onFreshHome) {
-            forwarded = true
-            navController.navigate(Routes.chat(latest.key, latest.title)) {
-                popUpTo(Routes.CHAT) { inclusive = true }
+    // Freeze the start destination after its first resolution. Later list
+    // refreshes (e.g. a session created from a new chat) must never rebuild
+    // the NavHost mid-conversation and throw the user back home.
+    var frozenStart by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(startSessionId, latest?.key) {
+        if (frozenStart == null && (startSessionId != null || latest != null)) {
+            frozenStart = if (startSessionId != null || latest == null) {
+                Routes.chat(startSessionId)
+            } else {
+                Routes.chat(latest.key, latest.title)
             }
         }
     }
-    NavHost(
-        navController = navController,
-        startDestination = Routes.chat(startSessionId),
+    val startDestination = frozenStart ?: Routes.chat(startSessionId)
+    key(startDestination) {
+        NavHost(
+            navController = navController,
+            startDestination = startDestination,
+            // Draw the surface color behind transitions: without this the
+            // transparent NavHost shows the white windowBackground as a flash.
+            modifier = Modifier.background(MaterialTheme.colorScheme.surface),
         // Material shared-axis-X: short slide with fade. Forward slides in
         // from the right, back pops from the left.
         enterTransition = {
@@ -132,19 +141,20 @@ fun NavGraph(startSessionId: String?) {
         ) { entry ->
             val sessionId = entry.arguments?.getString("sessionId")
             val title = entry.arguments?.getString("title")
+            val drawerState = rememberDrawerState(DrawerValue.Closed)
+            val scope = rememberCoroutineScope()
             // Fresh-home nonce: tapping "new chat" while already home recreates
             // the chat in place (no navigation, no transition), just closing
             // the drawer. From another session, navigate home as usual.
             var homeNonce by rememberSaveable { mutableIntStateOf(0) }
-            var drawerOpen by rememberSaveable { mutableStateOf(false) }
-            HermesDrawer(
-                open = drawerOpen,
-                onClose = { drawerOpen = false },
+            ModalNavigationDrawer(
+                drawerState = drawerState,
                 drawerContent = {
                     ConversationDrawerContent(
                         selectedSessionId = sessionId,
+                        drawerState = drawerState,
                         onOpenChat = { id, chatTitle ->
-                            drawerOpen = false
+                            scope.launch { drawerState.close() }
                             if (id == null && sessionId == null) {
                                 homeNonce++
                             } else {
@@ -154,11 +164,11 @@ fun NavGraph(startSessionId: String?) {
                             }
                         },
                         onOpenSearch = {
-                            drawerOpen = false
+                            scope.launch { drawerState.close() }
                             navController.navigate(Routes.SEARCH)
                         },
                         onOpenSettings = { navController.navigate(Routes.SETTINGS) },
-                        onCloseDrawer = { drawerOpen = false },
+                        onCloseDrawer = { scope.launch { drawerState.close() } },
                     )
                 },
             ) {
@@ -166,10 +176,16 @@ fun NavGraph(startSessionId: String?) {
                     sessionId = sessionId,
                     title = title,
                     instanceNonce = homeNonce,
-                    onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                    recentSessions = startVm.sessions,
+                    onNavigateToFreshChat = {
+                        navController.navigate(Routes.chat(null, null)) {
+                            popUpTo(Routes.CHAT) { inclusive = true }
+                        }
+                    },
+                    onSessionCreated = { startVm.refresh() },
                     // At the home root there is nothing to pop: stay instead of a blank screen.
                     onNavigateBack = { if (navController.previousBackStackEntry != null) navController.popBackStack() },
-                    onOpenDrawer = { drawerOpen = true },
+                    onOpenDrawer = { scope.launch { drawerState.open() } },
                 )
             }
         }
@@ -185,6 +201,7 @@ fun NavGraph(startSessionId: String?) {
         }
         composable(Routes.SETTINGS) {
             SettingsScreen(onNavigateBack = { navController.popBackStack() })
+        }
         }
     }
 }

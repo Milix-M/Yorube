@@ -6,6 +6,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -77,7 +78,7 @@ class ConversationListDeleteUiTest {
         var opened: String? = null
         compose.setContent {
             HermesAppTheme {
-                ConversationListScreen(onOpenChat = { id, _ -> opened = id }, onOpenSettings = {})
+                ConversationListScreen(onOpenChat = { id, _ -> opened = id })
             }
         }
         compose.waitUntil(timeoutMillis = 10_000) {
@@ -87,6 +88,11 @@ class ConversationListDeleteUiTest {
         assertEquals("s1", opened)
 
         compose.onNodeWithText("Hello").performTouchInput { longClick() }
+        // Long-press now opens the options sheet (pin / delete), then delete confirms.
+        assertTrue(
+            compose.onAllNodesWithText("Conversation options").fetchSemanticsNodes().isNotEmpty()
+        )
+        compose.onNodeWithTag("deleteOption").performClick()
         assertTrue(
             compose.onAllNodesWithText("Delete conversation?").fetchSemanticsNodes().isNotEmpty()
         )
@@ -94,6 +100,7 @@ class ConversationListDeleteUiTest {
         compose.onNodeWithText("Hello").assertIsDisplayed()
 
         compose.onNodeWithText("Hello").performTouchInput { longClick() }
+        compose.onNodeWithTag("deleteOption").performClick()
         compose.onNodeWithText("Delete").performClick()
         compose.waitUntil(timeoutMillis = 10_000) {
             compose.onAllNodes(hasText("Hello")).fetchSemanticsNodes().isEmpty()

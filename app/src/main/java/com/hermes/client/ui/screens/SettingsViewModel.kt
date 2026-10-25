@@ -34,6 +34,8 @@ class SettingsViewModel(
         private set
     var testResult by mutableStateOf("")
         private set
+    var testOk by mutableStateOf<Boolean?>(null)
+        private set
     var testing by mutableStateOf(false)
         private set
     var saved by mutableStateOf(false)
@@ -81,6 +83,7 @@ class SettingsViewModel(
     fun test() {
         viewModelScope.launch {
             testing = true
+            testOk = null
             val ctx = container.appContext
             testResult = ctx.getString(R.string.err_checking)
             try {
@@ -89,6 +92,7 @@ class SettingsViewModel(
                 )
                 if (!before.isConfigured) {
                     testResult = ctx.getString(R.string.err_health_key)
+                    testOk = false
                     return@launch
                 }
                 val api = container.api()
@@ -99,6 +103,7 @@ class SettingsViewModel(
                     testResult = ctx.getString(
                         R.string.err_health_caps, healthy.toString(), (e.message ?: "").take(120)
                     )
+                    testOk = false
                     return@launch
                 }
                 val flags = listOf("run_status", "run_events_sse", "run_stop", "run_steer", "run_approval_response")
@@ -109,8 +114,10 @@ class SettingsViewModel(
                     false
                 }
                 testResult = "health=$healthy\n$flags\nfcm_ready=$fcm"
+                testOk = healthy
             } catch (e: Exception) {
                 testResult = (e.message ?: e.javaClass.simpleName).take(300)
+                testOk = false
             } finally {
                 testing = false
             }

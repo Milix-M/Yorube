@@ -3,9 +3,9 @@
     <string name="app_name">Hermes クライアント</string>
 
     <string name="empty_conversations">会話はまだありません。+で始めます。</string>
-    <string name="delete_title">会話を消しますか?</string>
-    <string name="delete">消す</string>
-    <string name="cancel">やめる</string>
+    <string name="delete_title">会話を削除しますか?</string>
+    <string name="delete">削除</string>
+    <string name="cancel">キャンセル</string>
 
     <string name="new_chat">新しい会話</string>
     <string name="stop">止める</string>
@@ -39,6 +39,8 @@
     <string name="saved">保存済み ✓</string>
     <string name="test">接続試験</string>
     <string name="testing">確認中…</string>
+    <string name="test_ok">接続OK</string>
+    <string name="test_failed">接続できません</string>
     <string name="test_result_title">接続結果</string>
     <string name="close">閉じる</string>
     <string name="show">表示</string>
@@ -63,9 +65,10 @@
     <string name="err_not_configured">Base URLとAPIキーが未設定です。設定を開いてください。</string>
     <string name="err_conflict">以前の要求と競合しました (%1$d)。状態を取り直しました。</string>
     <string name="err_unknown_exec">結果不明です。再送せず新規会話を始めてください。</string>
-    <string name="err_foreign">他の画面の会話です (%1$d)。</string>
+    <string name="err_foreign">この会話は利用できません（削除されたか他の画面のものです）。新しい会話を始めてください。</string>
     <string name="err_draining">サーバーが混雑・停止中です (%1$d)。待って再試行してください。</string>
     <string name="err_server">サーバー誤り %1$d: %2$s</string>
+    <string name="err_run_gone">実行は既に終了していたため、送信されませんでした。</string>
     <string name="err_health_key">Base URLとAPIキーが必要です。</string>
     <string name="err_checking">確認中</string>
     <string name="err_health_caps">health=%1$s、機能取得に失敗: %2$s</string>
@@ -84,15 +87,25 @@
     <string name="refresh">更新</string>
     <string name="scroll_to_bottom">最新へ移動</string>
     <string name="thinking">考え中…</string>
+    <string name="thinking_2">取り組んでいます…</string>
+    <string name="thinking_3">情報を集めています…</string>
+    <string name="thinking_4">次の手順を考えています…</string>
+    <string name="thinking_5">内容を確認しています…</string>
     <string name="copy">コピー</string>
     <string name="copied">コピーしました</string>
     <string name="attach">画像を添付</string>
     <string name="image_label">画像</string>
     <string name="empty_chat_title">何をお手伝いしますか?</string>
     <string name="empty_chat_subtitle">サーバー上のHermesに作業を頼めます。</string>
-    <string name="suggest_1">未コミットの変更を要約して</string>
-    <string name="suggest_2">サーバーで動いているものを確認して</string>
-    <string name="suggest_3">直近のエラーを調べて</string>
+    <string name="session_options">会話の操作</string>
+    <string name="pin">固定する</string>
+    <string name="unpin">固定を外す</string>
+    <string name="pinned">固定中</string>
+    <string name="hermes_subtitle">オンデバイス エージェント</string>
+    <string name="running_status">実行中…</string>
+    <string name="ready_status">準備OK</string>
+    <string name="approval_desc">サーバーで実行する前にコマンドを確認してください。</string>
+    <string name="clarify_hint">回答を入力…</string>
     <string name="details">詳細</string>
     <string name="activity_summary">ツール %1$d件 · %2$s</string>
     <string name="expand">展開</string>

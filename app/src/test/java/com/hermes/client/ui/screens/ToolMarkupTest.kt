@@ -101,7 +101,7 @@ class ToolMarkupTest {
         val split = splitUserFacing("{\"success\":true,\"name\":\"grounded-citations\",\"x\":1}")
         assertEquals("", split.visible)
         assertEquals(1, split.folded.size)
-        assertTrue("folded=${split.folded}", split.folded[0].summary.startsWith("grounded-citations: "))
+        assertTrue("folded=${split.folded}", split.folded[0].startsWith("grounded-citations: "))
     }
 
     @Test
@@ -122,7 +122,7 @@ class ToolMarkupTest {
     fun split_tagWrappedPayload_folds() {
         val split = splitUserFacing("<result>some dump</result>")
         assertEquals("", split.visible)
-        assertEquals(listOf("markup: <result>"), split.folded.map { it.summary })
+        assertEquals(listOf("markup: <result>"), split.folded)
     }
 
     @Test
@@ -137,7 +137,7 @@ class ToolMarkupTest {
         val summary = summarizeMachineJson(
             "{\"tool_name\":\"web_search\",\"results\":[{\"title\":\"Hermes docs\",\"url\":\"https://docs.example/hermes\"}]}"
         )
-        assertEquals("web search: Hermes docs — https://docs.example/hermes", summary)
+        assertEquals("web_search: Hermes docs — https://docs.example/hermes", summary)
     }
 
     @Test
@@ -167,60 +167,7 @@ class ToolMarkupTest {
 
     @Test
     fun summarizeJsonObject_keyFallback() {
-        assertEquals("tool: a=1, b=2", summarizeJsonObject(parseObj("{\"a\":1,\"b\":2}")))
-        assertTrue(summarizeJsonObject(parseObj("{\"a\":1,\"b\":2,\"c\":3,\"d\":4,\"e\":5}")).endsWith("…"))
-    }
-
-    @Test
-    fun summarizeJsonObject_readsValues() {
-        assertEquals(
-            "grounded-citations: success=true, name=grounded-citations, x=1",
-            summarizeJsonObject(parseObj("{\"success\":true,\"name\":\"grounded-citations\",\"x\":1}")),
-        )
-    }
-
-    @Test
-    fun compactPairs_truncatesAndMarksNested() {
-        val parsed = parseObj("{\"a\":null,\"b\":[1,2],\"c\":{\"d\":1},\"e\":\"" + "y".repeat(100) + "\",\"f\":1}")
-        assertEquals("a=null, b=[2], c={d}, e=" + "y".repeat(80) + ", f=1", compactPairs(parsed))
-    }
-
-    @Test
-    fun jsonScalar_shapes() {
-        assertEquals("x", jsonScalar(kotlinx.serialization.json.JsonPrimitive("x")))
-        assertEquals("3", jsonScalar(kotlinx.serialization.json.JsonPrimitive(3)))
-        assertEquals("[2]", jsonScalar(parseArr("[1,2]")))
-        assertEquals("{a}", jsonScalar(parseObj("{\"a\":1}")))
-        assertEquals("null", jsonScalar(kotlinx.serialization.json.JsonNull))
-    }
-
-    @Test
-    fun untrustedDetail_stripsBoilerplate() {
-        val detail = untrustedDetail("<untrusted_tool_result source=\"web_search\">RESULT BODY HERE</untrusted_tool_result>")
-        assertEquals("RESULT BODY HERE", detail)
-        assertEquals("abc…", untrustedDetail("abcdef", max = 3))
-    }
-
-    @Test
-    fun prettyMachineJson_formatsAndCaps() {
-        val pretty = prettyMachineJson("{\"a\":1}")
-        assertTrue(pretty.contains("\"a\": 1"))
-        assertTrue(pretty.contains("\n"))
-        assertEquals("nope", prettyMachineJson("nope"))
-        val long = prettyMachineJson("{\"a\":\"" + "y".repeat(2000) + "\"}", max = 50)
-        assertTrue(long.endsWith("…"))
-    }
-
-    @Test
-    fun foldedRender_joinsSummaryAndDetail() {
-        assertEquals("s", Folded("s").render())
-        assertEquals("s\nd", Folded("s", "d").render())
-    }
-
-    @Test
-    fun splitUserFacing_carriesDetail() {
-        val split = splitUserFacing("<result>some dump</result>")
-        assertEquals("markup: <result>\n<result>some dump</result>", split.folded[0].render())
+        assertEquals("tool: {a, b}", summarizeJsonObject(parseObj("{\"a\":1,\"b\":2}")))
     }
 
     @Test
@@ -234,58 +181,6 @@ class ToolMarkupTest {
         assertEquals("web search: bulk", foldForLog("<untrusted_tool_result source=\"web_search\">bulk</untrusted_tool_result>"))
     }
 
-    @Test
-    fun embeddedMachineJson_foldsOutOfProse() {
-        val (clean, folded) = foldEmbeddedJson(
-            "調べたよ\n{\"success\":true,\"name\":\"grounded-citations\",\"x\":1}\n以上"
-        )
-        assertEquals("調べたよ\n以上", clean)
-        assertEquals(1, folded.size)
-        assertTrue(folded[0].summary.startsWith("grounded-citations: "))
-        assertTrue(folded[0].detail.contains("\"success\": true"))
-    }
-
-    @Test
-    fun embeddedJson_insideFence_stays() {
-        val raw = "例:\n```json\n{\"success\":true,\"name\":\"x\"}\n```\nおわり"
-        val (clean, folded) = foldEmbeddedJson(raw)
-        assertEquals(raw, clean)
-        assertTrue(folded.isEmpty())
-    }
-
-    @Test
-    fun embeddedJson_nonMachineOrBroken_stays() {
-        val (clean, folded) = foldEmbeddedJson("値は {\"answer\": 42} です")
-        assertEquals("値は {\"answer\": 42} です", clean)
-        assertTrue(folded.isEmpty())
-        val (clean2, folded2) = foldEmbeddedJson("壊れた {\"a\": 1")
-        assertEquals("壊れた {\"a\": 1", clean2)
-        assertTrue(folded2.isEmpty())
-    }
-
-    @Test
-    fun takeBalanced_handlesNestingAndStrings() {
-        val lines = listOf("{\"a\":\"}not end\",\"b\":[1,{\"c\":2}]}", "tail")
-        val (seg, end) = takeBalanced(lines, 0)
-        assertEquals("{\"a\":\"}not end\",\"b\":[1,{\"c\":2}]}", seg)
-        assertEquals(0, end)
-        val (seg2, _) = takeBalanced(listOf("{\"a\": 1", "still open"), 0)
-        assertEquals(null, seg2)
-        val (seg3, _) = takeBalanced(listOf("{\"a\": 1}}", "x"), 0)
-        assertEquals(null, seg3)
-    }
-
-    @Test
-    fun splitUserFacing_extractsEmbedded() {
-        val split = splitUserFacing("結果:\n{\"tool_name\":\"web_search\",\"output\":\"ok\"}\n以上")
-        assertEquals("結果:\n以上", split.visible)
-        assertEquals(1, split.folded.size)
-        assertEquals("web search: ok", split.folded[0].summary)
-    }
-
     private fun parseObj(raw: String) =
         kotlinx.serialization.json.Json.parseToJsonElement(raw) as kotlinx.serialization.json.JsonObject
-
-    private fun parseArr(raw: String) =
-        kotlinx.serialization.json.Json.parseToJsonElement(raw) as kotlinx.serialization.json.JsonArray
 }

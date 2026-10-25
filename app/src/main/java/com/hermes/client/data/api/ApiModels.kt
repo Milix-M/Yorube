@@ -157,7 +157,8 @@ data class SessionMessage(
     val text: String = "",
 )
 
-fun messageText(content: JsonElement?): String {    if (content == null) return ""
+fun messageText(content: JsonElement?): String {
+    if (content == null) return ""
     if (content is JsonPrimitive && content.isString) return content.content
     if (content is JsonArray) {
         return content.mapNotNull { part ->
@@ -169,37 +170,6 @@ fun messageText(content: JsonElement?): String {    if (content == null) return 
         }.joinToString("\n")
     }
     return ""
-}
-
-/**
- * Flexible session timestamp: the server may send epoch seconds, millis,
- * micros, nanos (any numeric scale), an ISO-8601 string, or camelCase keys.
- * Returns epoch seconds, or null when the payload carries no usable date.
- */
-internal fun parseSessionDate(o: JsonObject): Double? {
-    val raw = (o["updated_at"] ?: o["updatedAt"] ?: o["created_at"] ?: o["createdAt"])
-        as? JsonPrimitive ?: return null
-    if (!raw.isString) {
-        return raw.doubleOrNull?.let { normalizeEpoch(it) }
-    }
-    return parseDateString(raw.content)
-}
-
-/** Collapse any epoch scale (s/ms/us/ns) down to seconds. */
-internal fun normalizeEpoch(value: Double): Double {
-    var epochSec = value
-    while (epochSec > 1e11) epochSec /= 1000.0
-    return epochSec
-}
-
-internal fun parseDateString(raw: String): Double? {
-    val text = raw.trim()
-    if (text.isEmpty()) return null
-    try {
-        return java.time.Instant.parse(text).epochSecond.toDouble()
-    } catch (_: Exception) {
-    }
-    return text.toDoubleOrNull()?.let { normalizeEpoch(it) }
 }
 
 @Serializable
@@ -251,4 +221,37 @@ fun extractModelIds(root: JsonElement): List<String> {
     val obj = root as? JsonObject ?: return emptyList()
     val arr = (obj["data"] as? JsonArray) ?: (obj["models"] as? JsonArray) ?: return emptyList()
     return arr.mapNotNull { (it as? JsonObject)?.str("id", "name") }
+}
+
+/** Timestamp keys observed across session list shapes (snake/camel, activity/creation). */
+private val SessionTimestampKeys = listOf(
+    "updated_at", "updatedAt", "updated",
+    "last_message_at", "lastMessageAt",
+    "last_active", "lastActiveAt", "last_activity",
+    "modified_at", "modifiedAt",
+    "created_at", "createdAt",
+    "timestamp", "time",
+)
+
+/**
+ * Lenient timestamp lookup for one raw session entry. Accepts epoch
+ * seconds/millis/micros as numbers or strings, plus ISO-8601 strings.
+ * Returns null when the entry carries nothing usable.
+ */
+internal fun extractSessionTimestamp(o: JsonObject): Double? {
+    for (key in SessionTimestampKeys) {
+        val v = o[key] as? JsonPrimitive ?: continue
+        if (v.isString) {
+            val raw = v.content.trim()
+            if (raw.isEmpty()) continue
+            try {
+                return java.time.Instant.parse(raw).epochSecond.toDouble()
+            } catch (_: Exception) {
+            }
+            raw.toDoubleOrNull()?.let { return it }
+            continue
+        }
+        (v.longOrNull?.toDouble() ?: v.doubleOrNull)?.let { return it }
+    }
+    return null
 }

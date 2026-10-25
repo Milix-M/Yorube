@@ -1,0 +1,6 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": [
+    "hermes_appを改修した際は、毎回debug APKをビルドしてcatbox等のHTTPリンクで共有し、sha256を添えること。"
+  ]
+}
