@@ -137,10 +137,14 @@ class ChatViewModel(
     }
 
     fun loadHistory(id: String) {
+        // Set synchronously: callers awaiting !historyLoading must observe
+        // the in-flight load, never a pre-launch false that lets a send
+        // steal the history response from the shared queue.
+        historyLoading = true
+        statusLine = ""
         viewModelScope.launch {
             refreshLanguage()
             statusLine = s(R.string.st_loading)
-            historyLoading = true
             try {
                 val api = container.api()
                 renderHistory(api.getSessionMessages(id))
