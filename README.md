@@ -15,7 +15,7 @@
 ## 必要なもの
 
 - Hermes API サーバー (`gateway/platforms/api_server.py`) を HTTPS で公開したもの
-  - 推奨: Cloudflare Tunnel + Cloudflare Access。Hermes 本体は `127.0.0.1:8642` のまま置き、トンネルで `https://hermes.example.com` に出します
+  - 推奨: Cloudflare Tunnel + Cloudflare Access。Hermes 本体は `127.0.0.1:8642` のまま置きます。トンネルで `https://hermes.example.com` に出します
   - サーバー側で `API_SERVER_ENABLED=true` と `API_SERVER_KEY` を設定します
 - Android 8.0 (API 26) 以上
 
@@ -44,7 +44,7 @@ Hermes サーバーはセッションの単一所有者を強制します。こ�
 CLI / Discord 等が所有するセッションへの書き込みは `permission_denied` で拒否されます。
 これはサーバー側の仕様で、アプリの設定では変えられません。
 アプリではその会話を読み取り専用で開きます。**分岐して続ける** ダイアログから自分のコピーに分岐して続けられます。
-アプリから送信に成功した会話は端末内に「アプリ所有」として記録されます。他面非表示をオンにしても隠れません。
+アプリから送信に成功した会話は端末内に「アプリ所有」として記録されます。その会話は他面非表示をオンにしても隠れません。
 
 ## 再接続について
 
@@ -62,5 +62,5 @@ CI (`.github/workflows/android.yml`) でも同じものを作ります。成果�
 ## 既知の制限
 
 - 他面所有セッションの一覧可否は、サーバーが所有者メタデータを返さない場合、過去の `permission_denied` 記録に依存します
-- SSE 購読は前面のみです。裏では Doze で切れるため、復帰時は状態取得で補います
+- SSE 購読は前面のみです。バックグラウンドでは Doze で切れるため、復帰時は状態取得で補います
 - `unknown` 終端の再送はしません (二重実行防止)。新規会話を始めてください
