@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -78,8 +77,6 @@ import com.hermes.client.HermesApp
 import com.hermes.client.R
 import com.hermes.client.data.api.SessionInfo
 import com.hermes.client.ui.theme.GeminiSparkAvatar
-
-private const val SectionHorizontal = 16
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -514,20 +511,9 @@ private fun ConversationListBody(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-                ) {
-                    Icon(
-                        Icons.Filled.Search,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(26.dp),
-                    )
-                }
+                // Brand mark, not a search glyph: this state is "no
+                // conversations yet", not "no search results".
+                GeminiSparkAvatar(size = 56.dp, iconSize = 28.dp)
                 Text(
                     stringResource(R.string.empty_conversations),
                     style = MaterialTheme.typography.bodyMedium,
@@ -536,25 +522,9 @@ private fun ConversationListBody(
                 )
             }
         else -> LazyColumn(Modifier.fillMaxSize()) {
-            var lastBucket: HistoryBucket? = null
+            // Flat newest-first list (server order, pinned on top): no
+            // section headers, the rows speak for themselves.
             sessions.forEach { s ->
-                val bucket = bucketFor(s.updatedAt, pinnedIds.contains(s.key))
-                if (bucket != lastBucket) {
-                    lastBucket = bucket
-                    item(key = "header-$bucket") {
-                        Text(
-                            stringResource(bucket.titleRes),
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(
-                                start = SectionHorizontal.dp,
-                                end = SectionHorizontal.dp,
-                                top = 12.dp,
-                                bottom = 4.dp,
-                            ),
-                        )
-                    }
-                }
                 item(key = "session-${s.key.ifBlank { s.displayTitle }}") {
                     val selected = selectedKey != null && s.key == selectedKey
                     val pinned = pinnedIds.contains(s.key)
@@ -717,29 +687,4 @@ private fun DeleteDialog(label: String, onDismiss: () -> Unit, onConfirm: () -> 
 private fun List<SessionInfo>.filterQuery(q: String): List<SessionInfo> {
     if (q.isBlank()) return this
     return filter { it.displayTitle.contains(q, ignoreCase = true) || it.key.contains(q, ignoreCase = true) }
-}
-
-/** History sections. Pinned conversations always lead. */
-private enum class HistoryBucket(val titleRes: Int) {
-    PINNED(R.string.pinned),
-    TODAY(R.string.history_today),
-    WEEK(R.string.history_week),
-    MONTH(R.string.history_month),
-    OLDER(R.string.history_older),
-}
-
-private fun bucketFor(updatedAt: Double?, pinned: Boolean): HistoryBucket {
-    if (pinned) return HistoryBucket.PINNED
-    // Servers that omit timestamps list newest-first, so undated entries
-    // belong with today rather than piling up under "older".
-    if (updatedAt == null) return HistoryBucket.TODAY
-    var epochSec = updatedAt
-    while (epochSec > 1e11) epochSec /= 1000.0
-    val ageDays = (System.currentTimeMillis() / 1000.0 - epochSec) / 86400.0
-    return when {
-        ageDays < 1 -> HistoryBucket.TODAY
-        ageDays < 7 -> HistoryBucket.WEEK
-        ageDays < 30 -> HistoryBucket.MONTH
-        else -> HistoryBucket.OLDER
-    }
 }

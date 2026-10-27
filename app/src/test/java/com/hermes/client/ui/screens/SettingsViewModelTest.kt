@@ -8,6 +8,7 @@ import com.hermes.client.data.store.ClientSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.withContext
 import com.hermes.client.testutil.awaitCondition
 import com.hermes.client.testutil.runVmTest
 import okhttp3.mockwebserver.MockResponse
@@ -53,6 +54,12 @@ class SettingsViewModelTest {
         val container = AppContainer(app)
         val vm = SettingsViewModel(container)
 
+        // Settle init()'s async load first: it overwrites every field, so
+        // editing before it lands races the save below.
+        testScheduler.advanceUntilIdle()
+        withContext(Dispatchers.IO) { Thread.sleep(300) }
+        testScheduler.advanceUntilIdle()
+
         vm.baseUrl = "https://example.com:8642"
         vm.apiKey = "k"
         vm.model = "m"
@@ -64,8 +71,15 @@ class SettingsViewModelTest {
         vm.firebaseSenderId = "sender"
         vm.cfClientId = "cid"
         vm.cfClientSecret = "csec"
+        vm.language = "ja"
+        vm.showForeignSessions = false
+        vm.enterToSend = true
         vm.save()
 
+        // Wait for the ViewModel-side completion first: distinguishes a lost
+        // DataStore write (assertion below shows the actual content) from a
+        // hung save (timeout here).
+        awaitCondition { vm.saved }
         val saved = awaitStored(container, "https://example.com:8642")
             assertEquals("https://example.com:8642", saved.baseUrl)
             assertEquals("k", saved.apiKey)
@@ -78,6 +92,9 @@ class SettingsViewModelTest {
             assertEquals("sender", saved.firebaseSenderId)
             assertEquals("cid", saved.cfClientId)
             assertEquals("csec", saved.cfClientSecret)
+            assertEquals("ja", saved.language)
+            assertEquals(false, saved.showForeignSessions)
+            assertEquals(true, saved.enterToSend)
     }
 
     private suspend fun TestScope.awaitStored(c: AppContainer, expectedBaseUrl: String): ClientSettings {

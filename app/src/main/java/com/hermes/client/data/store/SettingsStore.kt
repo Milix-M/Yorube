@@ -1,6 +1,7 @@
 package com.hermes.client.data.store
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
@@ -10,6 +11,16 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 private val Context.settingsDataStore by preferencesDataStore(name = "hermes_settings")
+
+/** App language: "system", "ja", "en", "zh" or "ko". Anything else falls back to system. */
+const val LANGUAGE_SYSTEM = "system"
+const val LANGUAGE_JA = "ja"
+const val LANGUAGE_EN = "en"
+const val LANGUAGE_ZH = "zh"
+const val LANGUAGE_KO = "ko"
+
+/** Supported in-app languages (codes). */
+val SUPPORTED_LANGUAGES = listOf(LANGUAGE_SYSTEM, LANGUAGE_JA, LANGUAGE_EN, LANGUAGE_ZH, LANGUAGE_KO)
 
 data class ClientSettings(
     val baseUrl: String = "",
@@ -25,6 +36,21 @@ data class ClientSettings(
     val cfClientId: String = "",
     val cfClientSecret: String = "",
     val pinnedSessionIds: Set<String> = emptySet(),
+    val language: String = LANGUAGE_SYSTEM,
+    val showForeignSessions: Boolean = true,
+    val enterToSend: Boolean = false,
+    /**
+     * Session keys the app itself created or successfully ran on: explicit
+     * proof of "made by this app", so the foreign-session filter never
+     * hides them even if the server sends odd owner metadata.
+     */
+    val appOwnedSessionIds: Set<String> = emptySet(),
+    /**
+     * Session keys known to be owned by another surface (e.g. Discord):
+     * recorded when a run is rejected with permission_denied, so history
+     * can hide them when [showForeignSessions] is off.
+     */
+    val foreignSessionIds: Set<String> = emptySet(),
 ) {
     val isConfigured: Boolean get() = baseUrl.isNotBlank() && apiKey.isNotBlank()
     val firebaseConfigured: Boolean get() =
@@ -47,6 +73,11 @@ class SettingsStore(private val context: Context) {
         val CF_ID = stringPreferencesKey("cf_client_id")
         val CF_SECRET = stringPreferencesKey("cf_client_secret")
         val PINNED = stringSetPreferencesKey("pinned_sessions")
+        val LANGUAGE = stringPreferencesKey("language")
+        val SHOW_FOREIGN = booleanPreferencesKey("show_foreign_sessions")
+        val ENTER_TO_SEND = booleanPreferencesKey("enter_to_send")
+        val APP_OWNED_IDS = stringSetPreferencesKey("app_owned_session_ids")
+        val FOREIGN_IDS = stringSetPreferencesKey("foreign_session_ids")
     }
 
     val settings: Flow<ClientSettings> = context.settingsDataStore.data.map { p ->
@@ -64,6 +95,12 @@ class SettingsStore(private val context: Context) {
             cfClientId = p[Keys.CF_ID] ?: "",
             cfClientSecret = p[Keys.CF_SECRET] ?: "",
             pinnedSessionIds = p[Keys.PINNED] ?: emptySet(),
+            language = (p[Keys.LANGUAGE] ?: LANGUAGE_SYSTEM).takeIf { it in SUPPORTED_LANGUAGES }
+                ?: LANGUAGE_SYSTEM,
+            showForeignSessions = p[Keys.SHOW_FOREIGN] ?: true,
+            enterToSend = p[Keys.ENTER_TO_SEND] ?: false,
+            appOwnedSessionIds = p[Keys.APP_OWNED_IDS] ?: emptySet(),
+            foreignSessionIds = p[Keys.FOREIGN_IDS] ?: emptySet(),
         )
     }
 
@@ -87,7 +124,12 @@ class SettingsStore(private val context: Context) {
             p[Keys.FB_SENDER] = value.firebaseSenderId.trim()
             p[Keys.CF_ID] = value.cfClientId.trim()
             p[Keys.CF_SECRET] = value.cfClientSecret.trim()
-            p[Keys.PINNED] = value.pinnedSessionIds } }
+            p[Keys.PINNED] = value.pinnedSessionIds
+            p[Keys.LANGUAGE] = value.language.takeIf { it in SUPPORTED_LANGUAGES } ?: LANGUAGE_SYSTEM
+            p[Keys.SHOW_FOREIGN] = value.showForeignSessions
+            p[Keys.ENTER_TO_SEND] = value.enterToSend
+            p[Keys.APP_OWNED_IDS] = value.appOwnedSessionIds
+            p[Keys.FOREIGN_IDS] = value.foreignSessionIds } }
 
     suspend fun saveFcmToken(token: String) { context.settingsDataStore.edit { p -> p[Keys.FCM_TOKEN] = token } }
 }

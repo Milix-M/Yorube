@@ -22,6 +22,7 @@ import okhttp3.mockwebserver.RecordedRequest
 import okhttp3.mockwebserver.SocketPolicy
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -87,6 +88,8 @@ class ChatViewModelTest {
         assertTrue(vm.messages.any { it.kind == MsgKind.TOOL })
         assertEquals("", vm.statusLine)
         assertNull(vm.error)
+        // The accepted write marks the session as app-owned for filtering.
+        awaitCondition { c.settingsStore.current().appOwnedSessionIds.contains("api-x") }
 
         val create = server.takeRequest(5, TimeUnit.SECONDS)!!
         assertEquals("/v1/runs", create.path)
@@ -139,7 +142,7 @@ class ChatViewModelTest {
             listOf("mid", "delegating: g", "child ok: s"),
             vm.messages.filter { it.kind == MsgKind.STATUS }.map { it.text },
         )
-        assertTrue(vm.messages.any { it.kind == MsgKind.ERROR && it.text.contains("bad") })
+        assertTrue(vm.messages.any { it.kind == MsgKind.TOOL && it.text.contains("bad") })
     }
 
     private fun lastStatus(vm: ChatViewModel): String =
@@ -927,6 +930,93 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun foreignRun_offersForkAndContinues() = runVmTest {
+        server.enqueue(MockResponse().setBody("""{"messages":[]}"""))
+        server.enqueue(
+            MockResponse().setResponseCode(403)
+                .setBody("""{"error":{"message":"denied","code":"permission_denied"}}""")
+        )
+        server.enqueue(MockResponse().setBody("""{"session_id":"s9"}"""))
+        server.enqueue(
+            MockResponse().setBody("""{"messages":[{"role":"assistant","content":"old"}]}""")
+        )
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r2","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r2","status":"running","session_id":"s9"}"""))
+        server.enqueue(
+            events(frame("run.completed", """{"event":"run.completed","output":"resumed"}"""))
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, "s1")
+        awaitCondition { !vm.historyLoading }
+        vm.input = "hi"
+        vm.onSend()
+        // The Discord-style ownership denial keeps the text as a fork offer.
+        awaitCondition { vm.error != null && vm.forkOffer == "hi" }
+        assertTrue(vm.error!!.contains("unavailable"))
+        assertFalse(vm.busy)
+        vm.forkAndContinue()
+        awaitCondition { !vm.busy && vm.sessionId == "s9" }
+        assertNull(vm.error)
+        assertNull(vm.forkOffer)
+        // The forked copy counts as app-owned from now on.
+        awaitCondition { c.settingsStore.current().appOwnedSessionIds.contains("s9") }
+        assertTrue(vm.messages.any { it.kind == MsgKind.ASSISTANT && it.text == "old" })
+        assertTrue(vm.messages.any { it.kind == MsgKind.USER && it.text == "hi" })
+        assertTrue(vm.messages.any { it.kind == MsgKind.ASSISTANT && it.text == "resumed" })
+    }
+
+    @Test
+    fun foreignRun_forkFails_reportsForeign() = runVmTest {
+        server.enqueue(MockResponse().setBody("""{"messages":[]}"""))
+        server.enqueue(
+            MockResponse().setResponseCode(403)
+                .setBody("""{"error":{"message":"denied","code":"permission_denied"}}""")
+        )
+        server.enqueue(MockResponse().setResponseCode(500).setBody("x"))
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, "s1")
+        awaitCondition { !vm.historyLoading }
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { vm.forkOffer == "hi" }
+        vm.forkAndContinue()
+        awaitCondition { vm.error != null && !vm.busy }
+        assertTrue("error=${vm.error}", vm.error!!.contains("unavailable"))
+        assertNull(vm.forkOffer)
+        assertEquals("s1", vm.sessionId)
+    }
+
+    @Test
+    fun dismissError_clearsForkOffer() = runVmTest {
+        server.enqueue(MockResponse().setBody("""{"messages":[]}"""))
+        server.enqueue(
+            MockResponse().setResponseCode(403)
+                .setBody("""{"error":{"message":"denied","code":"permission_denied"}}""")
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, "s1")
+        awaitCondition { !vm.historyLoading }
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { vm.forkOffer == "hi" }
+        vm.dismissError()
+        assertNull(vm.error)
+        assertNull(vm.forkOffer)
+    }
+
+    @Test
+    fun serverError_noForkOffer() = runVmTest {
+        server.enqueue(MockResponse().setResponseCode(500).setBody("kaput"))
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { vm.error != null }
+        assertTrue(vm.error!!.contains("500"))
+        assertNull(vm.forkOffer)
+    }
+
+    @Test
     fun untrustedDelta_foldsIntoActivityLog() = runVmTest {
         server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
         server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
@@ -1402,6 +1492,20 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun errorMessage_followsSavedLanguage() = runVmTest {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val c = AppContainer(app)
+        c.settingsStore.save(ClientSettings(language = "ja"))
+        awaitCondition { c.settingsStore.current().language == "ja" }
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { vm.error != null }
+        assertEquals("ja", vm.uiLanguage)
+        assertTrue("error=${vm.error}", vm.error!!.contains("設定を開いて"))
+    }
+
+    @Test
     fun reconnect_streamRunGone_reportsGone() = runVmTest {
         server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
         server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
@@ -1416,6 +1520,236 @@ class ChatViewModelTest {
         awaitCondition { vm.error != null }
         assertTrue(vm.error!!.contains("already ended") || vm.error!!.contains("終了"))
         assertEquals(false, vm.busy)
+    }
+
+    private fun stallAfterFirstEvents(vararg firstFrames: String): Array<Boolean> {
+        val hold = arrayOf(true)
+        val hits = java.util.concurrent.atomic.AtomicInteger(0)
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.method == "POST" && request.path == "/v1/runs" ->
+                    MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}""")
+                request.method == "GET" && request.path == "/v1/runs/r1" ->
+                    MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
+                request.method == "GET" && request.path == "/v1/runs/r1/events" -> {
+                    if (hits.getAndIncrement() == 0) {
+                        events(*firstFrames)
+                    } else {
+                        while (hold[0]) Thread.sleep(50)
+                        events(frame("run.completed", """{"event":"run.completed","output":"done"}"""))
+                    }
+                }
+                else -> MockResponse().setBody("{}")
+            }
+        }
+        return hold
+    }
+
+    @Test
+    fun awaitingReply_toolAfterDelta_stillThinking() = runVmTest {
+        val holdRun = stallAfterFirstEvents(
+            frame("message.delta", """{"event":"message.delta","delta":"hi"}"""),
+            frame("tool.started", """{"event":"tool.started","tool":"web_search","preview":"q"}"""),
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        try {
+            vm.input = "hi"
+            vm.onSend()
+            // Reply started but a skill is still running: keep thinking.
+            awaitCondition { vm.messages.any { it.kind == MsgKind.TOOL } }
+            assertTrue(vm.busy)
+            assertTrue(vm.awaitingReply)
+            holdRun[0] = false
+            awaitCondition { !vm.busy }
+            // Streaming settled: the reply holds the cursor, not thinking.
+            assertTrue(vm.messages.any { it.kind == MsgKind.ASSISTANT })
+            assertFalse(vm.awaitingReply)
+        } finally {
+            holdRun[0] = false
+            vm.viewModelScope.cancel()
+        }
+    }
+
+    @Test
+    fun awaitingReply_statusAfterDelta_stillThinking() = runVmTest {
+        val holdRun = stallAfterFirstEvents(
+            frame("message.delta", """{"event":"message.delta","delta":"hi"}"""),
+            frame(
+                "message.interim",
+                """{"event":"message.interim","text":"working","already_streamed":false}""",
+            ),
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        try {
+            vm.input = "hi"
+            vm.onSend()
+            // The reply chunk alone shows the cursor, not the indicator.
+            awaitCondition { vm.messages.any { it.kind == MsgKind.ASSISTANT } }
+            awaitCondition { vm.messages.any { it.kind == MsgKind.STATUS } }
+            // The trailing status step is still progress: keep thinking.
+            assertTrue(vm.busy)
+            assertTrue(vm.awaitingReply)
+            holdRun[0] = false
+            awaitCondition { !vm.busy }
+            assertFalse(vm.awaitingReply)
+        } finally {
+            holdRun[0] = false
+            vm.viewModelScope.cancel()
+        }
+    }
+
+    @Test
+    fun awaitingReply_approvalHidesThinking() = runVmTest {
+        val hold = java.util.concurrent.atomic.AtomicBoolean(true)
+        try {
+            val vm = approvalVmWithHold(
+                hold,
+                MockResponse().setResponseCode(409)
+                    .setBody("""{"error":{"message":"x","code":"admission_conflict"}}"""),
+            )
+            try {
+                // An approval dialog owns the wait: no thinking row behind it.
+                assertTrue(vm.busy)
+                assertFalse(vm.awaitingReply)
+                vm.answerApproval("once")
+                awaitCondition { vm.error != null || !vm.busy }
+            } finally {
+                vm.viewModelScope.cancel()
+            }
+        } finally {
+            hold.set(false)
+        }
+    }
+
+    @Test
+    fun forkAndContinue_noopWhileBusy() = runVmTest {
+        val holdRun = stallAfterFirstEvents(
+            frame("message.delta", """{"event":"message.delta","delta":"hi"}"""),
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        try {
+            vm.input = "hi"
+            vm.onSend()
+            awaitCondition { vm.messages.any { it.kind == MsgKind.ASSISTANT } }
+            assertTrue(vm.busy)
+            vm.forkAndContinue()
+            // Still on the running conversation: no fork happened.
+            assertEquals("", vm.sessionId)
+            assertTrue(vm.busy)
+            holdRun[0] = false
+            awaitCondition { !vm.busy }
+        } finally {
+            holdRun[0] = false
+            vm.viewModelScope.cancel()
+        }
+    }
+
+    @Test
+    fun forkAndContinue_noopWhileHistoryLoading() = runVmTest {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse =
+                if (request.method == "GET" && request.path == "/api/sessions/s1/messages") {
+                    Thread.sleep(2000)
+                    MockResponse().setBody(
+                        """{"messages":[{"role":"user","content":"q"}]}"""
+                    )
+                } else {
+                    MockResponse().setBody("{}")
+                }
+        }
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, "s1")
+        awaitCondition { vm.historyLoading }
+        vm.forkAndContinue()
+        assertEquals("s1", vm.sessionId)
+        assertFalse(vm.busy)
+        awaitCondition { !vm.historyLoading }
+        assertTrue(vm.messages.any { it.kind == MsgKind.USER })
+    }
+
+    @Test
+    fun forkAndContinue_noopWithoutOffer() = runVmTest {
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.forkAndContinue()
+        assertEquals("", vm.sessionId)
+        assertFalse(vm.busy)
+        assertNull(vm.error)
+    }
+
+    @Test
+    fun foreignLoad_forkOpensHistoryWithoutResend() = runVmTest {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.method == "GET" && request.path == "/api/sessions/sF1/messages" ->
+                    MockResponse().setResponseCode(404)
+                        .setBody("""{"error":{"message":"gone","code":"not_found"}}""")
+                request.method == "POST" && request.path == "/api/sessions/sF1/fork" ->
+                    MockResponse().setBody("""{"session_id":"sF9"}""")
+                request.method == "GET" && request.path == "/api/sessions/sF9/messages" ->
+                    MockResponse().setBody(
+                        """{"messages":[{"role":"assistant","content":"old"}]}"""
+                    )
+                else -> MockResponse().setBody("{}")
+            }
+        }
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, "sF1")
+        awaitCondition { vm.foreignBlocked && vm.forkDialogOpen }
+        assertNull(vm.forkOffer)
+        vm.dismissForkDialog()
+        assertFalse(vm.forkDialogOpen)
+        // The read-only banner stays until the fork lands.
+        assertTrue(vm.foreignBlocked)
+        vm.forkAndContinue()
+        awaitCondition { !vm.busy && vm.sessionId == "sF9" }
+        assertFalse(vm.foreignBlocked)
+        assertFalse(vm.forkDialogOpen)
+        assertTrue(vm.messages.any { it.kind == MsgKind.ASSISTANT && it.text == "old" })
+        awaitCondition { c.settingsStore.current().foreignSessionIds.contains("sF1") }
+    }
+
+    @Test
+    fun forkAndContinue_apiFailure_reportsError() = runVmTest {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse =
+                if (request.method == "GET" && request.path == "/api/sessions/sF2/messages") {
+                    MockResponse().setResponseCode(404)
+                        .setBody("""{"error":{"message":"gone","code":"not_found"}}""")
+                } else {
+                    MockResponse().setBody("{}")
+                }
+        }
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, "sF2")
+        awaitCondition { vm.foreignBlocked }
+        // Lose the server config: the fork attempt itself fails locally.
+        c.settingsStore.save(ClientSettings())
+        awaitCondition { c.settingsStore.current().baseUrl.isBlank() }
+        vm.forkAndContinue()
+        awaitCondition { vm.error != null && !vm.busy }
+        assertTrue("error=${vm.error}", vm.error!!.contains("https"))
+    }
+
+    @Test
+    fun freshSend_denied_marksForeignWithoutOffer() = runVmTest {
+        server.enqueue(
+            MockResponse().setResponseCode(403)
+                .setBody("""{"error":{"message":"denied","code":"permission_denied"}}""")
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { vm.foreignBlocked }
+        assertNull(vm.forkOffer)
+        assertTrue(vm.forkDialogOpen)
+        assertFalse(vm.busy)
+        // Blank keys are never recorded.
+        assertFalse(c.settingsStore.current().foreignSessionIds.contains(""))
     }
 
     @Test
@@ -1471,18 +1805,78 @@ class ChatViewModelTest {
 
     @Test
     fun reconnect_pollTransientExhausted_reportsNetwork() = runVmTest {
-        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
-        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
-        server.enqueue(MockResponse().setBody(""))
-        repeat(3) {
-            server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START))
+        // Every status poll drops at the transport level: 15 fruitless
+        // reconnect cycles exhaust the budget and report a network error.
+        val polls = java.util.concurrent.atomic.AtomicInteger(0)
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.method == "POST" && request.path == "/v1/runs" ->
+                    MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}""")
+                request.method == "GET" && request.path == "/v1/runs/r1" ->
+                    if (polls.getAndIncrement() == 0) {
+                        MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
+                    } else {
+                        // AFTER_REQUEST (not AT_START): the server always reads
+                        // the request first, so this drops reliably even on a
+                        // reused keep-alive connection.
+                        MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AFTER_REQUEST)
+                    }
+                request.method == "GET" && request.path == "/v1/runs/r1/events" ->
+                    MockResponse().setBody("")
+                else -> MockResponse().setBody("{}")
+            }
         }
         val c = containerWithSettings()
         val vm = ChatViewModel(c, null)
         vm.input = "hi"
         vm.onSend()
-        awaitCondition(timeoutMs = 25_000) { vm.error != null }
+        awaitCondition(timeoutMs = 60_000) { vm.error != null }
         assertTrue("error=${vm.error}", vm.error!!.contains("Connection lost") || vm.error!!.contains("接続が切れ"))
+        assertEquals(false, vm.busy)
+    }
+
+    @Test
+    fun reconnect_progressResetsBudget() = runVmTest {
+        // 16 drop-and-redeliver cycles: each delivered delta resets the
+        // outage budget, so a long flaky run completes instead of dying at
+        // the 15th consecutive failure.
+        val eventsCalls = java.util.concurrent.atomic.AtomicInteger(0)
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.method == "POST" && request.path == "/v1/runs" ->
+                    MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}""")
+                request.method == "GET" && request.path == "/v1/runs/r1" ->
+                    MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
+                request.method == "GET" && request.path == "/v1/runs/r1/events" -> {
+                    val n = eventsCalls.getAndIncrement()
+                    if (n < 16) {
+                        events(
+                            frame(
+                                "message.delta",
+                                """{"event":"message.delta","delta":"p$n"}"""
+                            )
+                        )
+                    } else {
+                        events(
+                            frame("run.completed", """{"event":"run.completed","output":"fin"}""")
+                        )
+                    }
+                }
+                else -> MockResponse().setBody("{}")
+            }
+        }
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition(timeoutMs = 60_000) { !vm.busy }
+        assertNull("error=${vm.error}", vm.error)
+        // All 16 chunks streamed across 16 reconnects (over the 15-cycle
+        // budget): each delivery reset the outage counter. The terminal
+        // output is intentionally not duplicated: the reply already arrived.
+        val assistants = vm.messages.filter { it.kind == MsgKind.ASSISTANT }
+        assertEquals(1, assistants.size)
+        assertEquals((0 until 16).joinToString("") { "p$it" }, assistants[0].text)
     }
 
     @Test

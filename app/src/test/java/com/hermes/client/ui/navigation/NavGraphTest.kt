@@ -92,9 +92,8 @@ class NavGraphTest {
         // Past conversations live in the sidebar drawer.
         compose.onNodeWithTag("menuButton").performClick()
         waitFor("Hello")
-        // Header shows the latest title and drawer lists it: two "Hello" nodes.
-        // Click the drawer entry (last) to open the conversation.
-        compose.onAllNodesWithText("Hello")[1].performClick()
+        // Fresh home header shows "New chat": the only "Hello" is the drawer entry.
+        compose.onAllNodesWithText("Hello")[0].performClick()
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
         // Chat -> settings via the drawer (covers drawer onOpenSettings navigation).
         compose.onNodeWithTag("menuButton").performClick()
@@ -111,12 +110,26 @@ class NavGraphTest {
 
     @Test
     fun chatRoute_rendersInput() {
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                return when {
+                    (request.path ?: "").startsWith("/api/sessions/s1/messages") ->
+                        MockResponse().setBody(
+                            """{"messages":[{"role":"user","content":"pinned-msg"}]}"""
+                        )
+                    else -> MockResponse().setBody("{}")
+                }
+            }
+        }
+        saveSettings()
         compose.setContent {
             HermesAppTheme {
                 NavGraph("s1")
             }
         }
+        // An explicit session id (e.g. notification tap) still opens it.
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
+        waitFor("pinned-msg")
     }
 
     @Test
@@ -142,7 +155,7 @@ class NavGraphTest {
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
         compose.onNodeWithTag("menuButton").performClick()
         waitFor("Hello")
-        compose.onAllNodesWithText("Hello")[1].performClick()
+        compose.onAllNodesWithText("Hello")[0].performClick()
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
         // Open ChatGPT-like drawer and start a new chat from it.
         compose.onNodeWithTag("menuButton").performClick()
@@ -177,7 +190,7 @@ class NavGraphTest {
     }
 
     @Test
-    fun homeShowsLatestChat() {
+    fun homeStartsFresh_doesNotAutoOpenLatest() {
         server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
             override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
                 return when {
@@ -199,9 +212,15 @@ class NavGraphTest {
                 NavGraph(null)
             }
         }
-        // Launch lands on the latest conversation, not an empty chat.
-        waitFor("recent answer")
-        compose.onNodeWithText("recent answer").assertIsDisplayed()
+        // Launch stays on a fresh home chat even with history present:
+        // the empty-state prompt shows and the latest reply never opens.
+        waitFor("What can I do for you?")
+        assertTrue(
+            compose.onAllNodesWithText("recent answer").fetchSemanticsNodes().isEmpty()
+        )
+        // Past conversations are still reachable from the drawer.
+        compose.onNodeWithTag("menuButton").performClick()
+        waitFor("Recent")
     }
 
     @Test
@@ -238,6 +257,49 @@ class NavGraphTest {
             }
         }
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
+    }
+
+    @Test
+    fun drawerTapCurrentSession_doesNotReload() {
+        val messagesHits = java.util.concurrent.atomic.AtomicInteger(0)
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                return when {
+                    (request.path ?: "").startsWith("/api/sessions/s1/messages") -> {
+                        messagesHits.incrementAndGet()
+                        MockResponse().setBody(
+                            """{"messages":[{"role":"user","content":"drawer-q"}]}"""
+                        )
+                    }
+                    (request.path ?: "").startsWith("/api/sessions") ->
+                        MockResponse().setBody("""{"sessions":[{"id":"s1","title":"Hello"}]}""")
+                    else -> MockResponse().setBody("{}")
+                }
+            }
+        }
+        saveSettings()
+        compose.setContent {
+            HermesAppTheme {
+                NavGraph("s1")
+            }
+        }
+        waitFor("drawer-q")
+        // Startup may load history more than once (the start navigation
+        // rebuilds the entry); what matters is the tap adds no reload.
+        Thread.sleep(1500)
+        val baseline = messagesHits.get()
+        assertTrue("baseline=$baseline", baseline >= 1)
+        // Tapping the open conversation only closes the drawer: no reload.
+        compose.onNodeWithTag("menuButton").performClick()
+        waitFor("Hello")
+        compose.onAllNodesWithText("Hello")[0].performClick()
+        compose.onNodeWithTag("chatInput").assertIsDisplayed()
+        Thread.sleep(1500)
+        assertTrue(
+            "messagesHits=${messagesHits.get()} baseline=$baseline",
+            messagesHits.get() == baseline,
+        )
+        compose.onNodeWithText("drawer-q").assertIsDisplayed()
     }
 
     @Test

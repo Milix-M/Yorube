@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hermes.client.AppContainer
 import com.hermes.client.data.api.SessionInfo
+import com.hermes.client.data.api.isForeignSurface
 import kotlinx.coroutines.launch
 
 class ConversationListViewModel(
@@ -22,14 +23,19 @@ class ConversationListViewModel(
     var error by mutableStateOf<String?>(null)
         private set
 
+    var showForeign by mutableStateOf(true)
+        private set
+
     fun refresh() {
         viewModelScope.launch {
             loading = true
             error = null
             try {
-                pinnedIds = container.settingsStore.current().pinnedSessionIds
+                val settings = container.settingsStore.current()
+                pinnedIds = settings.pinnedSessionIds
+                showForeign = settings.showForeignSessions
                 val loaded = container.api().listSessions()
-                sessions = sortPinnedFirst(loaded, pinnedIds)
+                sessions = sortPinnedFirst(filterForeign(loaded, settings), settings.pinnedSessionIds)
             } catch (e: Exception) {
                 error = (e.message ?: e.javaClass.simpleName).take(200)
             } finally {
@@ -83,4 +89,22 @@ private fun sortPinnedFirst(
     // Keep server order inside each group.
     val pinnedOrdered = pinnedList.sortedBy { loaded.indexOf(it) }
     return pinnedOrdered + rest
+}
+
+/**
+ * Drops other-surface sessions when the user hid them: either the server
+ * says so (owner/surface metadata), a past run was rejected with
+ * permission_denied on that key (recorded in DataStore), or neither but
+ * the key was never created by this app. Keys the app itself created or
+ * successfully ran on always stay: explicit proof of "made by this app".
+ */
+internal fun filterForeign(
+    loaded: List<SessionInfo>,
+    settings: com.hermes.client.data.store.ClientSettings,
+): List<SessionInfo> {
+    if (settings.showForeignSessions) return loaded
+    return loaded.filter { s ->
+        s.key in settings.appOwnedSessionIds ||
+            (!s.isForeignSurface() && !settings.foreignSessionIds.contains(s.key))
+    }
 }

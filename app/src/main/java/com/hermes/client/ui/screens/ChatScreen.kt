@@ -1,10 +1,12 @@
 package com.hermes.client.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -25,13 +27,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -55,6 +57,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Terminal
@@ -72,6 +75,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -82,6 +86,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -95,6 +100,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -123,10 +134,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.hermes.client.HermesApp
 import com.hermes.client.R
 import com.hermes.client.data.api.SessionInfo
+import com.hermes.client.data.store.ClientSettings
 import com.hermes.client.ui.theme.GeminiSparkAvatar
 import com.hermes.client.ui.theme.geminiHeadlineStyle
 import com.hermes.client.ui.theme.geminiHorizontalBrush
 import kotlinx.coroutines.launch
+import kotlin.math.absoluteValue
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -151,32 +164,39 @@ fun ChatScreen(
         }
     )
     val snackbar = remember { SnackbarHostState() }
+    val forkLabel = stringResource(R.string.fork_and_continue)
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val clarifyAnswer = remember { mutableStateOf("") }
+    // Input behavior follows Settings: Enter sends only when opted in.
+    val displaySettings by app.container.settingsStore.settings.collectAsState(initial = ClientSettings())
     val messageSnapshot = vm.messages.toList()
     val blocks = remember(messageSnapshot) { buildChatBlocks(messageSnapshot) }
 
     LaunchedEffect(vm.error) {
-        vm.error?.let { snackbar.showSnackbar(it); vm.dismissError() }
+        // Foreign sessions ask via dialog/banner instead: the transient
+        // snackbar would vanish before the user can choose.
+        if (vm.foreignBlocked) return@LaunchedEffect
+        vm.error?.let { msg ->
+            // A foreign-session block offers fork-and-continue as the action.
+            val result = if (vm.forkOffer != null) {
+                snackbar.showSnackbar(msg, actionLabel = forkLabel)
+            } else {
+                snackbar.showSnackbar(msg)
+            }
+            if (result == SnackbarResult.ActionPerformed) vm.forkAndContinue()
+            else vm.dismissError()
+        }
     }
-    // The jump button shows whenever the very bottom is off-screen.
-    // Tapping first lands on the newest user prompt, tapping again (already
-    // there) goes on to the bottom, so a reply below the prompt can never
-    // strand the user with no button visible.
+    // The jump button shows while the newest user prompt is off-screen.
+    // Tapping it lands on that prompt. It stays hidden once the prompt is
+    // visible: the auto-follow above already tracks the streaming reply.
     val lastUserIndex = remember(blocks) { lastUserBlockIndex(blocks) }
     val atLatestUser by remember(lastUserIndex) {
         derivedStateOf {
             val info = listState.layoutInfo
             val lastVisible = info.visibleItemsInfo.lastOrNull()?.index
             lastVisible != null && lastVisible >= lastUserIndex
-        }
-    }
-    val atBottom by remember {
-        derivedStateOf {
-            val info = listState.layoutInfo
-            val lastVisible = info.visibleItemsInfo.lastOrNull()?.index
-            lastVisible != null && lastVisible >= info.totalItemsCount - 1
         }
     }
     // Open at the newest user message without animation (history only);
@@ -191,7 +211,7 @@ fun ChatScreen(
             listState.scrollToItem(lastUserBlockIndex(blocks))
             initialJumpDone = true
         } else if (vm.busy && (atLatestUser || freshChat)) {
-            val thinking = vm.busy && vm.messages.none { it.kind == MsgKind.ASSISTANT }
+            val thinking = vm.awaitingReply
             val last = blocks.size - 1 + if (thinking) 1 else 0
             listState.animateScrollToItem(last)
         } else if (atLatestUser) {
@@ -243,10 +263,14 @@ fun ChatScreen(
             ChatInputBar(
                 input = vm.input,
                 busy = vm.busy,
+                enabled = !vm.foreignBlocked,
+                enterToSend = displaySettings.enterToSend,
                 onInputChange = { vm.input = it },
                 onSend = vm::onSend,
                 onSteer = vm::onSteer,
                 onStop = vm::onStop,
+                onFork = vm::forkAndContinue,
+                showForkBanner = vm.foreignBlocked && !vm.forkDialogOpen,
             )
         },
     ) { padding ->
@@ -298,24 +322,17 @@ fun ChatScreen(
                             }
                         }
                     }
-                    if (vm.busy && vm.messages.none { it.kind == MsgKind.ASSISTANT }) {
+                    if (vm.awaitingReply) {
                         item(key = "thinking") { ThinkingRow() }
                     }
                     item(key = "bottom-spacer") { Spacer(Modifier.height(8.dp)) }
                 }
             }
-            if (!atBottom && blocks.isNotEmpty()) {
+            if (!atLatestUser && blocks.isNotEmpty()) {
                 SmallFloatingActionButton(
-                    // First tap lands on the newest user prompt (animated);
-                    // a second tap while already there continues to the
-                    // bottom, so the reply below the prompt is reachable.
+                    // Jump to the newest user prompt.
                     onClick = {
-                        scope.launch {
-                            val thinking = vm.busy && vm.messages.none { it.kind == MsgKind.ASSISTANT }
-                            val last = blocks.size - 1 + if (thinking) 1 else 0
-                            if (atLatestUser) listState.animateScrollToItem(last)
-                            else listState.animateScrollToItem(lastUserBlockIndex(blocks))
-                        }
+                        scope.launch { listState.animateScrollToItem(lastUserBlockIndex(blocks)) }
                     },
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                     contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -330,6 +347,24 @@ fun ChatScreen(
                 }
             }
         }
+    }
+
+    if (vm.forkDialogOpen) {
+        AlertDialog(
+            onDismissRequest = vm::dismissForkDialog,
+            confirmButton = {
+                TextButton(
+                    onClick = vm::forkAndContinue,
+                    modifier = Modifier.testTag("forkConfirm"),
+                ) { Text(stringResource(R.string.fork_and_continue)) }
+            },
+            dismissButton = {
+                TextButton(onClick = vm::dismissForkDialog) { Text(stringResource(R.string.not_now)) }
+            },
+            icon = { GeminiSparkAvatar(size = 40.dp, iconSize = 22.dp) },
+            title = { Text(stringResource(R.string.foreign_title)) },
+            text = { Text(stringResource(R.string.foreign_message)) },
+        )
     }
 
     vm.approval?.let { req ->
@@ -497,32 +532,54 @@ private fun GeminiChatTopBar(
 private fun ChatInputBar(
     input: String,
     busy: Boolean,
+    enabled: Boolean,
+    enterToSend: Boolean,
     onInputChange: (String) -> Unit,
     onSend: () -> Unit,
     onSteer: () -> Unit,
     onStop: () -> Unit,
+    onFork: () -> Unit,
+    showForkBanner: Boolean,
 ) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
-    val attachLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetContent()
-    ) { uri ->
-        if (uri != null) {
-            val name = queryDisplayName(context, uri) ?: "image"
-            val token = "[${context.getString(R.string.image_label)}: $name]"
-            onInputChange(if (input.isBlank()) token else "$input $token")
+    // The attach picker needs an ActivityResultRegistryOwner. On some hosts
+    // the bottom-bar subcomposition recomposes without one and
+    // rememberLauncherForActivityResult throws, killing startup outright —
+    // so skip the picker instead of crashing the whole chat. The owner is
+    // root-provided and never flips, so this branch is stable per
+    // composition.
+    val attachLauncher = LocalActivityResultRegistryOwner.current?.let {
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.GetContent()
+        ) { uri ->
+            if (uri != null) {
+                val name = queryDisplayName(context, uri) ?: "image"
+                val token = "[${context.getString(R.string.image_label)}: $name]"
+                onInputChange(if (input.isBlank()) token else "$input $token")
+            }
         }
     }
     // Sending clears focus so the keyboard closes.
     val sendAndClose: () -> Unit = { focusManager.clearFocus(); onSend() }
     val steerAndClose: () -> Unit = { focusManager.clearFocus(); onSteer() }
+    val submitAndClose: () -> Unit = { if (busy) steerAndClose() else sendAndClose() }
     Column(
         Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .imePadding()
+            // No imePadding(): the manifest uses adjustResize (and the app is
+            // not edge-to-edge), so the window itself already moves above the
+            // keyboard. Adding imePadding() on top offsets twice and leaves a
+            // keyboard-sized white gap.
             .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
+        if (showForkBanner) {
+            ForkBanner(
+                onFork = onFork,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            )
+        }
         Surface(
             shape = RoundedCornerShape(32.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -539,7 +596,8 @@ private fun ChatInputBar(
                 modifier = Modifier.padding(6.dp),
             ) {
                 IconButton(
-                    onClick = { attachLauncher.launch("image/*") },
+                    onClick = { attachLauncher?.launch("image/*") },
+                    enabled = enabled && attachLauncher != null,
                     modifier = Modifier.testTag("attachButton").size(44.dp),
                 ) {
                     Icon(
@@ -548,21 +606,47 @@ private fun ChatInputBar(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                // Hardware keyboards: with Enter-to-send, plain Enter submits
+                // and Shift+Enter keeps the line break. Software keyboards
+                // follow imeAction instead. With the default (Enter = newline)
+                // nothing is intercepted.
+                val keyModifier = if (enterToSend && enabled) {
+                    Modifier.onPreviewKeyEvent { event ->
+                        if (event.key == Key.Enter && event.type == KeyEventType.KeyDown) {
+                            if (event.isShiftPressed) {
+                                false
+                            } else {
+                                submitAndClose()
+                                true
+                            }
+                        } else {
+                            false
+                        }
+                    }
+                } else {
+                    Modifier
+                }
                 TextField(
                     value = input,
                     onValueChange = onInputChange,
-                    modifier = Modifier.weight(1f).testTag("chatInput"),
+                    enabled = enabled,
+                    modifier = keyModifier.weight(1f).testTag("chatInput"),
                     placeholder = {
                         Text(
-                            if (busy) stringResource(R.string.steer_hint)
-                            else stringResource(R.string.message_hint),
+                            when {
+                                !enabled -> stringResource(R.string.foreign_input_hint)
+                                busy -> stringResource(R.string.steer_hint)
+                                else -> stringResource(R.string.message_hint)
+                            },
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                         )
                     },
                     maxLines = 6,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardOptions = KeyboardOptions(
+                        imeAction = if (enterToSend) ImeAction.Send else ImeAction.Default
+                    ),
                     keyboardActions = KeyboardActions(
-                        onSend = { if (busy) steerAndClose() else sendAndClose() },
+                        onSend = if (enterToSend) ({ submitAndClose() }) else null,
                     ),
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,
@@ -580,12 +664,41 @@ private fun ChatInputBar(
                     )
                 } else {
                     GradientSendButton(
-                        enabled = input.isNotBlank(),
+                        enabled = enabled && input.isNotBlank(),
                         onClick = sendAndClose,
                         modifier = Modifier.testTag("sendButton"),
                     )
                 }
             }
+        }
+    }
+}
+
+/** Persistent read-only notice with a one-tap fork action. */
+@Composable
+private fun ForkBanner(onFork: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+        shape = RoundedCornerShape(18.dp),
+        modifier = modifier.testTag("forkBanner"),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        ) {
+            Icon(
+                Icons.Filled.Info,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                stringResource(R.string.foreign_banner),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.weight(1f).padding(start = 8.dp),
+            )
+            TextButton(onClick = onFork) { Text(stringResource(R.string.fork_and_continue)) }
         }
     }
 }
@@ -833,24 +946,27 @@ private fun ShimmerText(text: String) {
     )
 }
 
-/** Gemini-like typing indicator: three dots wave in sequence. */
+/** Gemini-like typing indicator: three dots bounce forward, then back. */
 @Composable
 private fun TypingDots() {
-    val t = rememberInfiniteTransition(label = "typing")
+    // One shared 0->2->0 sweep: dot i peaks when the sweep passes i, so the
+    // highlight travels 0,1,2,1,0... (forward then reverse, never jumping).
+    val progress by rememberInfiniteTransition(label = "typing").animateFloat(
+        initialValue = 0f,
+        targetValue = 2f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "progress",
+    )
     Row(
         horizontalArrangement = Arrangement.spacedBy(5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         for (i in 0 until 3) {
-            val scale by t.animateFloat(
-                initialValue = 0.5f,
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(600, delayMillis = i * 150),
-                    repeatMode = RepeatMode.Reverse,
-                ),
-                label = "dot$i",
-            )
+            val closeness = (1f - (progress - i).absoluteValue).coerceIn(0f, 1f)
+            val scale = 0.5f + 0.5f * closeness
             Box(
                 modifier = Modifier
                     .size(8.dp)
@@ -1102,8 +1218,11 @@ private fun ActivityLog(msgs: List<UiMessage>, modifier: Modifier = Modifier) {
                 SelectionContainer {
                     Column(Modifier.padding(start = 4.dp, top = 2.dp, bottom = 6.dp)) {
                         for ((index, m) in msgs.withIndex()) {
+                            // IntrinsicSize.Min fixes the row height to the text,
+                            // so the weight(1f) connector below spans the full
+                            // row even for multi-line details.
                             Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = 4.dp),
                                 verticalAlignment = Alignment.Top,
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1117,7 +1236,8 @@ private fun ActivityLog(msgs: List<UiMessage>, modifier: Modifier = Modifier) {
                                         Box(
                                             modifier = Modifier
                                                 .width(2.dp)
-                                                .height(14.dp)
+                                                .weight(1f)
+                                                .padding(top = 3.dp)
                                                 .background(
                                                     MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
                                                 ),

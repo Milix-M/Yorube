@@ -24,9 +24,11 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
@@ -35,7 +37,10 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -43,6 +48,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -62,6 +68,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -69,8 +76,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.hermes.client.BuildConfig
 import com.hermes.client.HermesApp
 import com.hermes.client.R
+import com.hermes.client.data.store.SUPPORTED_LANGUAGES
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -139,6 +148,34 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
                 SectionHelp(stringResource(R.string.section_cloudflare_help))
                 SettingField(stringResource(R.string.cf_id), vm.cfClientId, "", tag = "cfId") { vm.cfClientId = it }
                 SettingField(stringResource(R.string.cf_secret), vm.cfClientSecret, "", secret = true, tag = "cfSecret") { vm.cfClientSecret = it }
+            }
+
+            SettingsCard(
+                title = stringResource(R.string.language),
+                icon = Icons.Filled.Language,
+            ) {
+                LanguageDropdown(
+                    selected = vm.language,
+                    onSelect = { vm.language = it },
+                )
+            }
+
+            SettingsCard(
+                title = stringResource(R.string.section_general),
+                icon = Icons.Filled.Tune,
+            ) {
+                SwitchRow(
+                    label = stringResource(R.string.show_foreign),
+                    checked = vm.showForeignSessions,
+                    testTag = "showForeign",
+                    onChange = { vm.showForeignSessions = it },
+                )
+                SwitchRow(
+                    label = stringResource(R.string.enter_to_send),
+                    checked = vm.enterToSend,
+                    testTag = "enterToSend",
+                    onChange = { vm.enterToSend = it },
+                )
             }
 
             SettingsCard(
@@ -219,6 +256,13 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
                     modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)),
                 )
             }
+            Text(
+                "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            )
             Spacer(Modifier.height(16.dp))
         }
     }
@@ -308,6 +352,77 @@ private fun SectionHelp(text: String) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
     )
+}
+
+/** Label for one language option code. Defaults to system for unknowns. */
+private fun languageLabelRes(code: String): Int = when (code) {
+    "ja" -> R.string.lang_ja
+    "en" -> R.string.lang_en
+    "zh" -> R.string.lang_zh
+    "ko" -> R.string.lang_ko
+    else -> R.string.lang_system
+}
+
+/** Language picker: a single dropdown row, no radio list. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LanguageDropdown(selected: String, onSelect: (String) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(
+        expanded = open,
+        onExpandedChange = { open = it },
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+    ) {
+        OutlinedTextField(
+            value = stringResource(languageLabelRes(selected)),
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(stringResource(R.string.language)) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = open) },
+            singleLine = true,
+            shape = RoundedCornerShape(18.dp),
+            modifier = Modifier.menuAnchor().fillMaxWidth().testTag("langField"),
+        )
+        ExposedDropdownMenu(
+            expanded = open,
+            onDismissRequest = { open = false },
+        ) {
+            for (code in SUPPORTED_LANGUAGES) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(languageLabelRes(code))) },
+                    onClick = {
+                        onSelect(code)
+                        open = false
+                    },
+                    modifier = Modifier.testTag("lang-$code"),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SwitchRow(
+    label: String,
+    checked: Boolean,
+    testTag: String,
+    onChange: (Boolean) -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f).padding(end = 12.dp),
+        )
+        Switch(
+            checked = checked,
+            onCheckedChange = onChange,
+            modifier = Modifier.testTag(testTag),
+        )
+    }
 }
 
 @Composable

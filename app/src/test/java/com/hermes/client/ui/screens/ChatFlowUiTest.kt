@@ -16,10 +16,13 @@ import com.hermes.client.HermesApp
 import com.hermes.client.data.store.ClientSettings
 import com.hermes.client.ui.theme.HermesAppTheme
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -236,6 +239,112 @@ class ChatFlowUiTest {
         compose.onNodeWithText("Send").performClick()
         compose.waitUntil(timeoutMillis = 15_000) {
             compose.onAllNodesWithText("Question").fetchSemanticsNodes().isEmpty()
+        }
+    }
+
+    @Test
+    fun followUpInHistory_showsThinkingUntilFirstDelta() {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.method == "GET" && request.path == "/api/sessions/s1/messages" ->
+                    MockResponse().setBody(
+                        """{"messages":[{"role":"user","content":"histq"},{"role":"assistant","content":"hista"}]}"""
+                    )
+                request.method == "POST" && request.path == "/v1/runs" ->
+                    MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}""")
+                request.method == "GET" && request.path == "/v1/runs/r1" ->
+                    MockResponse().setBody("""{"run_id":"r1","status":"running","session_id":"s1"}""")
+                // Delay the whole reply: the thinking indicator must show
+                // during the wait even though history already contains an
+                // assistant message. No reconnect is involved: the terminal
+                // arrives on this same subscription.
+                request.method == "GET" && request.path == "/v1/runs/r1/events" ->
+                    events(
+                        frame("run.completed", """{"event":"run.completed","output":"done"}""")
+                    ).also { it.setHeadersDelay(3, TimeUnit.SECONDS) }
+                else -> MockResponse().setBody("{}")
+            }
+        }
+        kotlinx.coroutines.runBlocking { saveSettings() }
+
+        compose.setContent {
+            HermesAppTheme {
+                ChatScreen(sessionId = "s1", onNavigateBack = {})
+            }
+        }
+        // History renders first.
+        compose.waitUntil(timeoutMillis = 15_000) {
+            compose.onAllNodesWithText("hista", substring = true).fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("chatInput").performTextInput("more")
+        compose.onNodeWithTag("sendButton").performClick()
+        // No reply chunk yet, but history already has an assistant row: the
+        // thinking indicator must still appear.
+        compose.waitUntil(timeoutMillis = 15_000) {
+            compose.onAllNodesWithTag("thinkingIndicator", useUnmergedTree = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        // The run completes: the reply lands and the indicator leaves.
+        compose.waitUntil(timeoutMillis = 15_000) {
+            compose.onAllNodesWithText("done", substring = true).fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.waitUntil(timeoutMillis = 15_000) {
+            compose.onAllNodesWithTag("thinkingIndicator", useUnmergedTree = true)
+                .fetchSemanticsNodes().isEmpty()
+        }
+    }
+
+    @Test
+    fun foreignRun_snackbarAction_forksAndContinues() {
+        val creates = AtomicInteger(0)
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.method == "GET" && request.path == "/api/sessions/s1/messages" ->
+                    MockResponse().setBody("""{"messages":[]}""")
+                request.method == "POST" && request.path == "/v1/runs" ->
+                    if (creates.getAndIncrement() == 0) {
+                        // Discord-style ownership denial on the first send.
+                        MockResponse().setResponseCode(403)
+                            .setBody("""{"error":{"message":"denied","code":"permission_denied"}}""")
+                    } else {
+                        MockResponse().setResponseCode(202)
+                            .setBody("""{"run_id":"r2","status":"queued"}""")
+                    }
+                request.method == "POST" && request.path == "/api/sessions/s1/fork" ->
+                    MockResponse().setBody("""{"session_id":"s9"}""")
+                request.method == "GET" && request.path == "/api/sessions/s9/messages" ->
+                    MockResponse().setBody(
+                        """{"messages":[{"role":"assistant","content":"old"}]}"""
+                    )
+                request.method == "GET" && request.path == "/v1/runs/r2" ->
+                    MockResponse().setBody("""{"run_id":"r2","status":"running","session_id":"s9"}""")
+                request.method == "GET" && request.path == "/v1/runs/r2/events" ->
+                    events(
+                        frame("run.completed", """{"event":"run.completed","output":"resumed"}""")
+                    )
+                else -> MockResponse().setBody("{}")
+            }
+        }
+        kotlinx.coroutines.runBlocking { saveSettings() }
+
+        compose.setContent {
+            HermesAppTheme {
+                ChatScreen(sessionId = "s1", onNavigateBack = {})
+            }
+        }
+        compose.onNodeWithTag("chatInput").performTextInput("hi")
+        compose.onNodeWithTag("sendButton").performClick()
+        // The denial surfaces with a fork action.
+        compose.waitUntil(timeoutMillis = 15_000) {
+            compose.onAllNodesWithText("Fork and continue").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithText("Fork and continue").performClick()
+        // The forked session runs the blocked text to completion.
+        compose.waitUntil(timeoutMillis = 15_000) {
+            compose.onAllNodesWithText("resumed", substring = true).fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.waitUntil(timeoutMillis = 15_000) {
+            compose.onAllNodesWithText("Fork and continue").fetchSemanticsNodes().isEmpty()
         }
     }
 }

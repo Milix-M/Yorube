@@ -14,16 +14,21 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import com.hermes.client.data.store.ClientSettings
+import com.hermes.client.data.store.LocaleHelper
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -62,9 +67,19 @@ private const val SlidePx = 32
 fun NavGraph(startSessionId: String?) {
     val navController = rememberNavController()
     val app = LocalContext.current.applicationContext as HermesApp
-    // Home shows the latest conversation; explicit session ids (e.g. from a
-    // notification tap) always win. Sessions load async, so the start
-    // destination resolves once the list arrives, then we navigate to it
+    // Apply the in-app language to every screen below: stringResource reads
+    // from LocalContext, so a wrapped context re-resolves all labels.
+    val appSettings by app.container.settingsStore.settings.collectAsState(initial = ClientSettings())
+    val baseContext = LocalContext.current
+    val localizedContext = remember(baseContext, appSettings.language) {
+        LocaleHelper.contextualize(baseContext, appSettings.language)
+    }
+    CompositionLocalProvider(
+        androidx.compose.ui.platform.LocalContext provides localizedContext,
+    ) {
+    // Home is always a fresh chat; explicit session ids (e.g. from a
+    // notification tap) always win. Sessions load async, so an explicit
+    // start resolves once the list arrives, then we navigate to it
     // (popUpTo inclusive so home has no back-stack entry). Using navigate()
     // instead of key(startDestination) recreation because NavHost
     // startDestination with query params does not parse args (they arrive
@@ -78,25 +93,25 @@ fun NavGraph(startSessionId: String?) {
         }
     )
     LaunchedEffect(Unit) { startVm.refresh() }
-    val latest = startVm.sessions.firstOrNull()
-    // Freeze the start destination after its first resolution. Later list
-    // refreshes (e.g. a session created from a new chat) must never rebuild
-    // the NavHost mid-conversation and throw the user back home.
+    // Home is always a fresh chat: explicit session ids (e.g. from a
+    // notification tap) still win via navigate(), but the latest
+    // conversation is never auto-opened on launch. Sessions still load
+    // async for the drawer and header titles.
     var frozenStart by rememberSaveable { mutableStateOf<String?>(null) }
-    LaunchedEffect(startSessionId, latest?.key) {
-        if (frozenStart == null && (startSessionId != null || latest != null)) {
-            frozenStart = if (startSessionId != null || latest == null) {
-                Routes.chat(startSessionId)
-            } else {
-                Routes.chat(latest.key, latest.title)
-            }
+    LaunchedEffect(startSessionId) {
+        if (frozenStart == null && startSessionId != null) {
+            frozenStart = Routes.chat(startSessionId)
         }
     }
     // Navigate to the resolved start once (popUpTo inclusive so back from
-    // home exits, not to an empty fresh chat).
+    // home exits, not to an empty fresh chat). Guarded: the effect can
+    // re-fire on recomposition and must never push the entry twice (double
+    // history load, flicker on notification taps).
+    var startNavigated by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(frozenStart) {
         val target = frozenStart
-        if (target != null && target != Routes.CHAT) {
+        if (!startNavigated && target != null && target != Routes.CHAT) {
+            startNavigated = true
             navController.navigate(target) {
                 popUpTo(Routes.CHAT) { inclusive = true }
             }
@@ -168,6 +183,9 @@ fun NavGraph(startSessionId: String?) {
                             scope.launch { drawerState.close() }
                             if (id == null && sessionId == null) {
                                 homeNonce++
+                            } else if (id != null && id == sessionId) {
+                                // Already open: just close the drawer, never
+                                // reload the conversation underneath.
                             } else {
                                 navController.navigate(Routes.chat(id, chatTitle)) {
                                     popUpTo(Routes.CHAT) { inclusive = true }
@@ -178,7 +196,12 @@ fun NavGraph(startSessionId: String?) {
                             scope.launch { drawerState.close() }
                             navController.navigate(Routes.SEARCH)
                         },
-                        onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                        // Close the drawer first so returning from settings
+                        // lands on the chat, not an open sidebar.
+                        onOpenSettings = {
+                            scope.launch { drawerState.close() }
+                            navController.navigate(Routes.SETTINGS)
+                        },
                         onCloseDrawer = { scope.launch { drawerState.close() } },
                     )
                 },
@@ -213,5 +236,6 @@ fun NavGraph(startSessionId: String?) {
         composable(Routes.SETTINGS) {
             SettingsScreen(onNavigateBack = { navController.popBackStack() })
         }
+    }
     }
 }

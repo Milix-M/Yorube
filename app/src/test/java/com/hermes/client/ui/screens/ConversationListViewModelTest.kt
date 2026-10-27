@@ -97,4 +97,71 @@ class ConversationListViewModelTest {
         awaitCondition { vm.error != null }
         assertEquals(1, vm.sessions.size)
     }
+
+    @Test
+    fun filterForeign_shownByDefault() {
+        val loaded = listOf(
+            SessionInfo(id = "s1"),
+            SessionInfo(id = "s2", surface = "discord"),
+        )
+        assertEquals(loaded, filterForeign(loaded, ClientSettings(showForeignSessions = true)))
+    }
+
+    @Test
+    fun filterForeign_hiddenDropsForeign() {
+        val loaded = listOf(
+            SessionInfo(id = "s1"),
+            SessionInfo(id = "s2", surface = "discord"),
+            SessionInfo(id = "s3", owner = "app"),
+            SessionInfo(id = "s4"),
+        )
+        val settings = ClientSettings(
+            showForeignSessions = false,
+            foreignSessionIds = setOf("s4"),
+        )
+        assertEquals(
+            listOf(SessionInfo(id = "s1"), SessionInfo(id = "s3", owner = "app")),
+            filterForeign(loaded, settings),
+        )
+    }
+
+    @Test
+    fun filterForeign_appOwnedAlwaysShown() {
+        // Proof of "made by this app" wins over odd server metadata: a
+        // session the app successfully ran on is never hidden.
+        val loaded = listOf(
+            SessionInfo(id = "s1"),
+            SessionInfo(id = "s2", surface = "discord"),
+        )
+        val settings = ClientSettings(
+            showForeignSessions = false,
+            foreignSessionIds = setOf("s1"),
+            appOwnedSessionIds = setOf("s1", "s2"),
+        )
+        assertEquals(loaded, filterForeign(loaded, settings))
+    }
+
+    @Test
+    fun refresh_hidesForeignWhenOff() = runVmTest {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"sessions":[{"id":"s1","title":"Mine"},{"id":"s2","title":"D","surface":"discord"}]}"""
+            )
+        )
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val c = AppContainer(app)
+        c.settingsStore.save(
+            ClientSettings(
+                baseUrl = server.url("").toString().removeSuffix("/"),
+                apiKey = "k",
+                showForeignSessions = false,
+            )
+        )
+        awaitCondition { c.settingsStore.current().baseUrl.isNotEmpty() }
+        val vm = ConversationListViewModel(c)
+        vm.refresh()
+        awaitCondition { vm.sessions.isNotEmpty() || vm.error != null }
+        assertEquals(listOf("s1"), vm.sessions.map { it.key })
+        assertEquals(false, vm.showForeign)
+    }
 }

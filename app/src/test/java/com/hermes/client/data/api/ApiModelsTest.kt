@@ -81,6 +81,30 @@ class ApiModelsTest {
     }
 
     @Test
+    fun isForeignSurface_metadata() {
+        // No metadata: ours (older servers send nothing).
+        assertEquals(false, SessionInfo(id = "s1").isForeignSurface())
+        // Blank metadata: ours.
+        assertEquals(false, SessionInfo(id = "s1", owner = " ").isForeignSurface())
+        // Other surfaces: foreign, case-insensitive.
+        assertEquals(true, SessionInfo(id = "s1", surface = "discord").isForeignSurface())
+        assertEquals(true, SessionInfo(id = "s1", owner = "CLI").isForeignSurface())
+        assertEquals(true, SessionInfo(id = "s1", source = "desktop").isForeignSurface())
+        assertEquals(true, SessionInfo(id = "s1", origin = "slack").isForeignSurface())
+        // App markers and unknown server markers: ours, never hidden.
+        assertEquals(false, SessionInfo(id = "s1", owner = "app").isForeignSurface())
+        assertEquals(false, SessionInfo(id = "s1", surface = "Android").isForeignSurface())
+        assertEquals(false, SessionInfo(id = "s1", source = "hermes_app").isForeignSurface())
+        assertEquals(false, SessionInfo(id = "s1", source = "api").isForeignSurface())
+        assertEquals(false, SessionInfo(id = "s1", origin = "other").isForeignSurface())
+        // Wire decoding keeps the hints.
+        val decoded = HermesJson.decodeFromString<SessionInfo>(
+            """{"id":"s1","surface":"discord"}"""
+        )
+        assertEquals(true, decoded.isForeignSurface())
+    }
+
+    @Test
     fun extractProviderOptions_emptyWhenNoLists() {
         assertTrue(extractProviderOptions(HermesJson.parseToJsonElement("""{"x":1}""")).isEmpty())
         assertEquals(emptyList<String>(), extractModelIds(HermesJson.parseToJsonElement("""{"x":1}""")))
