@@ -129,6 +129,43 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun displayOptions_persistOnSave() {
+        saveSettings(ClientSettings(baseUrl = "https://example.com", apiKey = "k"))
+        compose.setContent {
+            HermesAppTheme {
+                SettingsScreen(onNavigateBack = {})
+            }
+        }
+        // Language is a dropdown: open it, see every choice, pick Japanese.
+        compose.onNodeWithTag("langField").performScrollTo()
+        compose.onNodeWithTag("langField").performClick()
+        compose.onNodeWithTag("lang-ko").assertIsDisplayed()
+        compose.onNodeWithTag("lang-ja").performClick()
+        compose.onNodeWithTag("showForeign").performScrollTo()
+        compose.onNodeWithTag("showForeign").performClick()
+        compose.onNodeWithTag("enterToSend").performScrollTo()
+        compose.onNodeWithTag("enterToSend").performClick()
+        compose.onNodeWithTag("save").performScrollTo()
+        compose.onNodeWithTag("save").performClick()
+        val app = ApplicationProvider.getApplicationContext<Application>() as HermesApp
+        compose.waitUntil(timeoutMillis = 10_000) {
+            compose.onAllNodesWithText("Saved ✓").fetchSemanticsNodes().isNotEmpty()
+        }
+        kotlinx.coroutines.runBlocking {
+            val deadline = System.currentTimeMillis() + 10_000
+            while (app.container.settingsStore.current().language != "ja") {
+                if (System.currentTimeMillis() >= deadline) error("timed out saving language")
+                withContext(Dispatchers.IO) { Thread.sleep(100) }
+            }
+        }
+        kotlinx.coroutines.runBlocking {
+            val saved = app.container.settingsStore.current()
+            assertTrue(saved.showForeignSessions == false)
+            assertTrue(saved.enterToSend == true)
+        }
+    }
+
+    @Test
     fun testButton_showsHealthResult() {
         val want = server.url("").toString().removeSuffix("/")
         saveSettings(ClientSettings(baseUrl = want, apiKey = "k"))

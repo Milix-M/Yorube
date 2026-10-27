@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">Hermes クライアント</string>
 
-    <string name="empty_conversations">会話はまだありません。+で始めます。</string>
+    <string name="empty_conversations">会話はまだありません</string>
     <string name="delete_title">会話を削除しますか?</string>
     <string name="delete">削除</string>
     <string name="cancel">キャンセル</string>
@@ -10,7 +10,7 @@
     <string name="new_chat">新しい会話</string>
     <string name="stop">止める</string>
     <string name="message_hint">メッセージ…</string>
-    <string name="steer_hint">実行中に一言…</string>
+    <string name="steer_hint">追加の指示…</string>
     <string name="approval_title">承認が必要です</string>
     <string name="question_title">質問</string>
     <string name="send">送る</string>
@@ -69,6 +69,7 @@
     <string name="err_draining">サーバーが混雑・停止中です (%1$d)。待って再試行してください。</string>
     <string name="err_server">サーバー誤り %1$d: %2$s</string>
     <string name="err_network">接続が切れました（%1$s）。会話を開き直して続けてください。</string>
+    <string name="fork_and_continue">分岐して続ける</string>
     <string name="err_run_gone">実行は既に終了していたため、送信されませんでした。</string>
     <string name="err_health_key">Base URLとAPIキーが必要です。</string>
     <string name="err_checking">確認中</string>
@@ -101,7 +102,6 @@
     <string name="session_options">会話の操作</string>
     <string name="pin">固定する</string>
     <string name="unpin">固定を外す</string>
-    <string name="pinned">固定中</string>
     <string name="hermes_subtitle">オンデバイス エージェント</string>
     <string name="running_status">実行中…</string>
     <string name="ready_status">準備OK</string>
@@ -111,8 +111,22 @@
     <string name="activity_summary">ツール %1$d件 · %2$s</string>
     <string name="expand">展開</string>
     <string name="collapse">折りたたむ</string>
-    <string name="history_today">今日</string>
-    <string name="history_week">過去7日間</string>
-    <string name="history_month">過去30日間</string>
-    <string name="history_older">それ以前</string>
+
+    <string name="section_general">一般</string>
+    <string name="language">言語</string>
+    <string name="lang_system">システム既定</string>
+    <string name="lang_ja">日本語</string>
+    <string name="lang_en">English</string>
+    <string name="lang_zh">中文</string>
+    <string name="lang_ko">한국어</string>
+    <string name="show_foreign">他のアプリの会話を表示する</string>
+    <string name="enter_to_send">Enterで送信する</string>
+
+    <string name="foreign_title">この会話を続けますか?</string>
+    <string name="foreign_message">この会話は他の画面の所有なので読み取り専用です。分岐して自分のコピーにすれば続けられます。</string>
+    <string name="foreign_banner">読み取り専用: 他の画面の所有です。</string>
+    <string name="foreign_input_hint">分岐して続ける…</string>
+    <string name="not_now">後で</string>
+    <string name="retry">再試行</string>
+    <string name="app_version">バージョン</string>
 </resources>

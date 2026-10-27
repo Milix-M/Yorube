@@ -2,6 +2,7 @@ package com.hermes.client
 
 import android.app.Application
 import com.hermes.client.data.api.HermesApi
+import com.hermes.client.data.crash.CrashLog
 import com.hermes.client.data.fcm.WatchRegistrar
 import com.hermes.client.data.store.ClientSettings
 import com.hermes.client.data.store.SettingsStore
@@ -32,6 +33,7 @@ class HermesApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        CrashLog.install(this)
         container = AppContainer(this)
     }
 }

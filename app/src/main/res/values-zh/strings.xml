@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Hermes 客户端</string>
+
+    <string name="empty_conversations">还没有会话</string>
+    <string name="delete_title">删除此会话?</string>
+    <string name="delete">删除</string>
+    <string name="cancel">取消</string>
+
+    <string name="new_chat">新会话</string>
+    <string name="stop">停止</string>
+    <string name="message_hint">消息…</string>
+    <string name="steer_hint">追加说明…</string>
+    <string name="approval_title">需要审批</string>
+    <string name="question_title">问题</string>
+    <string name="send">发送</string>
+
+    <string name="settings">设置</string>
+    <string name="section_server">服务器</string>
+    <string name="section_cloudflare">Cloudflare Access (可选)</string>
+    <string name="section_cloudflare_help">仅当服务器 URL 受 Cloudflare Access 保护时填写。</string>
+    <string name="cf_id">客户端 ID</string>
+    <string name="cf_secret">客户端密钥</string>
+    <string name="base_url">Base URL</string>
+    <string name="api_key">API 密钥</string>
+    <string name="model">模型</string>
+    <string name="provider_optional">服务商 (可选)</string>
+    <string name="section_notifications">通知 (M3)</string>
+    <string name="relay_optional">中转 URL (可选)</string>
+    <string name="fcm_token">FCM 令牌: %1$s…</string>
+    <string name="fcm_token_none">FCM 令牌: (暂无)</string>
+    <string name="section_firebase">Firebase 手动设置 (可选)</string>
+    <string name="section_firebase_help">不使用 google-services.json 接收推送时才需要。从 Firebase 控制台复制四个值。</string>
+    <string name="fb_project">项目 ID</string>
+    <string name="fb_app">应用 ID</string>
+    <string name="fb_key">API 密钥</string>
+    <string name="fb_sender">发送者 ID</string>
+    <string name="save">保存设置</string>
+    <string name="saved">已保存 ✓</string>
+    <string name="test">测试连接</string>
+    <string name="testing">检查中…</string>
+    <string name="test_ok">连接正常</string>
+    <string name="test_failed">无法连接</string>
+    <string name="test_result_title">连接结果</string>
+    <string name="close">关闭</string>
+    <string name="show">显示</string>
+    <string name="hide">隐藏</string>
+
+    <string name="st_loading">正在加载历史</string>
+    <string name="st_starting">正在启动</string>
+    <string name="st_writing">正在书写</string>
+    <string name="st_reconnecting">正在重连</string>
+    <string name="st_stopping">正在停止</string>
+    <string name="st_steered">已追加说明</string>
+    <string name="st_approved">已批准: %1$s</string>
+    <string name="st_answered">已回答</string>
+    <string name="st_waiting_approval">等待审批</string>
+    <string name="st_question">有问题待答</string>
+    <string name="st_cancelled">已取消</string>
+    <string name="st_failed">失败</string>
+    <string name="st_stream_ended">连接已断开</string>
+    <string name="st_unknown_restart">重启后状态未知。请开始新会话。</string>
+    <string name="st_undelivered">保留未送达的追加输入: %1$s</string>
+
+    <string name="err_not_configured">尚未设置 Base URL 和 API 密钥。请打开设置。</string>
+    <string name="err_conflict">与之前的请求冲突 (%1$d)。已重新加载状态。</string>
+    <string name="err_unknown_exec">执行结果未知。请开始新会话，不要重发。</string>
+    <string name="err_foreign">此会话不可用（已删除或属于其他端）。请开始新会话。</string>
+    <string name="err_draining">服务器繁忙或维护中 (%1$d)。请稍后重试。</string>
+    <string name="err_server">服务器错误 %1$d: %2$s</string>
+    <string name="err_network">连接已断开（%1$s）。请重新打开会话继续。</string>
+    <string name="fork_and_continue">分叉并继续</string>
+    <string name="err_run_gone">执行已结束，未发送任何内容。</string>
+    <string name="err_health_key">需要 Base URL 和 API 密钥。</string>
+    <string name="err_checking">检查中</string>
+    <string name="err_health_caps">health=%1$s，功能获取失败: %2$s</string>
+
+    <string name="tool_started">▶ %1$s %2$s</string>
+    <string name="tool_finished">■ %1$s (%2$s秒) %3$s</string>
+    <string name="delegating">委派中: %1$s</string>
+    <string name="child_done">子任务 %1$s: %2$s</string>
+
+    <string name="conversations">会话</string>
+    <string name="search_hint">搜索</string>
+    <string name="search_chats">搜索聊天</string>
+    <string name="menu">菜单</string>
+    <string name="back">返回</string>
+    <string name="settings_desc">设置</string>
+    <string name="refresh">刷新</string>
+    <string name="scroll_to_bottom">回到最新</string>
+    <string name="thinking">思考中…</string>
+    <string name="thinking_2">正在处理…</string>
+    <string name="thinking_3">正在收集信息…</string>
+    <string name="thinking_4">正在规划下一步…</string>
+    <string name="thinking_5">正在确认内容…</string>
+    <string name="copy">复制</string>
+    <string name="copied">已复制</string>
+    <string name="attach">添加图片</string>
+    <string name="image_label">图片</string>
+    <string name="empty_chat_title">有什么可以帮您?</string>
+    <string name="empty_chat_subtitle">让服务器上的 Hermes 为您执行任务。</string>
+    <string name="session_options">会话操作</string>
+    <string name="pin">置顶</string>
+    <string name="unpin">取消置顶</string>
+    <string name="hermes_subtitle">端侧智能体控制台</string>
+    <string name="running_status">运行中…</string>
+    <string name="ready_status">就绪</string>
+    <string name="approval_desc">请在服务器执行前确认命令。</string>
+    <string name="clarify_hint">输入回答…</string>
+    <string name="details">详情</string>
+    <string name="activity_summary">%1$d 个工具步骤 · %2$s</string>
+    <string name="expand">展开</string>
+    <string name="collapse">收起</string>
+
+    <string name="section_general">通用</string>
+    <string name="language">语言</string>
+    <string name="lang_system">跟随系统</string>
+    <string name="lang_ja">日本語</string>
+    <string name="lang_en">English</string>
+    <string name="lang_zh">中文</string>
+    <string name="lang_ko">한국어</string>
+    <string name="show_foreign">显示其他应用的会话</string>
+    <string name="enter_to_send">按 Enter 发送</string>
+
+    <string name="foreign_title">要继续此会话吗?</string>
+    <string name="foreign_message">此会话属于其他端，在此为只读。分叉为自己的副本即可继续聊天。</string>
+    <string name="foreign_banner">只读：属于其他端。</string>
+    <string name="foreign_input_hint">分叉后继续…</string>
+    <string name="not_now">稍后</string>
+    <string name="retry">重试</string>
+    <string name="app_version">版本</string>
+</resources>

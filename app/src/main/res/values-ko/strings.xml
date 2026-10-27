@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Hermes 클라이언트</string>
+
+    <string name="empty_conversations">아직 대화가 없습니다</string>
+    <string name="delete_title">대화를 삭제할까요?</string>
+    <string name="delete">삭제</string>
+    <string name="cancel">취소</string>
+
+    <string name="new_chat">새 대화</string>
+    <string name="stop">중지</string>
+    <string name="message_hint">메시지…</string>
+    <string name="steer_hint">추가 지시…</string>
+    <string name="approval_title">승인이 필요합니다</string>
+    <string name="question_title">질문</string>
+    <string name="send">보내기</string>
+
+    <string name="settings">설정</string>
+    <string name="section_server">서버</string>
+    <string name="section_cloudflare">Cloudflare Access (선택)</string>
+    <string name="section_cloudflare_help">서버 URL이 Cloudflare Access로 보호될 때만 입력하세요.</string>
+    <string name="cf_id">클라이언트 ID</string>
+    <string name="cf_secret">클라이언트 시크릿</string>
+    <string name="base_url">Base URL</string>
+    <string name="api_key">API 키</string>
+    <string name="model">모델</string>
+    <string name="provider_optional">프로바이더 (선택)</string>
+    <string name="section_notifications">알림 (M3)</string>
+    <string name="relay_optional">릴레이 URL (선택)</string>
+    <string name="fcm_token">FCM 토큰: %1$s…</string>
+    <string name="fcm_token_none">FCM 토큰: (아직 없음)</string>
+    <string name="section_firebase">Firebase 수동 설정 (선택)</string>
+    <string name="section_firebase_help">google-services.json 없이 푸시를 받을 때만 필요합니다. Firebase 콘솔의 네 값을 입력하세요.</string>
+    <string name="fb_project">프로젝트 ID</string>
+    <string name="fb_app">앱 ID</string>
+    <string name="fb_key">API 키</string>
+    <string name="fb_sender">발신자 ID</string>
+    <string name="save">설정 저장</string>
+    <string name="saved">저장됨 ✓</string>
+    <string name="test">연결 테스트</string>
+    <string name="testing">확인 중…</string>
+    <string name="test_ok">연결됨</string>
+    <string name="test_failed">연결할 수 없음</string>
+    <string name="test_result_title">연결 결과</string>
+    <string name="close">닫기</string>
+    <string name="show">표시</string>
+    <string name="hide">숨기기</string>
+
+    <string name="st_loading">기록 불러오는 중</string>
+    <string name="st_starting">시작 중</string>
+    <string name="st_writing">작성 중</string>
+    <string name="st_reconnecting">다시 연결 중</string>
+    <string name="st_stopping">중지 중</string>
+    <string name="st_steered">추가 입력 전송됨</string>
+    <string name="st_approved">승인됨: %1$s</string>
+    <string name="st_answered">답변됨</string>
+    <string name="st_waiting_approval">승인 대기 중</string>
+    <string name="st_question">질문 있음</string>
+    <string name="st_cancelled">취소됨</string>
+    <string name="st_failed">실패</string>
+    <string name="st_stream_ended">연결이 끊어졌습니다</string>
+    <string name="st_unknown_restart">다시 시작 후 상태를 알 수 없습니다. 새 대화를 시작하세요.</string>
+    <string name="st_undelivered">미전달 추가 입력 보관: %1$s</string>
+
+    <string name="err_not_configured">Base URL과 API 키가 없습니다. 설정을 여세요.</string>
+    <string name="err_conflict">이전 요청과 충돌했습니다 (%1$d). 상태를 다시 읽었습니다.</string>
+    <string name="err_unknown_exec">결과를 알 수 없습니다. 다시 보내지 말고 새 대화를 시작하세요.</string>
+    <string name="err_foreign">이 대화를 사용할 수 없습니다(삭제되었거나 다른 화면의 것입니다). 새 대화를 시작하세요.</string>
+    <string name="err_draining">서버가 혼잡하거나 점검 중입니다 (%1$d). 잠시 후 다시 시도하세요.</string>
+    <string name="err_server">서버 오류 %1$d: %2$s</string>
+    <string name="err_network">연결이 끊어졌습니다(%1$s). 대화를 다시 열어 계속하세요.</string>
+    <string name="fork_and_continue">분기하여 계속</string>
+    <string name="err_run_gone">실행이 이미 끝나 전송되지 않았습니다.</string>
+    <string name="err_health_key">Base URL과 API 키가 필요합니다.</string>
+    <string name="err_checking">확인 중</string>
+    <string name="err_health_caps">health=%1$s, 기능 조회 실패: %2$s</string>
+
+    <string name="tool_started">▶ %1$s %2$s</string>
+    <string name="tool_finished">■ %1$s (%2$s초) %3$s</string>
+    <string name="delegating">위임 중: %1$s</string>
+    <string name="child_done">하위 %1$s: %2$s</string>
+
+    <string name="conversations">대화</string>
+    <string name="search_hint">검색</string>
+    <string name="search_chats">채팅 검색</string>
+    <string name="menu">메뉴</string>
+    <string name="back">뒤로</string>
+    <string name="settings_desc">설정</string>
+    <string name="refresh">새로고침</string>
+    <string name="scroll_to_bottom">최신으로 이동</string>
+    <string name="thinking">생각 중…</string>
+    <string name="thinking_2">작업 중…</string>
+    <string name="thinking_3">정보를 모으는 중…</string>
+    <string name="thinking_4">다음 단계를 생각 중…</string>
+    <string name="thinking_5">내용을 확인 중…</string>
+    <string name="copy">복사</string>
+    <string name="copied">복사됨</string>
+    <string name="attach">이미지 첨부</string>
+    <string name="image_label">이미지</string>
+    <string name="empty_chat_title">무엇을 도와드릴까요?</string>
+    <string name="empty_chat_subtitle">서버의 Hermes에 작업을 맡겨 보세요.</string>
+    <string name="session_options">대화 작업</string>
+    <string name="pin">고정</string>
+    <string name="unpin">고정 해제</string>
+    <string name="hermes_subtitle">온디바이스 에이전트</string>
+    <string name="running_status">실행 중…</string>
+    <string name="ready_status">준비됨</string>
+    <string name="approval_desc">서버에서 실행하기 전에 명령을 확인하세요.</string>
+    <string name="clarify_hint">답변 입력…</string>
+    <string name="details">자세히</string>
+    <string name="activity_summary">도구 %1$d건 · %2$s</string>
+    <string name="expand">펼치기</string>
+    <string name="collapse">접기</string>
+
+    <string name="section_general">일반</string>
+    <string name="language">언어</string>
+    <string name="lang_system">시스템 기본값</string>
+    <string name="lang_ja">日本語</string>
+    <string name="lang_en">English</string>
+    <string name="lang_zh">中文</string>
+    <string name="lang_ko">한국어</string>
+    <string name="show_foreign">다른 앱의 대화 표시</string>
+    <string name="enter_to_send">Enter로 전송</string>
+
+    <string name="foreign_title">이 대화를 계속할까요?</string>
+    <string name="foreign_message">이 대화는 다른 화면의 소유라 읽기 전용입니다. 분기하여 내 복사본으로 계속할 수 있습니다.</string>
+    <string name="foreign_banner">읽기 전용: 다른 화면의 소유입니다.</string>
+    <string name="foreign_input_hint">분기하여 계속…</string>
+    <string name="not_now">나중에</string>
+    <string name="retry">다시 시도</string>
+    <string name="app_version">버전</string>
+</resources>

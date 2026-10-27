@@ -10,6 +10,7 @@ import com.hermes.client.R
 import com.hermes.client.data.api.featureEnabled
 import com.hermes.client.data.fcm.FirebaseInit
 import com.hermes.client.data.store.ClientSettings
+import com.hermes.client.data.store.LANGUAGE_SYSTEM
 import com.hermes.client.data.store.SettingsStore
 import kotlinx.coroutines.launch
 
@@ -30,6 +31,9 @@ class SettingsViewModel(
     var firebaseSenderId by mutableStateOf("")
     var cfClientId by mutableStateOf("")
     var cfClientSecret by mutableStateOf("")
+    var language by mutableStateOf(LANGUAGE_SYSTEM)
+    var showForeignSessions by mutableStateOf(true)
+    var enterToSend by mutableStateOf(false)
     var fcmToken by mutableStateOf("")
         private set
     var testResult by mutableStateOf("")
@@ -55,11 +59,18 @@ class SettingsViewModel(
             cfClientId = s.cfClientId
             cfClientSecret = s.cfClientSecret
             fcmToken = s.fcmToken
+            language = s.language
+            showForeignSessions = s.showForeignSessions
+            enterToSend = s.enterToSend
         }
     }
 
     fun save() {
         viewModelScope.launch {
+            // Preserve the session marks: the screen never edits them.
+            val stored = store.current()
+            val keepForeign = stored.foreignSessionIds
+            val keepAppOwned = stored.appOwnedSessionIds
             store.save(
                 ClientSettings(
                     baseUrl = baseUrl,
@@ -74,6 +85,11 @@ class SettingsViewModel(
                     firebaseSenderId = firebaseSenderId,
                     cfClientId = cfClientId,
                     cfClientSecret = cfClientSecret,
+                    language = language,
+                    showForeignSessions = showForeignSessions,
+                    enterToSend = enterToSend,
+                    appOwnedSessionIds = keepAppOwned,
+                    foreignSessionIds = keepForeign,
                 )
             )
             saved = true
@@ -130,5 +146,7 @@ class SettingsViewModel(
         firebaseProjectId = firebaseProjectId, firebaseAppId = firebaseAppId,
         firebaseApiKey = firebaseApiKey, firebaseSenderId = firebaseSenderId,
         cfClientId = cfClientId, cfClientSecret = cfClientSecret,
+        language = language, showForeignSessions = showForeignSessions,
+        enterToSend = enterToSend,
     )
 }

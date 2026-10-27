@@ -16,6 +16,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -57,7 +58,7 @@ class ConversationListScreenTest {
     }
 
     @Test
-    fun groupsByUpdatedAt_showsTodayHeader() {
+    fun listsSession_flatWithoutHeaders() {
         val nowSec = System.currentTimeMillis() / 1000.0
         server.enqueue(
             MockResponse().setBody(
@@ -82,7 +83,10 @@ class ConversationListScreenTest {
         compose.waitUntil(timeoutMillis = 10_000) {
             compose.onAllNodesWithText("Hello").fetchSemanticsNodes().isNotEmpty()
         }
-        compose.onNodeWithText("Today").assertIsDisplayed()
+        // No date section headers: the flat list shows the row directly.
         compose.onNodeWithText("Hello").assertIsDisplayed()
+        assertTrue(
+            compose.onAllNodesWithText("Today").fetchSemanticsNodes().isEmpty()
+        )
     }
 }

@@ -18,8 +18,11 @@ import com.hermes.client.data.api.HistoryMessage
 import com.hermes.client.data.api.RunCreateRequest
 import com.hermes.client.data.api.RunEvent
 import com.hermes.client.data.api.RunStatusResponse
+import com.hermes.client.data.api.SessionMessage
 import com.hermes.client.data.api.long
 import com.hermes.client.data.api.str
+import com.hermes.client.data.store.LANGUAGE_SYSTEM
+import com.hermes.client.data.store.LocaleHelper
 import java.io.IOException
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
@@ -46,11 +49,11 @@ data class ClarifyPrompt(
 )
 
 /**
- * Total SSE resubscribes allowed per run before the stream is declared dead.
- * Drops are routine on mobile networks and proxied tunnels (Cloudflare
- * idle kills, NAT timeouts, Doze, the DESIGN §8 five-minute transport
- * buffer), so the budget covers a long agent run instead of dying on the
- * first blips.
+ * Consecutive fruitless resubscribes allowed before the stream is declared
+ * dead. The counter resets on every received event, so it only binds a
+ * persistent outage (no progress at all), never a long run over a flaky
+ * network (Cloudflare idle kills, NAT timeouts, Doze, the DESIGN §8
+ * five-minute transport buffer).
  */
 internal const val MAX_RECONNECT_ATTEMPTS = 15
 
@@ -74,69 +77,129 @@ class ChatViewModel(
         private set
     var error by mutableStateOf<String?>(null)
         private set
+    /**
+     * Text blocked by foreign-session ownership (e.g. Discord): the run was
+     * rejected, but forking the session may let the user continue in an
+     * app-owned copy. Non-null only together with [error].
+     */
+    var forkOffer by mutableStateOf<String?>(null)
+        private set
     var sessionId by mutableStateOf(initialSessionId.orEmpty())
         private set
     var historyLoading by mutableStateOf(false)
         private set
+    /**
+     * Another surface (e.g. Discord) owns this session: the input stays
+     * disabled and the user is asked to fork-and-continue instead.
+     */
+    var foreignBlocked by mutableStateOf(false)
+        private set
+    /** Fork prompt visibility. Dismissing it keeps the read-only banner. */
+    var forkDialogOpen by mutableStateOf(false)
+        private set
+    /** In-app language code driving all strings from this ViewModel. */
+    var uiLanguage by mutableStateOf(LANGUAGE_SYSTEM)
+        private set
+
+    /**
+     * True while the run is still working toward its reply: no assistant
+     * chunk yet (fresh or follow-up run), or the latest activity is a
+     * tool/skill step after streamed text. Approval/clarify waits show
+     * their own dialog instead.
+     */
+    val awaitingReply: Boolean
+        get() = busy && approval == null && clarify == null &&
+            (assistantIndex < 0 || messages.lastOrNull()?.kind == MsgKind.TOOL ||
+                messages.lastOrNull()?.kind == MsgKind.STATUS)
 
     private var runId: String? = null
     private var eventsJob: Job? = null
     private var assistantIndex: Int = -1
+    private var reconnectAttempts: Int = 0
+    private var lastReconnectCause: Exception? = null
     private var idSeq = 0L
 
     private fun s(id: Int, vararg args: Any): String =
-        container.appContext.getString(id, *args)
+        LocaleHelper.getString(container.appContext, uiLanguage, id, *args)
 
     init {
         if (sessionId.isNotBlank()) loadHistory(sessionId)
     }
 
+    /**
+     * Refreshes the cached in-app language before any user-facing string is
+     * resolved. One-shot reads only: an infinite settings collector would
+     * outlive ownerless ViewModels (unit tests) and stall later DataStore
+     * writes behind its dead dispatcher.
+     */
+    private suspend fun refreshLanguage() {
+        uiLanguage = container.settingsStore.current().language
+    }
+
     fun loadHistory(id: String) {
         viewModelScope.launch {
+            refreshLanguage()
             statusLine = s(R.string.st_loading)
             historyLoading = true
             try {
                 val api = container.api()
-                val history = api.getSessionMessages(id)
-                messages.clear()
-                for (m in history) {
-                    if (m.text.isBlank()) continue
-                    when (m.role) {
-                        "user" -> messages.add(UiMessage(idSeq++, MsgKind.USER, m.text))
-                        "assistant" -> {
-                            val split = splitUserFacing(m.text)
-                            if (split.visible.isNotBlank()) {
-                                messages.add(UiMessage(idSeq++, MsgKind.ASSISTANT, split.visible))
-                            }
-                            for (summary in split.folded) {
-                                messages.add(UiMessage(idSeq++, MsgKind.TOOL, summary))
-                            }
-                        }
-                        // tool/system/function roles are machine payloads, never chat bubbles.
-                        else -> {
-                            val summary = foldForLog(m.text)
-                            if (summary.isNotBlank()) {
-                                messages.add(UiMessage(idSeq++, MsgKind.TOOL, summary))
-                            }
-                        }
-                    }
-                }
-                // History also carries tool-role payloads: fold their markup out of bubbles.
-                foldMarkupOutOfReplies()
+                renderHistory(api.getSessionMessages(id))
                 statusLine = ""
             } catch (e: Exception) {
                 statusLine = ""
-                // Session endpoint: any 404 means the session itself is gone
-                // (deleted or never existed), regardless of the machine code.
                 error = if (e is HermesApiException && e.status == 404) {
                     s(R.string.err_foreign)
                 } else {
                     friendlyError(e)
                 }
+                // A gone-or-foreign session is read-only here: disable the
+                // input and ask to fork (the fork may still fail when the
+                // session was deleted, which surfaces as err_foreign).
+                if (e is HermesApiException &&
+                    (e.status == 404 || e.code == "permission_denied" || e.code == "not_found")
+                ) {
+                    // Record first: awaiting the flags below implies the
+                    // write already landed (no late clobber of later saves).
+                    markForeignSession(id)
+                    foreignBlocked = true
+                    forkDialogOpen = true
+                }
             } finally {
                 historyLoading = false
             }
         }
+    }
+
+    /**
+     * Renders one session history into bubbles, folding machine content into
+     * the activity log. Shared by history loads and fork-and-continue.
+     */
+    private fun renderHistory(history: List<SessionMessage>) {
+        messages.clear()
+        for (m in history) {
+            if (m.text.isBlank()) continue
+            when (m.role) {
+                "user" -> messages.add(UiMessage(idSeq++, MsgKind.USER, m.text))
+                "assistant" -> {
+                    val split = splitUserFacing(m.text)
+                    if (split.visible.isNotBlank()) {
+                        messages.add(UiMessage(idSeq++, MsgKind.ASSISTANT, split.visible))
+                    }
+                    for (summary in split.folded) {
+                        messages.add(UiMessage(idSeq++, MsgKind.TOOL, summary))
+                    }
+                }
+                // tool/system/function roles are machine payloads, never chat bubbles.
+                else -> {
+                    val summary = foldForLog(m.text)
+                    if (summary.isNotBlank()) {
+                        messages.add(UiMessage(idSeq++, MsgKind.TOOL, summary))
+                    }
+                }
+            }
+        }
+        // History also carries tool-role payloads: fold their markup out of bubbles.
+        foldMarkupOutOfReplies()
     }
 
     fun onSend() {
@@ -153,6 +216,7 @@ class ChatViewModel(
         if (text.isEmpty() || id == null || !busy) return
         input = ""
         viewModelScope.launch {
+            refreshLanguage()
             try {
                 container.api().steerRun(id, text)
                 statusLine = s(R.string.st_steered)
@@ -179,6 +243,7 @@ class ChatViewModel(
     fun onStop() {
         val id = runId ?: return
         viewModelScope.launch {
+            refreshLanguage()
             try {
                 container.api().stopRun(id)
                 statusLine = s(R.string.st_stopping)
@@ -244,6 +309,7 @@ class ChatViewModel(
         val id = runId ?: return
         approval = null
         viewModelScope.launch {
+            refreshLanguage()
             try {
                 container.api().answerApproval(id, ApprovalAnswer(req.requestId, req.executionGeneration, choice))
                 statusLine = s(R.string.st_approved, choice)
@@ -278,6 +344,7 @@ class ChatViewModel(
         val prompt = clarify ?: return
         clarify = null
         viewModelScope.launch {
+            refreshLanguage()
             try {
                 container.api().answerClarify(
                     prompt.runId,
@@ -352,6 +419,93 @@ class ChatViewModel(
 
     fun dismissError() {
         error = null
+        // A dismissed foreign error also drops its fork offer: the action is
+        // only meaningful together with the message.
+        forkOffer = null
+    }
+
+    fun dismissForkDialog() {
+        forkDialogOpen = false
+    }
+
+    /**
+     * Records a session key as app-owned: the server accepted our write, so
+     * it is provably "made by this app" regardless of owner metadata. Used
+     * by the history filter to never hide our own conversations.
+     */
+    private suspend fun markAppOwned(id: String) {
+        if (id.isBlank()) return
+        val cur = container.settingsStore.current()
+        if (cur.appOwnedSessionIds.contains(id)) return
+        container.settingsStore.save(cur.copy(appOwnedSessionIds = cur.appOwnedSessionIds + id))
+    }
+
+    /**
+     * Records a session key as owned by another surface so history can hide
+     * it when the user opts out. Set-union keeps this idempotent. Suspends
+     * so callers finish the write before reporting the block (no
+     * fire-and-forget leak into the next test or screen).
+     */
+    private suspend fun markForeignSession(id: String) {
+        if (id.isBlank()) return
+        val cur = container.settingsStore.current()
+        container.settingsStore.save(cur.copy(foreignSessionIds = cur.foreignSessionIds + id))
+    }
+
+    /**
+     * Ownership-denied runs (other-surface sessions): 401/403 or an explicit
+     * permission_denied. Bare 404s stay out: a deleted session cannot be
+     * forked either.
+     */
+    private fun isForeignOwned(e: Exception): Boolean =
+        e is HermesApiException && (e.code == "permission_denied" || e.status == 401 || e.status == 403)
+
+    /**
+     * Forks a foreign-owned session into an app-owned copy and continues
+     * there: the blocked text is resent when there is one (send-time
+     * denial), otherwise the forked history just opens (history-load
+     * denial). No-op while running/loading or with nothing to fork.
+     */
+    fun forkAndContinue() {
+        if (busy || historyLoading) return
+        if (!foreignBlocked && forkOffer.isNullOrBlank()) return
+        val text = forkOffer
+        forkOffer = null
+        forkDialogOpen = false
+        // Clear synchronously so waiters can't pass on the stale error
+        // before the launch below takes effect.
+        error = null
+        viewModelScope.launch {
+            refreshLanguage()
+            busy = true
+            statusLine = s(R.string.st_loading)
+            try {
+                val api = container.api()
+                val forked = api.forkSession(sessionId, null)
+                if (forked.isNullOrBlank()) {
+                    busy = false
+                    statusLine = ""
+                    error = s(R.string.err_foreign)
+                    return@launch
+                }
+                sessionId = forked
+                // Our own copy: never hide it as foreign.
+                markAppOwned(forked)
+                renderHistory(api.getSessionMessages(forked))
+                foreignBlocked = false
+                if (!text.isNullOrBlank()) {
+                    messages.add(UiMessage(idSeq++, MsgKind.USER, text))
+                    startRun(text, null)
+                } else {
+                    busy = false
+                    statusLine = ""
+                }
+            } catch (e: Exception) {
+                busy = false
+                statusLine = ""
+                error = friendlyError(e)
+            }
+        }
     }
 
     private fun startRun(text: String, history: List<HistoryMessage>?) {
@@ -359,11 +513,14 @@ class ChatViewModel(
         error = null
         statusLine = s(R.string.st_starting)
         assistantIndex = -1
+        reconnectAttempts = 0
+        lastReconnectCause = null
         viewModelScope.launch { doStartRun(text, history) }
     }
 
     private suspend fun doStartRun(text: String, history: List<HistoryMessage>?) {
         val settings = container.settingsStore.current()
+        uiLanguage = settings.language
         if (!settings.isConfigured) {
             busy = false
             error = s(R.string.err_not_configured)
@@ -396,6 +553,9 @@ class ChatViewModel(
                 status.sessionId?.ifBlank { null }?.let { sessionId = it }
             } catch (_: Exception) {
             }
+            // The server accepted our write on this key: provably made (or
+            // adopted) by this app, so history never hides it as foreign.
+            markAppOwned(sessionId)
             // Best-effort FCM watch so a closed app still gets the finish notice.
             // registerWatch never throws (returns false on failure), so no
             // try-catch needed here.
@@ -409,25 +569,46 @@ class ChatViewModel(
             busy = false
             statusLine = ""
             error = friendlyError(e)
+            // Other-surface sessions (e.g. Discord) reject runs: lock the
+            // input, remember the key for history filtering, and ask to
+            // fork-and-continue instead of hitting a dead end.
+            if (isForeignOwned(e)) {
+                // Record first: awaiting the flags below implies the write
+                // already landed (no late clobber of later saves).
+                markForeignSession(sessionId)
+                forkOffer = if (sessionId.isNotBlank()) text else null
+                foreignBlocked = true
+                forkDialogOpen = true
+            } else {
+                forkOffer = null
+            }
             return
         }
-        subscribe(id, attempt = 0)
+        subscribe(id)
     }
 
-    private fun subscribe(id: String, attempt: Int) {
+    private fun subscribe(id: String) {
         eventsJob?.cancel()
         eventsJob = viewModelScope.launch {
+            refreshLanguage()
             try {
                 val api = container.api()
                 var terminalSeen = false
-                api.runEvents(id).collect { event -> if (handleEvent(id, event)) terminalSeen = true }
-                if (!terminalSeen) reconnectOrFinish(id, attempt)
+                api.runEvents(id).collect { event ->
+                    // A delivered event proves the stream is healthy again:
+                    // reset the outage budget instead of letting hourly proxy
+                    // kills accumulate over a long run.
+                    reconnectAttempts = 0
+                    if (handleEvent(id, event)) terminalSeen = true
+                }
+                if (!terminalSeen) reconnectOrFinish(id)
             } catch (e: CancellationException) {
                 // Resubscribe, Stop, or scope teardown: not a stream failure,
                 // never route into the reconnect path.
                 throw e
             } catch (e: Exception) {
-                reconnectOrFinish(id, attempt, cause = e)
+                lastReconnectCause = e
+                reconnectOrFinish(id, cause = e)
             }
         }
     }
@@ -448,12 +629,14 @@ class ChatViewModel(
             is RunEvent.ToolStarted ->
                 messages.add(UiMessage(idSeq++, MsgKind.TOOL, s(R.string.tool_started, event.tool, humanPreview(event.preview)).trim()))
             is RunEvent.ToolCompleted -> {
+                // Failures stay one-line activity rows too: a red error card
+                // reads like a stop button and overstates a retried tool step.
                 val preview = humanPreview(event.preview)
                 val shown = summarizeMachineJson(preview.trim()) ?: preview
                 messages.add(
                     UiMessage(
                         idSeq++,
-                        if (event.isError) MsgKind.ERROR else MsgKind.TOOL,
+                        MsgKind.TOOL,
                         s(R.string.tool_finished, event.tool, event.durationSeconds.toString(), shown).trim(),
                     )
                 )
@@ -543,7 +726,7 @@ class ChatViewModel(
         throw last!!
     }
 
-    private suspend fun reconnectOrFinish(id: String, attempt: Int, cause: Exception? = null) {
+    private suspend fun reconnectOrFinish(id: String, cause: Exception? = null) {
         // The run is gone server-side but the session is still usable:
         // report it as an ended run, never as a dead conversation.
         if (cause != null && isRunGone(cause)) {
@@ -561,11 +744,15 @@ class ChatViewModel(
             error = friendlyError(cause)
             return
         }
-        if (attempt >= MAX_RECONNECT_ATTEMPTS) {
+        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
             busy = false
             runId = null
             statusLine = ""
-            error = cause?.let { friendlyError(it) } ?: s(R.string.st_stream_ended)
+            // Clean EOFs carry no cause: fall back to the latest real failure
+            // so a 45-transport-failure outage reports "connection lost",
+            // not a bare "stream ended".
+            error = (cause ?: lastReconnectCause)?.let { friendlyError(it) }
+                ?: s(R.string.st_stream_ended)
             return
         }
         statusLine = s(R.string.st_reconnecting)
@@ -573,26 +760,43 @@ class ChatViewModel(
         // (the §8 transport buffer expires after 5 min) don't spin.
         // delay() is also the cancellation point: teardown during the wait
         // throws here instead of polling pointlessly.
-        delay(reconnectDelayMs(attempt))
+        delay(reconnectDelayMs(reconnectAttempts))
         val status = try {
             getRunWithRetry(id)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            busy = false
-            runId = null
-            statusLine = ""
             // A run-level 404/unknown_execution from the poll means the run
             // expired server-side (the session is still usable): report it as
-            // an ended run, never as err_foreign. A permanent auth/ownership
-            // answer replaces the stale stream cause; a transient poll blip
-            // keeps the original stream cause.
-            error = when {
-                e is HermesApiException && isRunGone(e) -> runGoneError(e)
-                cause != null && isRunGone(cause) -> runGoneError(cause)
-                e is HermesApiException && isUnrecoverable(e) -> friendlyError(e)
-                else -> friendlyError(cause ?: e)
+            // an ended run, never as err_foreign. Permanent auth/ownership
+            // answers and authoritative HTTP errors (e.g. 5xx) surface
+            // immediately; a transient transport blip consumes one attempt
+            // and loops instead of killing the run (dead zones, tunnel
+            // restarts), so short total outages also heal on their own.
+            if (e is HermesApiException && isRunGone(e)) {
+                busy = false
+                runId = null
+                statusLine = ""
+                error = runGoneError(e)
+                return
             }
+            if (e is HermesApiException && isUnrecoverable(e)) {
+                busy = false
+                runId = null
+                statusLine = ""
+                error = friendlyError(e)
+                return
+            }
+            if (e is HermesApiException) {
+                busy = false
+                runId = null
+                statusLine = ""
+                error = friendlyError(e)
+                return
+            }
+            reconnectAttempts++
+            lastReconnectCause = e
+            subscribe(id)
             return
         }
         when (status.status) {
@@ -614,7 +818,8 @@ class ChatViewModel(
         // A drop may have swallowed the approval/clarify request event
         // while the run still waits: re-surface it from status.
         surfacePendingControls(id, status.pendingControls)
-        subscribe(id, attempt = attempt + 1)
+        reconnectAttempts++
+        subscribe(id)
     }
 
     private fun friendlyError(e: Exception): String {

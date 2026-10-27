@@ -2,6 +2,7 @@ package com.hermes.client.ui
 
 import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
@@ -59,6 +60,19 @@ class ChatScreenTest {
         // Suggestion chips were removed: only the headline remains, no subtitle.
         compose.onNodeWithText(app.getString(R.string.empty_chat_title)).assertIsDisplayed()
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
+    }
+
+    @Test
+    fun attachButton_isEnabledWithRegistryOwner() {
+        // The attach picker registers against the host activity: normal
+        // hosts keep it enabled (the null-owner path degrades silently).
+        clearSettings()
+        compose.setContent {
+            HermesAppTheme {
+                ChatScreen(sessionId = null, onNavigateBack = {})
+            }
+        }
+        compose.onNodeWithTag("attachButton").assertIsEnabled()
     }
 
     private fun clearSettings() {

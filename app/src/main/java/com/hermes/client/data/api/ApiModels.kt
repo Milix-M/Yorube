@@ -146,9 +146,42 @@ data class SessionInfo(
     @SerialName("session_id") val sessionId: String = "",
     val title: String? = null,
     @SerialName("updated_at") val updatedAt: Double? = null,
+    /**
+     * Owner/surface hints when the server sends them (e.g. "discord",
+     * "cli", "desktop", "app"). Absent on older servers: defaults keep
+     * decoding working and the session counts as ours.
+     */
+    val owner: String? = null,
+    val surface: String? = null,
+    val source: String? = null,
+    val origin: String? = null,
 ) {
     val key: String get() = id.ifEmpty { sessionId }
     val displayTitle: String get() = title?.ifBlank { null } ?: key.take(16)
+}
+
+/**
+ * Surfaces known to belong to another tool. Only these hide a session:
+ * anything else (blank metadata, "app", server-specific markers like
+ * "api") counts as ours. An allowlist would mass-hide app sessions the
+ * moment the server sends an unknown marker.
+ */
+private val FOREIGN_SURFACE_TOKENS = setOf(
+    "discord", "slack", "telegram", "line",
+    "cli", "desktop", "vscode", "cursor",
+)
+
+/**
+ * True when server metadata explicitly marks this session as owned by
+ * another surface (e.g. Discord). Unknown or blank metadata counts as ours
+ * so older servers and new markers never hide everything.
+ */
+fun SessionInfo.isForeignSurface(): Boolean {
+    val tags = listOfNotNull(owner, surface, source, origin)
+        .map { it.trim().lowercase() }
+        .filter { it.isNotEmpty() }
+    if (tags.isEmpty()) return false
+    return tags.any { it in FOREIGN_SURFACE_TOKENS }
 }
 
 data class SessionMessage(
