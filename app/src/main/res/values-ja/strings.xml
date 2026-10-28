@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Hermes クライアント</string>
+    <string name="app_name">Yorube</string>
 
     <string name="empty_conversations">会話はまだありません</string>
     <string name="delete_title">会話を削除しますか?</string>
