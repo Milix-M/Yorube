@@ -1,4 +1,4 @@
-# Hermes Client
+# Yorube
 
 サーバー上で動く [Hermes Agent](https://github.com/NousResearch/hermes) を外出先から使うための Android クライアントです。
 

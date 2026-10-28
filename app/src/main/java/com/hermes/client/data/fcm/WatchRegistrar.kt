@@ -16,10 +16,11 @@ data class WatchRequest(
     val run_id: String,
     val session_id: String,
     val fcm_token: String,
-    val title: String = "Hermes",
+    val title: String = "Yorube",
 )
 
 private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
+private val JSON = Json { encodeDefaults = true }
 
 /**
  * Best-effort registration with the FCM relay (server/fcm-relay).
@@ -41,7 +42,7 @@ class WatchRegistrar(
     ): Boolean = withContext(Dispatchers.IO) {
         if (relayBaseUrl.isBlank() || fcmToken.isBlank()) return@withContext false
         try {
-            val payload = Json.encodeToString(
+            val payload = JSON.encodeToString(
                 WatchRequest(runId, sessionId, fcmToken)
             )
             val request = Request.Builder()

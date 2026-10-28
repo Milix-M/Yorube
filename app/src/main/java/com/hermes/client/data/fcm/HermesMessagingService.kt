@@ -34,7 +34,7 @@ class HermesMessagingService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
         val data = message.data
         val title = message.notification?.title
-            ?: data["title"] ?: "Hermes"
+            ?: data["title"] ?: "Yorube"
         val body = message.notification?.body
             ?: data["body"] ?: data["output"]?.take(200) ?: "run finished"
         val sessionId = data["session_id"] ?: data["sessionId"] ?: ""
@@ -45,7 +45,7 @@ class HermesMessagingService : FirebaseMessagingService() {
         val manager = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             manager.createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "Hermes runs", NotificationManager.IMPORTANCE_DEFAULT)
+                NotificationChannel(CHANNEL_ID, "Yorube runs", NotificationManager.IMPORTANCE_DEFAULT)
             )
         }
         val intent = Intent(this, MainActivity::class.java).apply {

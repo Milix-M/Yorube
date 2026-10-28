@@ -1,4 +1,4 @@
-"""FCM relay for the Hermes Android client (M3).
+"""FCM relay for the Yorube Android client (M3).
 
 Watches one Hermes run to its terminal event, then pushes a single FCM
 data message. Hermes itself never talks to FCM; this small sidecar does.
@@ -131,7 +131,7 @@ def push_and_watch(run_id: str, session_id: str, fcm_token: str, title: str) -> 
         messaging.send(
             messaging.Message(
                 data={
-                    "title": title or "Hermes",
+                    "title": title or "Yorube",
                     "body": body,
                     "session_id": session_id,
                     "run_id": run_id,
@@ -186,7 +186,7 @@ class Handler(BaseHTTPRequestHandler):
         run_id = str(req.get("run_id", ""))
         session_id = str(req.get("session_id", ""))
         fcm_token = str(req.get("fcm_token", ""))
-        title = str(req.get("title", "Hermes"))
+        title = str(req.get("title", "Yorube"))
         if not run_id or not fcm_token:
             self._send(400, {"error": "run_id and fcm_token are required"})
             return

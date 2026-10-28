@@ -1,4 +1,4 @@
-# Hermes Agent Androidクライアント 設計書
+# Yorube — Hermes Agent Androidクライアント 設計書
 
 - 版: 1.0
 - 日付: 2026-10-21
