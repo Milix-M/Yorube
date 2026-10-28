@@ -1,6 +1,6 @@
 # FCM relay
 
-Hermesのrun完了を1件のFCM通知に変える外付けの中継である。Hermes本体の改修は要らない。
+Yorube の完了通知を支える外付けの中継である。Hermes の run 完了を1件のFCM通知に変える。Hermes本体の改修は要らない。
 
 ## 動かし方
 

@@ -16,7 +16,7 @@ data class WatchRequest(
     val run_id: String,
     val session_id: String,
     val fcm_token: String,
-    val title: String = "Hermes",
+    val title: String = "Yorube",
 )
 
 private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()

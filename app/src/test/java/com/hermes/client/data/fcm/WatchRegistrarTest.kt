@@ -49,6 +49,7 @@ class WatchRegistrarTest {
         val body = req.body.readUtf8()
         assertTrue(body.contains("\"run_id\":\"r1\""))
         assertTrue(body.contains("\"fcm_token\":\"tok\""))
+        assertTrue(body.contains("\"title\":\"Yorube\""))
     }
 
     @Test
