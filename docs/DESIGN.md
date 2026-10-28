@@ -10,17 +10,17 @@ Hermes Agentはサーバー上で動く自律エージェントである。本�
 
 ## 2. 目的
 
-外出先からHermesを使えるようにする。チャットの送受信ができる。実行の様子が見える。承認を求められたら答えられる。これを片手で済ませることが目的である。
+外出先からHermesを使えるようにする。チャットの送受信ができる。実行の様子が見える。承認を求められたら答えられる。これらを片手で済ませることが目的である。
 
 ## 3. 非目的
 
-次は含めない。端末内の推論、常駐Gateway、Termuxの内包、Desktop会話への直書き、FCM中継の初版同梱である。通知中継はM3に回す。
+含めないものは端末内の推論、常駐Gateway、Termuxの内包、Desktop会話への直書き、FCM中継の初版同梱である。通知中継は別途対応する。
 
 ## 4. 全体構成
 
 ```
 Androidアプリ ── HTTPS/SSE ── Hermes API Server (/v1/*, /api/*)
-                                  └── (M3) 完了検知 → FCM中継 → Android通知
+                                  └── 完了検知 → FCM中継 → Android通知
 ```
 
 * 実行、道具、記憶、cronはサーバー側に置く。
@@ -74,12 +74,12 @@ Androidアプリ ── HTTPS/SSE ── Hermes API Server (/v1/*, /api/*)
 
 ### 7.2 状態
 
-`GET /v1/runs/{id}` の `status` は次を取る。`queued`、`running`、`waiting_for_approval`、`completed`、`failed`、`cancelled`、`interrupted`、`unknown` である。`output` が最終文である。`usage` が利用量である。`runtime` が実際に使われた組である。請求表示には `runtime` を使う。
+`GET /v1/runs/{id}` の `status` は `queued`、`running`、`waiting_for_approval`、`completed`、`failed`、`cancelled`、`interrupted`、`unknown` のいずれかを取る。`output` が最終文である。`usage` が利用量である。`runtime` が実際に使われた組である。請求表示には `runtime` を使う。
 
 ### 7.3 継続の決まり
 
 * 主手段は `session_id` である。新規は空欄にし、返値を保持する。
-* `X-Hermes-Session-Id` は写しの指定に使う。`X-Hermes-Session-Key` は長期記憶の範囲指定に使う。複数人では後者を人ごとに分ける。
+* `X-Hermes-Session-Id` は写しの指定に使う。`X-Hermes-Session-Key` は長期記憶の範囲指定に使う。複数人で使う場合は `X-Hermes-Session-Key` を人ごとに分ける。
 * 圧縮で世代が進んだら古いIDは使わない。状態応答の `session_id` を正とする。
 * `previous_response_id` の連鎖も使える。ただし承認との相性は `session_id` が良い。基本は `session_id` とする。
 
@@ -96,12 +96,12 @@ Androidアプリ ── HTTPS/SSE ── Hermes API Server (/v1/*, /api/*)
 | `approval.request` | 承認ダイアログを開く。`request_id` と世代を保持する |
 | `run.completed`、`run.failed`、`run.cancelled`、`run.interrupted` | 終端として確定表示する。`pending_steer` があれば次の入力に回す |
 
-切断したら状態を取り直す。未終端なら付け直す。輸送用の一時置き場は5分で消える。長期離脱は状態取得で補う。終端の判定は終端事象で行う。`finish_reason` での代用はしない。
+切断したら状態を取り直し、未終端なら付け直す。輸送用の一時置き場は5分で消える。長期離脱は状態取得で補う。終端の判定は終端事象で行い、`finish_reason` での代用はしない。
 
 ## 9. 承認フロー
 
 1. `approval.request` を受けたらダイアログを開く。
-2. コマンド表示は秘匿整形済みである。そのまま出す。
+2. コマンド表示は秘匿整形済みのため、そのまま出す。
 3. `POST /v1/runs/{id}/approval` に `{request_id, execution_generation, choice}` を送る。`choice` は `once`、`session`、`always`、`deny` のいずれかである。
 4. 世代ずれで `409` になったら状態を取り直す。最新の `pending_controls` に従う。
 5. 回答後は購読を続ける。承認でrunを作り直さない。
@@ -110,7 +110,7 @@ Androidアプリ ── HTTPS/SSE ── Hermes API Server (/v1/*, /api/*)
 
 ### 10.1 会話一覧
 
-`GET /api/sessions` を出す。新規開始ボタンを持つ。削除と分岐はM2以降で足す。
+`GET /api/sessions` を出す。新規開始ボタンを持つ。削除と分岐は後から足す。
 
 ### 10.2 チャット
 
@@ -122,12 +122,12 @@ BaseURL、APIキー、モデルを持つ。接続試験と再取得のボタン�
 
 ## 11. 状態遷移
 
-`idle` から `started` に進む。次に `running` になる。`waiting_for_approval` では承認を優先する。終端は `completed`、`failed`、`cancelled` のいずれかである。`unknown` では再送しない。確定手順か新規会話に回す。
+`idle` から `started` に進む。次に `running` になる。`waiting_for_approval` では承認を優先する。終端は `completed`、`failed`、`cancelled` のいずれかである。`unknown` では再送せず、確定手順か新規会話に回す。
 
 ## 12. 認証と保存
 
 * APIキーは暗号化領域に置く。平文ファイルに置かない。ログに出さない。
-* Cloudflare Accessを使う場合はClient IDとClient Secretも同じ場所に置く。全要求に `CF-Access-Client-Id` と `CF-Access-Client-Secret` を付ける。HermesのAPI鍵認証はその内側で従来どおり行う。
+* Cloudflare Accessを使う場合はClient IDとClient Secretも同じ暗号化領域に置く。全要求に `CF-Access-Client-Id` と `CF-Access-Client-Secret` を付ける。HermesのAPI鍵認証はその内側で従来どおり行う。
 * BaseURLは `https://` のみ許す。例外はデバッグビルドに限る。
 * 失効時は自動再試行をしない。設定画面に誘導する。
 
@@ -146,11 +146,13 @@ BaseURL、APIキー、モデルを持つ。接続試験と再取得のボタン�
 
 `model`、`provider`、`model_options` を送る。`model` 単独は無視される場合がある。確実に切り替える場合は `provider` を添える。応答の `runtime` を正とする。
 
-## 15. 通知 (M3)
+## 15. 通知
 
-Hermes単体にFCM送付はない。方式は中継である。サーバー側で完了を受け、Firebase Admin SDKで投げる。中継はHermes本体を改修せず、完了検知の外付けで足す。Android側はSDK導入、トークン登録、通知チャネル、タップ遷移を用意する。本文全文は載せない。会話IDと件名に留める。M1ではSSEのみとする。
+Hermes単体にFCM送付はない。方式は中継である。サーバー側で完了を受け、Firebase Admin SDKで投げる。中継はHermes本体を改修せず、完了検知の外付けで足す。Android側はSDK導入、トークン登録、通知チャネル、タップ遷移を用意する。
 
-FCMはFirebase Cloud Messagingの略である。GoogleのAndroid向け通知の仕組みである。アプリが閉じていてもサーバー側から起こせる。常駐接続より電池に優しい。
+本文全文は載せない。会話IDと件名に留める。中継を使わない場合はSSEのみで受ける。
+
+FCMはFirebase Cloud Messagingの略で、GoogleのAndroid向け通知の仕組みである。アプリが閉じていてもサーバー側から起こせる。常駐接続より電池に優しい。
 
 ## 16. 技術選定
 
@@ -158,22 +160,22 @@ FCMはFirebase Cloud Messagingの略である。GoogleのAndroid向け通知の�
 * 対応はAndroid 8.0以上、arm64を目安にする。
 * 常駐接続はしない。前面での購読と切断時の状態取得で持たせる。
 
-## 17. 工程
+## 17. 機能範囲
 
-* M0 接続基盤: 設定、試験、機能検出、モデル選択
-* M1 会話: 開始、表示、中断、再接続、履歴
-* M2 操作: 承認、steer、clarify、誤り整理
-* M3 通知: 中継、登録、タップ遷移
+* 接続基盤: 設定、試験、機能検出、モデル選択
+* 会話: 開始、表示、中断、再接続、履歴
+* 操作: 承認、steer、clarify、誤り整理
+* 通知: 中継、登録、タップ遷移
 
 ## 18. リスクと制約
 
 * Dozeで裏の接続は切れる。切断復帰を前提に作る。
-* 他面の所有物は触れない。CLIやDesktopの会話への直書きは `409` になる。共有が必要ならGateway WS側の仕事であり、本設計の範囲外である。
+* 他面が所有する会話は触れない。CLIやDesktopの会話への直書きは `409` になる。共有が必要ならGateway WS側の仕事であり、本設計の範囲外である。
 * 複数人は分離が要る。`X-Hermes-Session-Key` なしに共用しない。
 * `unknown` の再送はしない。二重実行になる。
 
 ## 19. 受け入れ条件
 
-* M1: 送信から終端表示まで通る。付け直しで重複実行しない。stopが `cancelled` で終わる。
-* M2: 承認要求に答えて再開する。世代ずれで壊れない。
-* M3: 閉じた状態で通知が届く。タップで該当会話を開ける。
+* 送信から終端表示まで通る。付け直しで重複実行しない。stopが `cancelled` で終わる。
+* 承認要求に答えて再開する。世代ずれで壊れない。
+* 閉じた状態で通知が届く。タップで該当会話を開ける。

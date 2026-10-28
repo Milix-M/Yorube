@@ -1,4 +1,4 @@
-# FCM relay (M3)
+# FCM relay
 
 Hermesのrun完了を1件のFCM通知に変える外付けの中継である。Hermes本体の改修は要らない。
 
@@ -12,13 +12,15 @@ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 python relay.py  # :8090
 ```
 
-任意: `RELAY_AUTH_TOKEN` を置くと `/watch` にBearer認証が要る。`PORT` で待受変更。
+任意: `RELAY_AUTH_TOKEN` を置くと `/watch` にBearer認証が要る。`PORT` で待受を変えられる。
 
 ## 仕組み
 
-Androidがrun開始時に `POST /watch {run_id, session_id, fcm_token}` を投げる。中継は `GET /v1/runs/{id}/events` を終端まで読み、FCMデータメッセージを1件送る。本文は先頭200字、タップで該当会話を開く。
+Androidはrun開始時に `POST /watch {run_id, session_id, fcm_token}` を投げる。中継は `GET /v1/runs/{id}/events` を終端まで読み、FCMデータメッセージを1件送る。本文は先頭200字に絞る。タップで該当会話を開く。
 
-## 必要な手続き (持ち主の操作が要る)
+## 必要な手続き
+
+持ち主の操作が要る:
 
 1. Firebaseプロジェクトの作成
 2. Androidアプリの登録 (パッケージ `com.hermes.client`)
