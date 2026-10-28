@@ -1,8 +1,8 @@
 # Yorube
 
-サーバー上で動く [Hermes Agent](https://github.com/NousResearch/hermes) を外出先から使うための Android クライアントです。
+[Hermes Agent](https://github.com/nousresearch/hermes-agent) の非公式 Android クライアントです。
 
-名前の **Yorube**（ヨルベ）は「寄る辺」、つまり頼りにできる場所に由来します。サーバー上のエージェントに、外出先からいつでも頼れる窓口を、という思いを込めています。
+名前の **Yorube**（ヨルベ）は「寄る辺」、つまり頼りにできる場所に由来します。サーバー上のエージェントに、いつでも頼れる窓口を、という思いを込めています。
 
 ## できること
 
