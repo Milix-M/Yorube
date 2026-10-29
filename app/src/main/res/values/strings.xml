@@ -61,6 +61,17 @@
     <string name="st_unknown_restart">Run state is unknown after a restart. Start a new conversation.</string>
     <string name="st_undelivered">undelivered steer kept: %1$s</string>
 
+    <string name="cmd_help">Commands:\n/stop — stop the current run\n/steer &lt;text&gt; — add instructions to the current run\n/new — start a new conversation\n/model — show the current model and options\n/model &lt;provider&gt;/&lt;model&gt; — switch the model\n/help — show this list</string>
+    <string name="cmd_unknown">Unknown command: %1$s. Send /help for the list.</string>
+    <string name="cmd_stop_not_running">Nothing is running to stop.</string>
+    <string name="cmd_steer_usage">Usage: /steer &lt;text&gt; — text is required.</string>
+    <string name="cmd_steer_not_running">Nothing is running to steer. Send a normal message instead.</string>
+    <string name="cmd_model_usage">Usage: /model &lt;provider&gt;/&lt;model&gt; or /model &lt;model&gt;.</string>
+    <string name="cmd_model_set">Model set to %1$s. Applies from the next run.</string>
+    <string name="cmd_model_unset">server default</string>
+    <string name="cmd_model_none">(none reported by the server)</string>
+    <string name="cmd_model_list">Current model: %1$s\nAvailable:\n%2$s</string>
+
     <string name="err_not_configured">Base URL and API key are not set. Open Settings.</string>
     <string name="err_conflict">Conflict with an earlier request (%1$d). State reloaded.</string>
     <string name="err_unknown_exec">Run outcome is unknown. Start a new conversation instead of resending.</string>

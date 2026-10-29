@@ -62,6 +62,17 @@
     <string name="st_unknown_restart">再起動で状態不明です。新規会話を始めてください。</string>
     <string name="st_undelivered">未達の一言を保持: %1$s</string>
 
+    <string name="cmd_help">コマンド:\n/stop — 実行中の処理を停止\n/steer &lt;テキスト&gt; — 実行中の処理に追加指示\n/new — 新しい会話を開始\n/model — 現在のモデルと候補を表示\n/model &lt;provider&gt;/&lt;model&gt; — モデルを切り替え\n/help — この一覧を表示</string>
+    <string name="cmd_unknown">不明なコマンドです: %1$s（/help で一覧表示）</string>
+    <string name="cmd_stop_not_running">停止できる実行中の処理がありません。</string>
+    <string name="cmd_steer_usage">使い方: /steer &lt;テキスト&gt; — テキストが必要です。</string>
+    <string name="cmd_steer_not_running">実行中の処理がありません。通常のメッセージとして送信してください。</string>
+    <string name="cmd_model_usage">使い方: /model &lt;provider&gt;/&lt;model&gt; または /model &lt;model&gt;</string>
+    <string name="cmd_model_set">モデルを %1$s に設定しました。次の実行から反映されます。</string>
+    <string name="cmd_model_unset">サーバー既定</string>
+    <string name="cmd_model_none">（サーバーから候補が返りませんでした）</string>
+    <string name="cmd_model_list">現在のモデル: %1$s\n利用可能:\n%2$s</string>
+
     <string name="err_not_configured">Base URLとAPIキーが未設定です。設定を開いてください。</string>
     <string name="err_conflict">以前の要求と競合しました (%1$d)。状態を取り直しました。</string>
     <string name="err_unknown_exec">結果不明です。再送せず新規会話を始めてください。</string>

@@ -19,6 +19,8 @@ import com.hermes.client.data.api.RunCreateRequest
 import com.hermes.client.data.api.RunEvent
 import com.hermes.client.data.api.RunStatusResponse
 import com.hermes.client.data.api.SessionMessage
+import com.hermes.client.data.api.extractModelIds
+import com.hermes.client.data.api.extractProviderOptions
 import com.hermes.client.data.api.long
 import com.hermes.client.data.api.str
 import com.hermes.client.data.store.LANGUAGE_SYSTEM
@@ -100,6 +102,12 @@ class ChatViewModel(
     /** In-app language code driving all strings from this ViewModel. */
     var uiLanguage by mutableStateOf(LANGUAGE_SYSTEM)
         private set
+    /**
+     * Set by ChatScreen: leaves this conversation for a fresh one (the
+     * /new command). Navigation lives in the NavGraph, so the ViewModel
+     * only holds the hook; without a host it stays a no-op.
+     */
+    var navigateToFreshChat: () -> Unit = {}
 
     /**
      * True while the run is still working toward its reply: no assistant
@@ -208,7 +216,9 @@ class ChatViewModel(
 
     fun onSend() {
         val text = input.trim()
-        if (text.isEmpty() || busy) return
+        if (text.isEmpty()) return
+        if (dispatchCommand(text)) return
+        if (busy) return
         input = ""
         messages.add(UiMessage(idSeq++, MsgKind.USER, text))
         startRun(text, history = null)
@@ -216,8 +226,15 @@ class ChatViewModel(
 
     fun onSteer() {
         val text = input.trim()
+        if (text.isEmpty()) return
+        if (dispatchCommand(text)) return
+        steer(text)
+    }
+
+    /** Steers the current run with [text]; a no-op when nothing runs. */
+    private fun steer(text: String) {
         val id = runId
-        if (text.isEmpty() || id == null || !busy) return
+        if (id == null || !busy) return
         input = ""
         viewModelScope.launch {
             refreshLanguage()
@@ -265,6 +282,154 @@ class ChatViewModel(
                 }
             }
         }
+    }
+
+    /**
+     * Handles a slash command typed into the input (see [SlashCommand]).
+     * Returns true when [text] was a command: commands are handled
+     * locally and are never sent to the server as a message. The
+     * interception runs before the busy guards so /stop and /steer also
+     * work while a run is active (the input bar routes Enter to
+     * [onSteer] then). /new, /help and /model are local or settings-only
+     * and also work while busy; a model change applies from the next run.
+     */
+    private fun dispatchCommand(text: String): Boolean {
+        when (val cmd = parseSlashCommand(text)) {
+            SlashCommand.NotACommand -> return false
+            SlashCommand.Stop -> {
+                input = ""
+                if (busy && runId != null) {
+                    onStop()
+                } else {
+                    postErrorMessage(s(R.string.cmd_stop_not_running))
+                }
+            }
+            is SlashCommand.Steer -> {
+                input = ""
+                when {
+                    cmd.text == null ->
+                        postErrorMessage(s(R.string.cmd_steer_usage))
+                    !busy || runId == null ->
+                        postErrorMessage(s(R.string.cmd_steer_not_running))
+                    else -> steer(cmd.text)
+                }
+            }
+            SlashCommand.New -> {
+                input = ""
+                navigateToFreshChat()
+            }
+            SlashCommand.Help -> {
+                input = ""
+                postStatusMessage(s(R.string.cmd_help))
+            }
+            is SlashCommand.Model -> {
+                input = ""
+                handleModelCommand(cmd.arg)
+            }
+            is SlashCommand.Unknown -> {
+                input = ""
+                postErrorMessage(s(R.string.cmd_unknown, cmd.name))
+            }
+        }
+        return true
+    }
+
+    private fun postStatusMessage(text: String) {
+        messages.add(UiMessage(idSeq++, MsgKind.STATUS, text))
+    }
+
+    private fun postErrorMessage(text: String) {
+        messages.add(UiMessage(idSeq++, MsgKind.ERROR, text))
+    }
+
+    /**
+     * /model with an argument: "<provider>/<model>" switches both stored
+     * settings; a bare model name switches only the model and keeps the
+     * current provider (the settings keep the two as separate fields, see
+     * SettingsStore). The change applies from the next run because
+     * doStartRun reads the settings on every start. /model without an
+     * argument lists the current model and the server-reported options
+     * as a local STATUS message; an API failure surfaces as a local
+     * ERROR message instead of crashing.
+     */
+    private fun handleModelCommand(arg: String?) {
+        if (arg == null) {
+            showModelOptions()
+            return
+        }
+        val slash = arg.indexOf('/')
+        val newProvider: String?
+        val newModel: String
+        if (slash >= 0) {
+            newProvider = arg.substring(0, slash).trim()
+            newModel = arg.substring(slash + 1).trim()
+            if (newProvider.isEmpty() || newModel.isEmpty() ||
+                newProvider.any { it.isWhitespace() } || newModel.any { it.isWhitespace() }
+            ) {
+                postErrorMessage(s(R.string.cmd_model_usage))
+                return
+            }
+        } else {
+            newModel = arg.trim()
+            if (newModel.isEmpty() || newModel.any { it.isWhitespace() }) {
+                postErrorMessage(s(R.string.cmd_model_usage))
+                return
+            }
+            newProvider = null
+        }
+        viewModelScope.launch {
+            refreshLanguage()
+            try {
+                val store = container.settingsStore
+                val cur = store.current()
+                val provider = newProvider ?: cur.provider
+                store.save(cur.copy(model = newModel, provider = provider))
+                postStatusMessage(s(R.string.cmd_model_set, displayModel(provider, newModel)))
+            } catch (e: Exception) {
+                postErrorMessage(friendlyError(e))
+            }
+        }
+    }
+
+    private fun showModelOptions() {
+        viewModelScope.launch {
+            refreshLanguage()
+            val cur = container.settingsStore.current()
+            val current = displayModel(cur.provider, cur.model)
+                .ifBlank { s(R.string.cmd_model_unset) }
+            try {
+                val body = container.api().getModelOptions()
+                val root = HermesJson.parseToJsonElement(body)
+                val lines = mutableListOf<String>()
+                val providers = extractProviderOptions(root)
+                if (providers.isNotEmpty()) {
+                    for (p in providers) {
+                        lines.add(
+                            if (p.models.isEmpty()) p.name
+                            else "${p.name}: ${p.models.joinToString(", ")}"
+                        )
+                    }
+                } else {
+                    val ids = extractModelIds(root)
+                    if (ids.isNotEmpty()) lines.add(ids.joinToString(", "))
+                }
+                val available = if (lines.isEmpty()) {
+                    s(R.string.cmd_model_none)
+                } else {
+                    lines.joinToString("\n")
+                }
+                postStatusMessage(s(R.string.cmd_model_list, current, available))
+            } catch (e: Exception) {
+                postErrorMessage(friendlyError(e))
+            }
+        }
+    }
+
+    /** "provider/model" display form; either side may be blank. */
+    private fun displayModel(provider: String, model: String): String = when {
+        provider.isBlank() -> model
+        model.isBlank() -> provider
+        else -> "$provider/$model"
     }
 
     /**

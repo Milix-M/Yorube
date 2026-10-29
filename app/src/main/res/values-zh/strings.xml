@@ -62,6 +62,17 @@
     <string name="st_unknown_restart">重启后状态未知。请开始新会话。</string>
     <string name="st_undelivered">保留未送达的追加输入: %1$s</string>
 
+    <string name="cmd_help">命令:\n/stop — 停止当前运行\n/steer &lt;文本&gt; — 向运行中的任务追加指示\n/new — 开始新对话\n/model — 显示当前模型和候选\n/model &lt;provider&gt;/&lt;model&gt; — 切换模型\n/help — 显示此列表</string>
+    <string name="cmd_unknown">未知命令:%1$s(发送 /help 查看列表)</string>
+    <string name="cmd_stop_not_running">没有可以停止的运行。</string>
+    <string name="cmd_steer_usage">用法:/steer &lt;文本&gt; — 需要输入文本。</string>
+    <string name="cmd_steer_not_running">当前没有运行中的任务。请发送普通消息。</string>
+    <string name="cmd_model_usage">用法:/model &lt;provider&gt;/&lt;model&gt; 或 /model &lt;model&gt;</string>
+    <string name="cmd_model_set">已将模型设置为 %1$s,将从下一次运行起生效。</string>
+    <string name="cmd_model_unset">服务器默认</string>
+    <string name="cmd_model_none">(服务器未返回候选)</string>
+    <string name="cmd_model_list">当前模型:%1$s\n可用:\n%2$s</string>
+
     <string name="err_not_configured">尚未设置 Base URL 和 API 密钥。请打开设置。</string>
     <string name="err_conflict">与之前的请求冲突 (%1$d)。已重新加载状态。</string>
     <string name="err_unknown_exec">执行结果未知。请开始新会话，不要重发。</string>
