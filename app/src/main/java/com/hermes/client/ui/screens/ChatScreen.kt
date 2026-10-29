@@ -292,9 +292,7 @@ fun ChatScreen(
                         start = 16.dp,
                         end = 16.dp,
                         top = 12.dp,
-                        // Keep the last row above the centered jump button so it
-                        // stays tappable while the button is visible.
-                        bottom = 88.dp,
+                        bottom = 12.dp,
                     ),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
@@ -325,7 +323,6 @@ fun ChatScreen(
                     if (vm.awaitingReply) {
                         item(key = "thinking") { ThinkingRow() }
                     }
-                    item(key = "bottom-spacer") { Spacer(Modifier.height(8.dp)) }
                 }
             }
             if (!atLatestUser && blocks.isNotEmpty()) {
