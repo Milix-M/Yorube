@@ -163,6 +163,10 @@ fun ChatScreen(
                 ChatViewModel(app.container, sessionId) as T
         }
     )
+    // The /new slash command leaves through the same navigation as back.
+    LaunchedEffect(onNavigateToFreshChat) {
+        vm.navigateToFreshChat = onNavigateToFreshChat
+    }
     val snackbar = remember { SnackbarHostState() }
     val forkLabel = stringResource(R.string.fork_and_continue)
     val listState = rememberLazyListState()

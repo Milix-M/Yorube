@@ -7,6 +7,7 @@ import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.SocketPolicy
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
@@ -552,5 +553,91 @@ class HermesApiTest {
         // branch for line coverage; the collector sees an empty stream.
         val events = cancellingReadApi.runEvents("r1").toList()
         assertTrue(events.isEmpty())
+    }
+
+    @Test
+    fun createSession_wrappedShape_returnsIdAndSendsTitle() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(201)
+                .setBody("""{"session":{"id":"s-new","title":"exp"}}""")
+        )
+        assertEquals("s-new", api.createSession("exp"))
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/api/sessions", recorded.path)
+        assertTrue(recorded.body.readUtf8().contains("\"title\":\"exp\""))
+    }
+
+    @Test
+    fun createSession_flatShapeAndNoTitle() = runTest {
+        server.enqueue(MockResponse().setBody("""{"session_id":"s-flat"}"""))
+        assertEquals("s-flat", api.createSession())
+        val recorded = server.takeRequest()
+        assertEquals("{}", recorded.body.readUtf8())
+    }
+
+    @Test
+    fun createSession_errorAndUnreadable_returnNull() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(404).setBody("""{"error":{"message":"no"}}""")
+        )
+        assertNull(api.createSession("x"))
+        server.enqueue(MockResponse().setBody("""not json"""))
+        assertNull(api.createSession("x"))
+        server.enqueue(MockResponse().setBody("""{}"""))
+        assertNull(api.createSession("x"))
+    }
+
+    @Test
+    fun getSession_wrapped_readsTitle() = runTest {
+        server.enqueue(
+            MockResponse().setBody("""{"session":{"id":"s1","title":"My Title","updated_at":123.0}}""")
+        )
+        val info = api.getSession("s1")
+        assertEquals("s1", info?.key)
+        assertEquals("My Title", info?.title)
+        assertEquals(123.0, info?.updatedAt)
+        val recorded = server.takeRequest()
+        assertEquals("GET", recorded.method)
+        assertEquals("/api/sessions/s1", recorded.path)
+    }
+
+    @Test
+    fun getSession_flatWithVariantTimestamp() = runTest {
+        server.enqueue(
+            MockResponse().setBody("""{"id":"s2","title":null,"last_active":"2026-01-01T00:00:00Z"}""")
+        )
+        val info = api.getSession("s2")
+        assertEquals("s2", info?.key)
+        assertNull(info?.title)
+        // last_active is not a SessionInfo field: the lenient fallback parses it.
+        assertEquals(1767225600.0, info?.updatedAt)
+    }
+
+    @Test
+    fun getSession_unreadable_returnsNull_httpErrorPropagates() = runTest {
+        server.enqueue(MockResponse().setBody("""[1,2]"""))
+        assertNull(api.getSession("s1"))
+        server.enqueue(MockResponse().setBody("""not json"""))
+        assertNull(api.getSession("s1"))
+        server.enqueue(
+            MockResponse().setResponseCode(404).setBody("""{"error":{"message":"gone"}}""")
+        )
+        try {
+            api.getSession("s1")
+            fail("expected HermesApiException")
+        } catch (e: HermesApiException) {
+            assertEquals(404, e.status)
+        }
+    }
+
+    @Test
+    fun updateSessionTitle_sendsPatch() = runTest {
+        server.enqueue(MockResponse().setBody("""{}"""))
+        api.updateSessionTitle("s1", "New \"Name\"")
+        val recorded = server.takeRequest()
+        assertEquals("PATCH", recorded.method)
+        assertEquals("/api/sessions/s1", recorded.path)
+        assertTrue(recorded.body.readUtf8().contains("\"title\":\"New \\\"Name\\\"\""))
     }
 }

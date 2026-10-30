@@ -78,6 +78,14 @@ class HermesApi(
         return b.build()
     }
 
+    private fun patch(path: String, body: String?): Request {
+        val b = Request.Builder().url(base + path)
+            .patch((body ?: "").toRequestBody(JSON_MEDIA))
+        b.header("Authorization", "Bearer $apiKey")
+        for ((k, v) in extraHeaders) if (v.isNotBlank()) b.header(k, v)
+        return b.build()
+    }
+
     private fun parseError(status: Int, body: String): HermesApiException {
         var code: String? = null
         var message = body.ifBlank { "empty response" }.take(300)
@@ -352,6 +360,51 @@ class HermesApi(
         } catch (_: Exception) {
             null
         }
+    }
+
+    /**
+     * POST /api/sessions — create an empty session row, optionally titled
+     * (the /new <name> path). Returns the new session id, or null when
+     * the server refuses or answers an unreadable body (older servers
+     * without the endpoint included).
+     */
+    suspend fun createSession(title: String? = null): String? {
+        val payload = if (title != null) "{\"title\":${title.jsonQuote()}}" else "{}"
+        return try {
+            val body = execute(post("/api/sessions", payload))
+            val o = HermesJson.parseToJsonElement(body) as? JsonObject
+            val session = o?.get("session") as? JsonObject ?: o
+            session?.str("session_id", "id")
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /**
+     * GET /api/sessions/{id} — one session's metadata (title, timestamps).
+     * Returns null when the body is unreadable; HTTP errors propagate so
+     * callers can tell a dead session from an untitled one.
+     */
+    suspend fun getSession(sessionId: String): SessionInfo? {
+        val body = execute(get("/api/sessions/$sessionId"))
+        return try {
+            val root = HermesJson.parseToJsonElement(body) as? JsonObject ?: return null
+            val o = root["session"] as? JsonObject ?: root
+            val info = HermesJson.decodeFromString<SessionInfo>(o.toString())
+            // Same timestamp leniency as listSessions.
+            if (info.updatedAt == null) {
+                extractSessionTimestamp(o)?.let { info.copy(updatedAt = it) } ?: info
+            } else {
+                info
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** PATCH /api/sessions/{id} — rename a session (the /title path). */
+    suspend fun updateSessionTitle(sessionId: String, title: String) {
+        execute(patch("/api/sessions/$sessionId", "{\"title\":${title.jsonQuote()}}"))
     }
 
     companion object {

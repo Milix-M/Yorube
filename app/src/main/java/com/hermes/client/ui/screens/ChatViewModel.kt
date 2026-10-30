@@ -19,6 +19,8 @@ import com.hermes.client.data.api.RunCreateRequest
 import com.hermes.client.data.api.RunEvent
 import com.hermes.client.data.api.RunStatusResponse
 import com.hermes.client.data.api.SessionMessage
+import com.hermes.client.data.api.extractModelIds
+import com.hermes.client.data.api.extractProviderOptions
 import com.hermes.client.data.api.long
 import com.hermes.client.data.api.str
 import com.hermes.client.data.store.LANGUAGE_SYSTEM
@@ -100,6 +102,12 @@ class ChatViewModel(
     /** In-app language code driving all strings from this ViewModel. */
     var uiLanguage by mutableStateOf(LANGUAGE_SYSTEM)
         private set
+    /**
+     * Set by ChatScreen: leaves this conversation for a fresh one (the
+     * /new command). Navigation lives in the NavGraph, so the ViewModel
+     * only holds the hook; without a host it stays a no-op.
+     */
+    var navigateToFreshChat: () -> Unit = {}
 
     /**
      * True while the run is still working toward its reply: no assistant
@@ -115,6 +123,12 @@ class ChatViewModel(
     private var runId: String? = null
     private var eventsJob: Job? = null
     private var assistantIndex: Int = -1
+    /** Last prompt actually sent as a run; /retry resends it. */
+    private var lastSentText: String? = null
+    /** Most recent run id, kept after it ends so /usage can read it back. */
+    private var lastRunId: String? = null
+    /** Prompts queued by /queue while a run is active (FIFO). */
+    private val pendingQueue = mutableListOf<String>()
     private var reconnectAttempts: Int = 0
     private var lastReconnectCause: Exception? = null
     private var idSeq = 0L
@@ -208,7 +222,9 @@ class ChatViewModel(
 
     fun onSend() {
         val text = input.trim()
-        if (text.isEmpty() || busy) return
+        if (text.isEmpty()) return
+        if (dispatchCommand(text)) return
+        if (busy) return
         input = ""
         messages.add(UiMessage(idSeq++, MsgKind.USER, text))
         startRun(text, history = null)
@@ -216,8 +232,15 @@ class ChatViewModel(
 
     fun onSteer() {
         val text = input.trim()
+        if (text.isEmpty()) return
+        if (dispatchCommand(text)) return
+        steer(text)
+    }
+
+    /** Steers the current run with [text]; a no-op when nothing runs. */
+    private fun steer(text: String) {
         val id = runId
-        if (text.isEmpty() || id == null || !busy) return
+        if (id == null || !busy) return
         input = ""
         viewModelScope.launch {
             refreshLanguage()
@@ -265,6 +288,596 @@ class ChatViewModel(
                 }
             }
         }
+    }
+
+    /**
+     * Handles a slash command typed into the input (see [SlashCommand]).
+     * Returns true when [text] was a command: commands are handled
+     * locally and are never sent to the server as a message. The
+     * interception runs before the busy guards so /stop and /steer also
+     * work while a run is active (the input bar routes Enter to
+     * [onSteer] then). Read-only and settings-only commands also work
+     * while busy; a model change applies from the next run. Commands the
+     * REST API cannot perform get a local "not supported" notice
+     * ([SlashCommand.Unsupported]) instead of reaching the agent as prose.
+     */
+    private fun dispatchCommand(text: String): Boolean {
+        when (val cmd = parseSlashCommand(text)) {
+            SlashCommand.NotACommand -> return false
+            SlashCommand.Stop -> {
+                input = ""
+                if (busy && runId != null) {
+                    onStop()
+                } else {
+                    postErrorMessage(s(R.string.cmd_stop_not_running))
+                }
+            }
+            is SlashCommand.Steer -> {
+                input = ""
+                when {
+                    cmd.text == null ->
+                        postErrorMessage(s(R.string.cmd_steer_usage))
+                    !busy || runId == null ->
+                        postErrorMessage(s(R.string.cmd_steer_not_running))
+                    else -> steer(cmd.text)
+                }
+            }
+            is SlashCommand.NewSession -> {
+                input = ""
+                val name = cmd.name
+                if (name == null) navigateToFreshChat() else createTitledSession(name)
+            }
+            SlashCommand.Help -> {
+                input = ""
+                postStatusMessage(s(R.string.cmd_help))
+            }
+            is SlashCommand.Commands -> {
+                input = ""
+                showCommands(cmd.arg)
+            }
+            is SlashCommand.Model -> {
+                input = ""
+                handleModelCommand(cmd.arg)
+            }
+            SlashCommand.Retry -> {
+                input = ""
+                retryLast()
+            }
+            is SlashCommand.Queue -> {
+                input = ""
+                handleQueue(cmd.op)
+            }
+            is SlashCommand.Branch -> {
+                input = ""
+                branchSession(cmd.name)
+            }
+            SlashCommand.Sessions -> {
+                input = ""
+                listSessionsCommand()
+            }
+            is SlashCommand.Resume -> {
+                input = ""
+                resumeSession(cmd.name)
+            }
+            is SlashCommand.Title -> {
+                input = ""
+                handleTitle(cmd.name)
+            }
+            SlashCommand.StatusInfo -> {
+                input = ""
+                showStatus()
+            }
+            SlashCommand.UsageInfo -> {
+                input = ""
+                showUsage()
+            }
+            is SlashCommand.Skills -> {
+                input = ""
+                handleSkills(cmd.arg)
+            }
+            SlashCommand.Toolsets -> {
+                input = ""
+                listToolsets()
+            }
+            is SlashCommand.Background -> {
+                input = ""
+                startBackground(cmd.prompt)
+            }
+            is SlashCommand.Approve -> {
+                input = ""
+                handleApprove(cmd.choice)
+            }
+            SlashCommand.Deny -> {
+                input = ""
+                handleDeny()
+            }
+            is SlashCommand.Unsupported -> {
+                input = ""
+                postStatusMessage(s(R.string.cmd_unsupported, cmd.name))
+            }
+            is SlashCommand.Unknown -> {
+                input = ""
+                postErrorMessage(s(R.string.cmd_unknown, cmd.name))
+            }
+        }
+        return true
+    }
+
+    /** /commands [page] — the full Hermes catalog with app support marks. */
+    private fun showCommands(arg: String?) {
+        val pageSize = 20
+        val totalPages = (HERMES_COMMANDS.size + pageSize - 1) / pageSize
+        val requested = if (arg == null) 1 else arg.toIntOrNull()
+        if (requested == null) {
+            postErrorMessage(s(R.string.cmd_commands_usage))
+            return
+        }
+        val page = requested.coerceIn(1, totalPages)
+        val lines = HERMES_COMMANDS.drop((page - 1) * pageSize).take(pageSize).map { command ->
+            val suffix =
+                if (command.action == SlashAction.UNSUPPORTED) s(R.string.cmd_commands_unsupported) else ""
+            "/${command.name} — ${command.description}$suffix"
+        }
+        postStatusMessage(
+            s(R.string.cmd_commands_list, HERMES_COMMANDS.size, page, totalPages, lines.joinToString("\n"))
+        )
+    }
+
+    /** /retry — resend the last prompt as a new run in this session. */
+    private fun retryLast() {
+        val text = lastSentText
+        when {
+            busy -> postErrorMessage(s(R.string.cmd_while_running))
+            text == null -> postErrorMessage(s(R.string.cmd_retry_none))
+            else -> {
+                messages.add(UiMessage(idSeq++, MsgKind.USER, text))
+                startRun(text, history = null)
+            }
+        }
+    }
+
+    /**
+     * /queue — app-local queue: prompts typed while a run is active go
+     * out as the next turn from [finishTerminal]. With nothing running,
+     * a queued prompt is simply sent at once (its turn is now).
+     */
+    private fun handleQueue(op: QueueOp) {
+        when (op) {
+            is QueueOp.Add -> {
+                if (busy) {
+                    pendingQueue.add(op.text)
+                    postStatusMessage(s(R.string.cmd_queue_added, pendingQueue.size))
+                } else {
+                    messages.add(UiMessage(idSeq++, MsgKind.USER, op.text))
+                    startRun(op.text, history = null)
+                }
+            }
+            QueueOp.ShowList -> postStatusMessage(queueListText())
+            QueueOp.Clear -> {
+                pendingQueue.clear()
+                postStatusMessage(s(R.string.cmd_queue_cleared))
+            }
+            is QueueOp.Remove -> {
+                val index = op.index
+                if (index == null || index < 1 || index > pendingQueue.size) {
+                    postErrorMessage(s(R.string.cmd_queue_rm_invalid))
+                } else {
+                    val removed = pendingQueue.removeAt(index - 1)
+                    postStatusMessage(s(R.string.cmd_queue_removed, removed))
+                }
+            }
+        }
+    }
+
+    private fun queueListText(): String {
+        if (pendingQueue.isEmpty()) return s(R.string.cmd_queue_empty)
+        val lines = pendingQueue.mapIndexed { i, text -> "${i + 1}. $text" }
+        return s(R.string.cmd_queue_list, lines.joinToString("\n"))
+    }
+
+    /**
+     * /new <name> — pre-create a titled session row and switch to it in
+     * place (the untitled form navigates to a fresh chat instead, whose
+     * session is only minted by its first run).
+     */
+    private fun createTitledSession(name: String) {
+        if (busy) {
+            postErrorMessage(s(R.string.cmd_while_running))
+            return
+        }
+        launchGuarded {
+            val id = container.api().createSession(name)
+            if (id.isNullOrBlank()) {
+                postErrorMessage(s(R.string.cmd_new_failed))
+            } else {
+                markAppOwned(id)
+                openSession(id)
+            }
+        }
+    }
+
+    /**
+     * /branch — fork the current session server-side and continue in the
+     * copy, in place (the app has no threads to open the branch in).
+     */
+    private fun branchSession(name: String?) {
+        when {
+            busy -> postErrorMessage(s(R.string.cmd_while_running))
+            sessionId.isBlank() -> postErrorMessage(s(R.string.cmd_no_session))
+            else -> launchGuarded {
+                val api = container.api()
+                val forked = api.forkSession(sessionId, name)
+                if (forked.isNullOrBlank()) {
+                    postErrorMessage(s(R.string.cmd_branch_failed))
+                } else {
+                    sessionId = forked
+                    // Our own copy: never hide it as foreign.
+                    markAppOwned(forked)
+                    renderHistory(api.getSessionMessages(forked))
+                    postStatusMessage(s(R.string.cmd_branch_done, forked.take(16)))
+                }
+            }
+        }
+    }
+
+    /** /sessions — the server's session list as a local status message. */
+    private fun listSessionsCommand() {
+        launchGuarded {
+            val sessions = container.api().listSessions()
+            if (sessions.isEmpty()) {
+                postStatusMessage(s(R.string.cmd_sessions_none))
+            } else {
+                val lines = sessions.take(20).map { info ->
+                    val mark = if (info.key == sessionId) " " + s(R.string.cmd_sessions_current) else ""
+                    "• ${info.displayTitle}$mark"
+                }
+                postStatusMessage(s(R.string.cmd_sessions_list, lines.joinToString("\n")))
+            }
+        }
+    }
+
+    /**
+     * /resume <name> — switch this chat to another session: exact id,
+     * then exact title, then an id-prefix / title-substring match.
+     */
+    private fun resumeSession(name: String?) {
+        when {
+            busy -> postErrorMessage(s(R.string.cmd_while_running))
+            name == null -> postErrorMessage(s(R.string.cmd_resume_usage))
+            else -> launchGuarded {
+                val sessions = container.api().listSessions()
+                val match = sessions.firstOrNull { it.key == name }
+                    ?: sessions.firstOrNull { it.title.equals(name, ignoreCase = true) }
+                    ?: sessions.firstOrNull {
+                        it.key.startsWith(name) || it.title?.contains(name, ignoreCase = true) == true
+                    }
+                when {
+                    match == null -> postErrorMessage(s(R.string.cmd_resume_not_found, name))
+                    match.key == sessionId -> postStatusMessage(s(R.string.cmd_resume_current))
+                    else -> openSession(match.key)
+                }
+            }
+        }
+    }
+
+    /**
+     * Switches this chat to [id] and loads its history (shared by
+     * /resume and the titled /new). Any stale run control is dropped:
+     * the caller has already established that nothing is running.
+     */
+    private fun openSession(id: String) {
+        sessionId = id
+        approval = null
+        clarify = null
+        error = null
+        forkOffer = null
+        foreignBlocked = false
+        forkDialogOpen = false
+        loadHistory(id)
+    }
+
+    /** /title — show the current title, or PATCH a new one. */
+    private fun handleTitle(name: String?) {
+        if (sessionId.isBlank()) {
+            postErrorMessage(s(R.string.cmd_no_session))
+            return
+        }
+        if (name == null) {
+            launchGuarded {
+                val title = container.api().getSession(sessionId)?.title?.ifBlank { null }
+                if (title == null) {
+                    postStatusMessage(s(R.string.cmd_title_unset))
+                } else {
+                    postStatusMessage(s(R.string.cmd_title_current, title))
+                }
+            }
+        } else {
+            launchGuarded {
+                container.api().updateSessionTitle(sessionId, name)
+                postStatusMessage(s(R.string.cmd_title_set, name))
+            }
+        }
+    }
+
+    /** /status — local session snapshot: id, model, state, counts. */
+    private fun showStatus() {
+        launchGuarded {
+            val cur = container.settingsStore.current()
+            val model = displayModel(cur.provider, cur.model).ifBlank { s(R.string.cmd_model_unset) }
+            val state = if (busy) s(R.string.cmd_status_running) else s(R.string.cmd_status_idle)
+            val users = messages.count { it.kind == MsgKind.USER }
+            val assistants = messages.count { it.kind == MsgKind.ASSISTANT }
+            postStatusMessage(
+                s(
+                    R.string.cmd_status,
+                    sessionId.ifBlank { "—" },
+                    model,
+                    state,
+                    users,
+                    assistants,
+                    pendingQueue.size,
+                )
+            )
+        }
+    }
+
+    /** /usage — read the latest run back and show its token usage. */
+    private fun showUsage() {
+        val id = runId ?: lastRunId
+        if (id == null) {
+            postErrorMessage(s(R.string.cmd_usage_none))
+            return
+        }
+        launchGuarded {
+            val status = container.api().getRun(id)
+            val usage = status.usage
+            if (usage == null) {
+                postStatusMessage(s(R.string.cmd_usage_unavailable, status.status))
+            } else {
+                postStatusMessage(
+                    s(
+                        R.string.cmd_usage,
+                        status.status,
+                        usage.inputTokens,
+                        usage.outputTokens,
+                        usage.totalTokens,
+                        usage.cacheReadTokens,
+                        usage.cacheWriteTokens,
+                    )
+                )
+            }
+        }
+    }
+
+    /**
+     * /skills — list what the server reports. Search/install and the
+     * write-approval subcommands have no REST equivalent (the skills API
+     * is read-only discovery), so any other argument is answered with
+     * the unsupported notice.
+     */
+    private fun handleSkills(arg: String?) {
+        if (arg != null && !arg.equals("list", ignoreCase = true)) {
+            postStatusMessage(s(R.string.cmd_unsupported, "/skills $arg"))
+            return
+        }
+        launchGuarded {
+            val skills = container.api().getSkills()
+            if (skills.isEmpty()) {
+                postStatusMessage(s(R.string.cmd_skills_none))
+            } else {
+                val lines = skills.take(30).map { skill ->
+                    if (skill.description.isBlank()) "/${skill.name}"
+                    else "/${skill.name} — ${skill.description.take(80)}"
+                }
+                postStatusMessage(s(R.string.cmd_skills_list, skills.size, lines.joinToString("\n")))
+            }
+        }
+    }
+
+    /** /toolsets — list what the server reports (display-only API). */
+    private fun listToolsets() {
+        launchGuarded {
+            val toolsets = container.api().getToolsets()
+            if (toolsets.isEmpty()) {
+                postStatusMessage(s(R.string.cmd_toolsets_none))
+            } else {
+                val lines = toolsets.map { toolset ->
+                    val label = toolset.label.ifBlank { toolset.name }
+                    if (toolset.description.isBlank()) label
+                    else "$label — ${toolset.description.take(80)}"
+                }
+                postStatusMessage(s(R.string.cmd_toolsets_list, toolsets.size, lines.joinToString("\n")))
+            }
+        }
+    }
+
+    /**
+     * /bg <prompt> — start a run on a fresh session and leave it there:
+     * no subscription is taken, so the result is read later from the
+     * conversation list (an FCM watch is registered like a normal run,
+     * so a closed app still gets the finish notice). The foreground
+     * conversation and any active run are untouched.
+     */
+    private fun startBackground(prompt: String?) {
+        if (prompt == null) {
+            postErrorMessage(s(R.string.cmd_bg_usage))
+            return
+        }
+        launchGuarded {
+            val settings = container.settingsStore.current()
+            if (!settings.isConfigured) {
+                postErrorMessage(s(R.string.err_not_configured))
+                return@launchGuarded
+            }
+            val api = container.api()
+            val accepted = api.createRun(
+                RunCreateRequest(
+                    input = prompt,
+                    sessionId = null,
+                    model = settings.model.ifBlank { null },
+                    provider = settings.provider.ifBlank { null },
+                ),
+                idempotencyKey = UUID.randomUUID().toString(),
+            )
+            val bgSessionId = try {
+                api.getRun(accepted.runId).sessionId?.ifBlank { null }
+            } catch (e: Exception) {
+                null
+            }
+            if (bgSessionId != null) markAppOwned(bgSessionId)
+            container.watchRegistrar.registerWatch(
+                relayBaseUrl = settings.relayUrl,
+                runId = accepted.runId,
+                sessionId = bgSessionId.orEmpty(),
+                fcmToken = settings.fcmToken,
+            )
+            postStatusMessage(s(R.string.cmd_bg_started, bgSessionId ?: accepted.runId))
+        }
+    }
+
+    /**
+     * /approve [session|always] — answer the waiting approval from the
+     * keyboard; a bare /approve means "once". The choice must be one
+     * the server actually offered for this request.
+     */
+    private fun handleApprove(choiceArg: String?) {
+        val req = approval
+        if (req == null) {
+            postErrorMessage(s(R.string.cmd_approval_none))
+            return
+        }
+        val choice = when (choiceArg?.lowercase()) {
+            null -> "once"
+            "once" -> "once"
+            "session" -> "session"
+            "always" -> "always"
+            else -> {
+                postErrorMessage(s(R.string.cmd_approve_usage))
+                return
+            }
+        }
+        if (choice !in req.choices) {
+            postErrorMessage(s(R.string.cmd_approve_unavailable, choice))
+            return
+        }
+        answerApproval(choice)
+    }
+
+    /** /deny — answer the waiting approval with "deny". */
+    private fun handleDeny() {
+        val req = approval
+        if (req == null) {
+            postErrorMessage(s(R.string.cmd_approval_none))
+            return
+        }
+        if ("deny" !in req.choices) {
+            postErrorMessage(s(R.string.cmd_approve_unavailable, "deny"))
+            return
+        }
+        answerApproval("deny")
+    }
+
+    private fun postStatusMessage(text: String) {
+        messages.add(UiMessage(idSeq++, MsgKind.STATUS, text))
+    }
+
+    private fun postErrorMessage(text: String) {
+        messages.add(UiMessage(idSeq++, MsgKind.ERROR, text))
+    }
+
+    /**
+     * /model with an argument: "<provider>/<model>" switches both stored
+     * settings; a bare model name switches only the model and keeps the
+     * current provider (the settings keep the two as separate fields, see
+     * SettingsStore). The change applies from the next run because
+     * doStartRun reads the settings on every start. /model without an
+     * argument lists the current model and the server-reported options
+     * as a local STATUS message; an API failure surfaces as a local
+     * ERROR message instead of crashing.
+     */
+    private fun handleModelCommand(arg: String?) {
+        if (arg == null) {
+            showModelOptions()
+            return
+        }
+        val slash = arg.indexOf('/')
+        val newProvider: String?
+        val newModel: String
+        if (slash >= 0) {
+            newProvider = arg.substring(0, slash).trim()
+            newModel = arg.substring(slash + 1).trim()
+            if (newProvider.isEmpty() || newModel.isEmpty() ||
+                newProvider.any { it.isWhitespace() } || newModel.any { it.isWhitespace() }
+            ) {
+                postErrorMessage(s(R.string.cmd_model_usage))
+                return
+            }
+        } else {
+            newModel = arg.trim()
+            if (newModel.isEmpty() || newModel.any { it.isWhitespace() }) {
+                postErrorMessage(s(R.string.cmd_model_usage))
+                return
+            }
+            newProvider = null
+        }
+        launchGuarded {
+            val store = container.settingsStore
+            val cur = store.current()
+            val provider = newProvider ?: cur.provider
+            store.save(cur.copy(model = newModel, provider = provider))
+            postStatusMessage(s(R.string.cmd_model_set, displayModel(provider, newModel)))
+        }
+    }
+
+    private fun showModelOptions() {
+        launchGuarded {
+            val cur = container.settingsStore.current()
+            val current = displayModel(cur.provider, cur.model)
+                .ifBlank { s(R.string.cmd_model_unset) }
+            val body = container.api().getModelOptions()
+            val root = HermesJson.parseToJsonElement(body)
+            val lines = mutableListOf<String>()
+            val providers = extractProviderOptions(root)
+            if (providers.isNotEmpty()) {
+                for (p in providers) {
+                    lines.add(
+                        if (p.models.isEmpty()) p.name
+                        else "${p.name}: ${p.models.joinToString(", ")}"
+                    )
+                }
+            } else {
+                val ids = extractModelIds(root)
+                if (ids.isNotEmpty()) lines.add(ids.joinToString(", "))
+            }
+            val available = if (lines.isEmpty()) {
+                s(R.string.cmd_model_none)
+            } else {
+                lines.joinToString("\n")
+            }
+            postStatusMessage(s(R.string.cmd_model_list, current, available))
+        }
+    }
+
+    /**
+     * Runs a slash command's async work, surfacing any failure as a
+     * local ERROR message instead of crashing.
+     */
+    private fun launchGuarded(block: suspend () -> Unit) {
+        viewModelScope.launch {
+            refreshLanguage()
+            try {
+                block()
+            } catch (e: Exception) {
+                postErrorMessage(friendlyError(e))
+            }
+        }
+    }
+
+    /** "provider/model" display form; either side may be blank. */
+    private fun displayModel(provider: String, model: String): String = when {
+        provider.isBlank() -> model
+        model.isBlank() -> provider
+        else -> "$provider/$model"
     }
 
     /**
@@ -517,6 +1130,7 @@ class ChatViewModel(
         error = null
         statusLine = s(R.string.st_starting)
         assistantIndex = -1
+        lastSentText = text
         reconnectAttempts = 0
         lastReconnectCause = null
         viewModelScope.launch { doStartRun(text, history) }
@@ -674,6 +1288,7 @@ class ChatViewModel(
     }
 
     private fun finishTerminal(event: RunEvent.Terminal) {
+        lastRunId = runId
         busy = false
         runId = null
         statusLine = when (event.status) {
@@ -694,6 +1309,13 @@ class ChatViewModel(
         }
         // Chunk splits can strand half a tool block in the reply: sweep it out.
         foldMarkupOutOfReplies()
+        // /queue prompts go out as the next turn once this run is over,
+        // however it ended (the gateway drains its queue the same way).
+        if (pendingQueue.isNotEmpty()) {
+            val next = pendingQueue.removeAt(0)
+            messages.add(UiMessage(idSeq++, MsgKind.USER, next))
+            startRun(next, history = null)
+        }
     }
 
     /**

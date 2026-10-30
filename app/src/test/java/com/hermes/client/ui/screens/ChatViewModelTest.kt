@@ -1932,4 +1932,1243 @@ class ChatViewModelTest {
             testScheduler.advanceUntilIdle()
         }
     }
+
+    // -- Slash commands -----------------------------------------------------
+
+    @Test
+    fun slashHelp_postsLocalStatusAndSendsNothing() = runVmTest {
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/help"
+        vm.onSend()
+        assertEquals("", vm.input)
+        val help = vm.messages.firstOrNull { it.kind == MsgKind.STATUS }
+        assertNotNull(help)
+        assertTrue(help!!.text.contains("/stop"))
+        assertTrue(help.text.contains("/model"))
+        assertFalse(vm.busy)
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun slashUnknown_postsErrorAndSendsNothing() = runVmTest {
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/frobnicate now"
+        vm.onSend()
+        assertEquals("", vm.input)
+        val err = vm.messages.firstOrNull { it.kind == MsgKind.ERROR }
+        assertNotNull(err)
+        assertTrue(err!!.text.contains("/frobnicate"))
+        assertFalse(vm.busy)
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun slashModelWithArg_updatesSettingsForNextRun() = runVmTest {
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/model openai/gpt-5"
+        vm.onSend()
+        assertEquals("", vm.input)
+        awaitCondition { c.settingsStore.current().model == "gpt-5" }
+        assertEquals("openai", c.settingsStore.current().provider)
+        awaitCondition { vm.messages.any { it.kind == MsgKind.STATUS } }
+        val status = vm.messages.first { it.kind == MsgKind.STATUS }
+        assertTrue(status.text.contains("openai/gpt-5"))
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun slashModelBareName_keepsCurrentProvider() = runVmTest {
+        val c = containerWithSettings()
+        c.settingsStore.save(
+            c.settingsStore.current().copy(provider = "anthropic", model = "old"),
+        )
+        val vm = ChatViewModel(c, null)
+        vm.input = "/model claude-sonnet-5"
+        vm.onSend()
+        awaitCondition { c.settingsStore.current().model == "claude-sonnet-5" }
+        assertEquals("anthropic", c.settingsStore.current().provider)
+    }
+
+    @Test
+    fun slashModelNoArg_listsServerOptions() = runVmTest {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"providers":[{"name":"openai","models":["gpt-5","gpt-5-mini"]}]}""",
+            ),
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/model"
+        vm.onSend()
+        awaitCondition { vm.messages.any { it.kind == MsgKind.STATUS } }
+        val status = vm.messages.first { it.kind == MsgKind.STATUS }
+        assertTrue(status.text.contains("openai"))
+        assertTrue(status.text.contains("gpt-5"))
+        assertEquals("/api/model/options", server.takeRequest().path)
+    }
+
+    @Test
+    fun slashModelNoArg_apiFailurePostsError() = runVmTest {
+        server.enqueue(MockResponse().setResponseCode(500).setBody("boom"))
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/model"
+        vm.onSend()
+        awaitCondition { vm.messages.any { it.kind == MsgKind.ERROR } }
+        assertFalse(vm.busy)
+        assertTrue(vm.messages.none { it.kind == MsgKind.USER })
+    }
+
+    @Test
+    fun slashStopAndSteer_whileRunning() = runVmTest {
+        // Same deterministic per-path flow as stopAndSteer_postControls:
+        // later status polls are delayed so the run stays active while
+        // the typed commands are dispatched.
+        server.dispatcher = object : Dispatcher() {
+            var getRuns = 0
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                return when {
+                    request.path == "/v1/runs" && request.method == "POST" ->
+                        MockResponse().setResponseCode(202)
+                            .setBody("""{"run_id":"r1","status":"queued"}""")
+                    request.path == "/v1/runs/r1" -> {
+                        if (getRuns++ == 0) {
+                            MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
+                        } else {
+                            MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
+                                .setBodyDelay(5, TimeUnit.SECONDS)
+                        }
+                    }
+                    request.path == "/v1/runs/r1/events" ->
+                        MockResponse().setBody("").setHeader("Content-Type", "text/event-stream")
+                    else -> MockResponse().setBody("{}")
+                }
+            }
+        }
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        try {
+            vm.input = "hi"
+            vm.onSend()
+            awaitCondition { vm.busy }
+            awaitCondition { server.requestCount >= 3 }
+            // A typed /steer submitted through onSend while busy must
+            // still reach the steer endpoint (dispatch precedes the
+            // busy guard).
+            vm.input = "/steer focus on tests"
+            vm.onSend()
+            awaitCondition { vm.statusLine.contains("steered") }
+            val steerPaths = pollPaths { it.endsWith("/steer") }
+            assertTrue("no steer POST, got=$steerPaths", steerPaths.any { it.endsWith("/steer") })
+            // Typed /stop while busy (Enter routes to onSteer then).
+            vm.input = "/stop"
+            vm.onSteer()
+            awaitCondition { vm.statusLine.contains("stopping") }
+            val stopPaths = pollPaths { it.endsWith("/stop") }
+            assertTrue("no stop POST, got=$stopPaths", stopPaths.any { it.endsWith("/stop") })
+            // The command texts themselves never became user messages.
+            assertEquals(
+                listOf("hi"),
+                vm.messages.filter { it.kind == MsgKind.USER }.map { it.text },
+            )
+        } finally {
+            vm.viewModelScope.cancel()
+            testScheduler.advanceUntilIdle()
+        }
+    }
+
+    @Test
+    fun slashSteer_withoutRunOrText_postsError() = runVmTest {
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/steer hello"
+        vm.onSend()
+        assertNotNull(vm.messages.firstOrNull { it.kind == MsgKind.ERROR })
+        vm.input = "/steer"
+        vm.onSend()
+        assertEquals(2, vm.messages.count { it.kind == MsgKind.ERROR })
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun slashNew_invokesFreshChatHook() = runVmTest {
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        var navigations = 0
+        vm.navigateToFreshChat = { navigations++ }
+        vm.input = "/new"
+        vm.onSend()
+        assertEquals(1, navigations)
+        assertEquals("", vm.input)
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun slashStop_withoutRun_postsError() = runVmTest {
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/stop"
+        vm.onSend()
+        assertEquals("", vm.input)
+        val err = vm.messages.firstOrNull { it.kind == MsgKind.ERROR }
+        assertNotNull(err)
+        assertTrue(err!!.text.contains("Nothing is running"))
+        assertFalse(vm.busy)
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun slashModel_invalidFormsPostUsageError() = runVmTest {
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        // Slash form with an empty provider side.
+        vm.input = "/model /gpt-5"
+        vm.onSend()
+        // Slash form with an empty model side.
+        vm.input = "/model openai/"
+        vm.onSend()
+        // Bare model name containing whitespace.
+        vm.input = "/model gpt 5"
+        vm.onSend()
+        val errors = vm.messages.filter { it.kind == MsgKind.ERROR }
+        assertEquals(3, errors.size)
+        assertTrue(errors.all { it.text.contains("Usage: /model") })
+        assertEquals("", c.settingsStore.current().model)
+        assertEquals("", c.settingsStore.current().provider)
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun slashModelNoArg_modelIdsFallback_listsIds() = runVmTest {
+        // No provider rows: the lenient fallback reads the models array.
+        server.enqueue(
+            MockResponse().setBody(
+                """{"models":[{"id":"gpt-5"},{"id":"gpt-5-mini"}]}""",
+            ),
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/model"
+        vm.onSend()
+        awaitCondition { vm.messages.any { it.kind == MsgKind.STATUS } }
+        val status = vm.messages.first { it.kind == MsgKind.STATUS }
+        assertTrue(status.text.contains("gpt-5, gpt-5-mini"))
+        assertEquals("/api/model/options", server.takeRequest().path)
+    }
+
+    @Test
+    fun slashModelNoArg_emptyOptions_reportsNone() = runVmTest {
+        server.enqueue(MockResponse().setBody("""{}"""))
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/model"
+        vm.onSend()
+        awaitCondition { vm.messages.any { it.kind == MsgKind.STATUS } }
+        val status = vm.messages.first { it.kind == MsgKind.STATUS }
+        assertTrue(status.text.contains("(none reported by the server)"))
+    }
+
+    @Test
+    fun slashModelNoArg_providerOnlySettings_showsProviderAsCurrent() = runVmTest {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"providers":[{"name":"openai","models":["gpt-5"]}]}""",
+            ),
+        )
+        val c = containerWithSettings()
+        c.settingsStore.save(c.settingsStore.current().copy(provider = "openai"))
+        awaitCondition { c.settingsStore.current().provider == "openai" }
+        val vm = ChatViewModel(c, null)
+        vm.input = "/model"
+        vm.onSend()
+        awaitCondition { vm.messages.any { it.kind == MsgKind.STATUS } }
+        val status = vm.messages.first { it.kind == MsgKind.STATUS }
+        assertTrue(status.text.contains("Current model: openai"))
+    }
+
+    @Test
+    fun slashModelNoArg_providerWithoutModels_listsProviderName() = runVmTest {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"providers":[{"name":"local"}]}""",
+            ),
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/model"
+        vm.onSend()
+        awaitCondition { vm.messages.any { it.kind == MsgKind.STATUS } }
+        val status = vm.messages.first { it.kind == MsgKind.STATUS }
+        assertTrue(status.text.contains("local"))
+    }
+
+    // -- Full Hermes command coverage (catalog expansion) --
+
+    /** A run that stays active: later status polls are delayed 5s. */
+    private fun busyDispatcher(): Dispatcher = object : Dispatcher() {
+        var getRuns = 0
+        override fun dispatch(request: RecordedRequest): MockResponse {
+            return when {
+                request.path == "/v1/runs" && request.method == "POST" ->
+                    MockResponse().setResponseCode(202)
+                        .setBody("""{"run_id":"r1","status":"queued"}""")
+                request.path == "/v1/runs/r1" -> {
+                    if (getRuns++ == 0) {
+                        MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
+                    } else {
+                        MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
+                            .setBodyDelay(5, TimeUnit.SECONDS)
+                    }
+                }
+                request.path == "/v1/runs/r1/events" ->
+                    MockResponse().setBody("").setHeader("Content-Type", "text/event-stream")
+                else -> MockResponse().setBody("{}")
+            }
+        }
+    }
+
+    /** A run that parks on an approval with the given offered choices. */
+    private fun approvalDispatcher(choicesJson: String): Dispatcher = object : Dispatcher() {
+        var eventsServed = 0
+        var getRuns = 0
+        override fun dispatch(request: RecordedRequest): MockResponse {
+            return when {
+                request.path == "/v1/runs" && request.method == "POST" ->
+                    MockResponse().setResponseCode(202)
+                        .setBody("""{"run_id":"r1","status":"queued"}""")
+                request.path == "/v1/runs/r1" -> {
+                    if (getRuns++ == 0) {
+                        MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
+                    } else {
+                        MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
+                            .setBodyDelay(5, TimeUnit.SECONDS)
+                    }
+                }
+                request.path == "/v1/runs/r1/events" -> {
+                    eventsServed++
+                    if (eventsServed == 1) {
+                        events(
+                            frame(
+                                "approval.request",
+                                """{"event":"approval.request","request_id":"a1","execution_generation":3,"command":"rm -rf /","choices":$choicesJson}""",
+                            ),
+                        )
+                    } else {
+                        events()
+                    }
+                }
+                else -> MockResponse().setBody("{}")
+            }
+        }
+    }
+
+    @Test
+    fun slashUnsupported_postsStatusAndSendsNothing() = runVmTest {
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/yolo"
+        vm.onSend()
+        assertEquals("", vm.input)
+        val status = vm.messages.firstOrNull { it.kind == MsgKind.STATUS }
+        assertNotNull(status)
+        assertTrue(status!!.text.contains("/yolo"))
+        assertTrue(status.text.contains("not supported"))
+        assertTrue(vm.messages.none { it.kind == MsgKind.ERROR })
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun slashCommands_browsesCatalogPages() = runVmTest {
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/commands"
+        vm.onSend()
+        var status = vm.messages.last { it.kind == MsgKind.STATUS }
+        assertTrue(status.text.contains("Hermes commands (104)"))
+        assertTrue(status.text.contains("page 1/6"))
+        assertTrue(status.text.contains("/new"))
+        assertTrue(status.text.contains("(unsupported)"))
+        vm.input = "/commands 6"
+        vm.onSend()
+        status = vm.messages.last { it.kind == MsgKind.STATUS }
+        assertTrue(status.text.contains("page 6/6"))
+        assertTrue(status.text.contains("/quit"))
+        // Out-of-range pages clamp to the last page.
+        vm.input = "/commands 99"
+        vm.onSend()
+        status = vm.messages.last { it.kind == MsgKind.STATUS }
+        assertTrue(status.text.contains("page 6/6"))
+        vm.input = "/commands x"
+        vm.onSend()
+        val err = vm.messages.last { it.kind == MsgKind.ERROR }
+        assertTrue(err.text.contains("Usage: /commands"))
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun slashClear_behavesLikeNew() = runVmTest {
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        var navigations = 0
+        vm.navigateToFreshChat = { navigations++ }
+        vm.input = "/clear"
+        vm.onSend()
+        assertEquals(1, navigations)
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun slashRetry_withoutHistory_postsError() = runVmTest {
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/retry"
+        vm.onSend()
+        val err = vm.messages.firstOrNull { it.kind == MsgKind.ERROR }
+        assertNotNull(err)
+        assertTrue(err!!.text.contains("Nothing to retry"))
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun slashRetry_resendsLastMessage() = runVmTest {
+        var creates = 0
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                return when {
+                    request.path == "/v1/runs" && request.method == "POST" -> {
+                        creates++
+                        MockResponse().setResponseCode(202)
+                            .setBody("""{"run_id":"r$creates","status":"queued"}""")
+                    }
+                    request.path == "/v1/runs/r1" || request.path == "/v1/runs/r2" ->
+                        MockResponse().setBody("""{"run_id":"rx","status":"running","session_id":"s1"}""")
+                    request.path == "/v1/runs/r1/events" || request.path == "/v1/runs/r2/events" ->
+                        events(frame("run.completed", """{"event":"run.completed","output":"ok"}"""))
+                    else -> MockResponse().setBody("{}")
+                }
+            }
+        }
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { !vm.busy }
+        vm.input = "/retry"
+        vm.onSend()
+        awaitCondition {
+            vm.messages.filter { it.kind == MsgKind.USER }.map { it.text } == listOf("hi", "hi") &&
+                !vm.busy
+        }
+        assertEquals(2, creates)
+    }
+
+    @Test
+    fun slashRetry_whileRunning_postsError() = runVmTest {
+        server.dispatcher = busyDispatcher()
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        try {
+            vm.input = "hi"
+            vm.onSend()
+            awaitCondition { vm.busy && server.requestCount >= 3 }
+            vm.input = "/retry"
+            vm.onSend()
+            val err = vm.messages.firstOrNull { it.kind == MsgKind.ERROR }
+            assertNotNull(err)
+            assertTrue(err!!.text.contains("while a run is active"))
+        } finally {
+            vm.viewModelScope.cancel()
+            testScheduler.advanceUntilIdle()
+        }
+    }
+
+    @Test
+    fun slashQueue_idleCommands() = runVmTest {
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/queue"
+        vm.onSend()
+        assertTrue(lastStatus(vm).contains("queue is empty"))
+        vm.input = "/queue rm x"
+        vm.onSend()
+        assertTrue(vm.messages.last { it.kind == MsgKind.ERROR }.text.contains("/queue rm"))
+        vm.input = "/queue clear"
+        vm.onSend()
+        assertTrue(lastStatus(vm).contains("Queue cleared"))
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun slashQueue_addWhileIdle_sendsAtOnce() = runVmTest {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running","session_id":"s1"}"""))
+        server.enqueue(events(frame("run.completed", """{"event":"run.completed","output":"ok"}""")))
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/queue hello"
+        vm.onSend()
+        awaitCondition { !vm.busy && vm.messages.any { it.kind == MsgKind.ASSISTANT } }
+        assertEquals(
+            listOf("hello"),
+            vm.messages.filter { it.kind == MsgKind.USER }.map { it.text },
+        )
+    }
+
+    @Test
+    fun slashQueue_addWhileRunning_flushesOnFinish() = runVmTest {
+        val gate = java.util.concurrent.atomic.AtomicBoolean(false)
+        var creates = 0
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                return when {
+                    request.path == "/v1/runs" && request.method == "POST" -> {
+                        creates++
+                        MockResponse().setResponseCode(202)
+                            .setBody("""{"run_id":"r$creates","status":"queued"}""")
+                    }
+                    request.path == "/v1/runs/r1" || request.path == "/v1/runs/r2" ->
+                        MockResponse().setBody("""{"run_id":"rx","status":"running","session_id":"s1"}""")
+                    request.path == "/v1/runs/r1/events" -> {
+                        if (gate.get()) {
+                            events(frame("run.completed", """{"event":"run.completed","output":"done"}"""))
+                        } else {
+                            events(frame("message.delta", """{"event":"message.delta","delta":"working"}"""))
+                        }
+                    }
+                    request.path == "/v1/runs/r2/events" ->
+                        events(frame("run.completed", """{"event":"run.completed","output":"done2"}"""))
+                    else -> MockResponse().setBody("{}")
+                }
+            }
+        }
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        try {
+            vm.input = "first"
+            vm.onSend()
+            awaitCondition { vm.busy && vm.messages.any { it.kind == MsgKind.ASSISTANT } }
+            vm.input = "/queue second"
+            vm.onSend()
+            assertTrue(lastStatus(vm).contains("Queued (#1)"))
+            vm.input = "/queue third"
+            vm.onSend()
+            assertTrue(lastStatus(vm).contains("Queued (#2)"))
+            vm.input = "/queue"
+            vm.onSend()
+            assertTrue(lastStatus(vm).contains("1. second"))
+            assertTrue(lastStatus(vm).contains("2. third"))
+            vm.input = "/queue rm 9"
+            vm.onSend()
+            assertTrue(vm.messages.last { it.kind == MsgKind.ERROR }.text.contains("/queue rm"))
+            vm.input = "/queue rm 2"
+            vm.onSend()
+            assertTrue(lastStatus(vm).contains("Removed from the queue: third"))
+            gate.set(true)
+            awaitCondition {
+                !vm.busy &&
+                    vm.messages.filter { it.kind == MsgKind.USER }.map { it.text } ==
+                    listOf("first", "second")
+            }
+            assertEquals(2, creates)
+        } finally {
+            vm.viewModelScope.cancel()
+            testScheduler.advanceUntilIdle()
+        }
+    }
+
+    @Test
+    fun slashNew_withName_createsTitledSession() = runVmTest {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                return when {
+                    request.path == "/api/sessions" && request.method == "POST" ->
+                        MockResponse().setResponseCode(201)
+                            .setBody("""{"session":{"id":"titled-1","title":"exp"}}""")
+                    request.path == "/api/sessions/titled-1/messages" ->
+                        MockResponse().setBody("""[]""")
+                    else -> MockResponse().setBody("{}")
+                }
+            }
+        }
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        var navigations = 0
+        vm.navigateToFreshChat = { navigations++ }
+        vm.input = "/new exp"
+        vm.onSend()
+        awaitCondition { vm.sessionId == "titled-1" }
+        assertEquals(0, navigations)
+        val bodies = pollBodies { it.startsWith("/api/sessions") }
+        assertTrue(bodies.any { it.contains("\"title\":\"exp\"") })
+    }
+
+    @Test
+    fun slashNew_withName_createFails_postsError() = runVmTest {
+        server.enqueue(MockResponse().setBody("""{}"""))
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/new exp"
+        vm.onSend()
+        awaitCondition { vm.messages.any { it.kind == MsgKind.ERROR } }
+        assertTrue(
+            vm.messages.first { it.kind == MsgKind.ERROR }.text.contains("Could not create"),
+        )
+        assertEquals("", vm.sessionId)
+    }
+
+    @Test
+    fun slashNew_withName_whileRunning_postsError() = runVmTest {
+        server.dispatcher = busyDispatcher()
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        try {
+            vm.input = "hi"
+            vm.onSend()
+            awaitCondition { vm.busy && server.requestCount >= 3 }
+            vm.input = "/new exp"
+            vm.onSend()
+            assertTrue(
+                vm.messages.first { it.kind == MsgKind.ERROR }.text.contains("while a run is active"),
+            )
+        } finally {
+            vm.viewModelScope.cancel()
+            testScheduler.advanceUntilIdle()
+        }
+    }
+
+    /** Dispatcher serving session s1 (with history) plus a second session s2. */
+    private fun sessionsDispatcher(): Dispatcher = object : Dispatcher() {
+        override fun dispatch(request: RecordedRequest): MockResponse {
+            return when {
+                request.path == "/api/sessions/s1/messages" ->
+                    MockResponse().setBody(
+                        """[{"id":"m1","role":"user","text":"hi"},{"id":"m2","role":"assistant","text":"yo"}]""",
+                    )
+                request.path == "/api/sessions/s2/messages" ->
+                    MockResponse().setBody(
+                        """[{"id":"m3","role":"assistant","text":"second history"}]""",
+                    )
+                request.path?.startsWith("/api/sessions?") == true ->
+                    MockResponse().setBody(
+                        """{"sessions":[{"id":"s1","title":"First"},{"id":"s2","title":"Second"}]}""",
+                    )
+                request.path == "/api/sessions/s1/fork" && request.method == "POST" ->
+                    MockResponse().setBody("""{"session_id":"s2"}""")
+                else -> MockResponse().setBody("{}")
+            }
+        }
+    }
+
+    @Test
+    fun slashBranch_forksAndSwitches() = runVmTest {
+        server.dispatcher = sessionsDispatcher()
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, "s1")
+        awaitCondition { !vm.historyLoading }
+        vm.input = "/branch"
+        vm.onSend()
+        awaitCondition { vm.sessionId == "s2" }
+        awaitCondition { vm.messages.any { it.text.contains("second history") } }
+        assertTrue(lastStatus(vm).contains("Branched to session s2"))
+    }
+
+    @Test
+    fun slashBranch_forkFails_postsError() = runVmTest {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                return when {
+                    request.path == "/api/sessions/s1/messages" ->
+                        MockResponse().setBody("""[]""")
+                    request.path == "/api/sessions/s1/fork" && request.method == "POST" ->
+                        MockResponse().setBody("""{}""")
+                    else -> MockResponse().setBody("{}")
+                }
+            }
+        }
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, "s1")
+        awaitCondition { !vm.historyLoading }
+        vm.input = "/branch"
+        vm.onSend()
+        awaitCondition { vm.messages.any { it.kind == MsgKind.ERROR } }
+        assertTrue(
+            vm.messages.first { it.kind == MsgKind.ERROR }.text.contains("Could not branch"),
+        )
+        assertEquals("s1", vm.sessionId)
+    }
+
+    @Test
+    fun slashBranch_noSession_postsError() = runVmTest {
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/branch"
+        vm.onSend()
+        assertTrue(
+            vm.messages.first { it.kind == MsgKind.ERROR }.text.contains("No active session"),
+        )
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun slashBranch_whileRunning_postsError() = runVmTest {
+        server.dispatcher = busyDispatcher()
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        try {
+            vm.input = "hi"
+            vm.onSend()
+            awaitCondition { vm.busy && server.requestCount >= 3 }
+            vm.input = "/branch"
+            vm.onSend()
+            assertTrue(
+                vm.messages.first { it.kind == MsgKind.ERROR }.text.contains("while a run is active"),
+            )
+        } finally {
+            vm.viewModelScope.cancel()
+            testScheduler.advanceUntilIdle()
+        }
+    }
+
+    @Test
+    fun slashSessions_listsWithCurrentMark() = runVmTest {
+        server.dispatcher = sessionsDispatcher()
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, "s1")
+        awaitCondition { !vm.historyLoading }
+        vm.input = "/sessions"
+        vm.onSend()
+        awaitCondition { vm.messages.any { it.kind == MsgKind.STATUS } }
+        val status = vm.messages.first { it.kind == MsgKind.STATUS }
+        assertTrue(status.text.contains("First"))
+        assertTrue(status.text.contains("(current)"))
+        assertTrue(status.text.contains("Second"))
+    }
+
+    @Test
+    fun slashSessions_empty_reportsNone() = runVmTest {
+        server.enqueue(MockResponse().setBody("""{"sessions":[]}"""))
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/sessions"
+        vm.onSend()
+        awaitCondition { vm.messages.any { it.kind == MsgKind.STATUS } }
+        assertTrue(
+            vm.messages.first { it.kind == MsgKind.STATUS }.text.contains("No sessions found"),
+        )
+    }
+
+    @Test
+    fun slashResume_byTitle_switches() = runVmTest {
+        server.dispatcher = sessionsDispatcher()
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/resume Second"
+        vm.onSend()
+        awaitCondition { vm.sessionId == "s2" }
+        awaitCondition { vm.messages.any { it.text.contains("second history") } }
+    }
+
+    @Test
+    fun slashResume_bySubstring_switches() = runVmTest {
+        server.dispatcher = sessionsDispatcher()
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/resume econ"
+        vm.onSend()
+        awaitCondition { vm.sessionId == "s2" }
+    }
+
+    @Test
+    fun slashResume_notFound_postsError() = runVmTest {
+        server.dispatcher = sessionsDispatcher()
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/resume zzz"
+        vm.onSend()
+        awaitCondition { vm.messages.any { it.kind == MsgKind.ERROR } }
+        assertTrue(
+            vm.messages.first { it.kind == MsgKind.ERROR }.text.contains("No session matches"),
+        )
+    }
+
+    @Test
+    fun slashResume_current_postsStatus() = runVmTest {
+        server.dispatcher = sessionsDispatcher()
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, "s1")
+        awaitCondition { !vm.historyLoading }
+        vm.input = "/resume s1"
+        vm.onSend()
+        awaitCondition { vm.messages.any { it.kind == MsgKind.STATUS } }
+        assertTrue(lastStatus(vm).contains("Already in that session"))
+    }
+
+    @Test
+    fun slashResume_noArg_postsUsage() = runVmTest {
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/resume"
+        vm.onSend()
+        assertTrue(
+            vm.messages.first { it.kind == MsgKind.ERROR }.text.contains("Usage: /resume"),
+        )
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun slashResume_whileRunning_postsError() = runVmTest {
+        server.dispatcher = busyDispatcher()
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        try {
+            vm.input = "hi"
+            vm.onSend()
+            awaitCondition { vm.busy && server.requestCount >= 3 }
+            vm.input = "/resume s2"
+            vm.onSend()
+            assertTrue(
+                vm.messages.first { it.kind == MsgKind.ERROR }.text.contains("while a run is active"),
+            )
+        } finally {
+            vm.viewModelScope.cancel()
+            testScheduler.advanceUntilIdle()
+        }
+    }
+
+    /** Dispatcher for /title: s1 has history and a stored title. */
+    private fun titleDispatcher(sessionJson: String): Dispatcher = object : Dispatcher() {
+        override fun dispatch(request: RecordedRequest): MockResponse {
+            return when {
+                request.path == "/api/sessions/s1/messages" ->
+                    MockResponse().setBody("""[]""")
+                request.path == "/api/sessions/s1" && request.method == "GET" ->
+                    MockResponse().setBody(sessionJson)
+                request.path == "/api/sessions/s1" && request.method == "PATCH" ->
+                    MockResponse().setBody("""{}""")
+                else -> MockResponse().setBody("{}")
+            }
+        }
+    }
+
+    @Test
+    fun slashTitle_showAndSet() = runVmTest {
+        server.dispatcher = titleDispatcher("""{"session":{"id":"s1","title":"My Title"}}""")
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, "s1")
+        awaitCondition { !vm.historyLoading }
+        vm.input = "/title"
+        vm.onSend()
+        awaitCondition { vm.messages.any { it.kind == MsgKind.STATUS } }
+        assertTrue(lastStatus(vm).contains("Session title: My Title"))
+        vm.input = "/title New Name"
+        vm.onSend()
+        awaitCondition { lastStatus(vm).contains("Title set to") }
+        assertTrue(lastStatus(vm).contains("New Name"))
+        val bodies = pollBodies { it.startsWith("/api/sessions/s1") }
+        assertTrue(bodies.any { it.contains("\"title\":\"New Name\"") })
+    }
+
+    @Test
+    fun slashTitle_unset_reportsUsage() = runVmTest {
+        server.dispatcher = titleDispatcher("""{"session":{"id":"s1"}}""")
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, "s1")
+        awaitCondition { !vm.historyLoading }
+        vm.input = "/title"
+        vm.onSend()
+        awaitCondition { vm.messages.any { it.kind == MsgKind.STATUS } }
+        assertTrue(lastStatus(vm).contains("no title"))
+    }
+
+    @Test
+    fun slashTitle_noSession_postsError() = runVmTest {
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/title x"
+        vm.onSend()
+        assertTrue(
+            vm.messages.first { it.kind == MsgKind.ERROR }.text.contains("No active session"),
+        )
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun slashStatus_reportsSnapshot() = runVmTest {
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/status"
+        vm.onSend()
+        awaitCondition { vm.messages.any { it.kind == MsgKind.STATUS } }
+        val status = vm.messages.first { it.kind == MsgKind.STATUS }
+        assertTrue(status.text.contains("Session: —"))
+        assertTrue(status.text.contains("server default"))
+        assertTrue(status.text.contains("idle"))
+        assertTrue(status.text.contains("Queued: 0"))
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun slashUsage_noRun_postsError() = runVmTest {
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/usage"
+        vm.onSend()
+        assertTrue(
+            vm.messages.first { it.kind == MsgKind.ERROR }.text.contains("No run yet"),
+        )
+        assertEquals(0, server.requestCount)
+    }
+
+    /** Dispatcher whose single run reports the given GET /v1/runs/{id} body. */
+    private fun usageDispatcher(runJson: String): Dispatcher = object : Dispatcher() {
+        override fun dispatch(request: RecordedRequest): MockResponse {
+            return when {
+                request.path == "/v1/runs" && request.method == "POST" ->
+                    MockResponse().setResponseCode(202)
+                        .setBody("""{"run_id":"r1","status":"queued"}""")
+                request.path == "/v1/runs/r1" -> MockResponse().setBody(runJson)
+                request.path == "/v1/runs/r1/events" ->
+                    events(frame("run.completed", """{"event":"run.completed","output":"ok"}"""))
+                else -> MockResponse().setBody("{}")
+            }
+        }
+    }
+
+    @Test
+    fun slashUsage_afterRun_showsTokens() = runVmTest {
+        server.dispatcher = usageDispatcher(
+            """{"run_id":"r1","status":"completed","session_id":"s1","usage":{"input_tokens":10,"output_tokens":5,"total_tokens":15,"cache_read_tokens":3,"cache_write_tokens":2}}""",
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { !vm.busy }
+        vm.input = "/usage"
+        vm.onSend()
+        awaitCondition { vm.messages.any { it.kind == MsgKind.STATUS } }
+        val status = vm.messages.first { it.kind == MsgKind.STATUS }
+        assertTrue(status.text.contains("input: 10 tokens"))
+        assertTrue(status.text.contains("total: 15"))
+    }
+
+    @Test
+    fun slashUsage_noUsageReported() = runVmTest {
+        server.dispatcher = usageDispatcher(
+            """{"run_id":"r1","status":"completed","session_id":"s1"}""",
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "hi"
+        vm.onSend()
+        awaitCondition { !vm.busy }
+        vm.input = "/usage"
+        vm.onSend()
+        awaitCondition { vm.messages.any { it.kind == MsgKind.STATUS } }
+        assertTrue(
+            vm.messages.first { it.kind == MsgKind.STATUS }.text.contains("No usage reported"),
+        )
+    }
+
+    @Test
+    fun slashSkills_listsAndRejectsSubcommands() = runVmTest {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                return when {
+                    request.path == "/v1/skills" ->
+                        MockResponse().setBody(
+                            """{"skills":[{"name":"pdf-tools","description":"Make PDFs","category":"docs"},{"name":"quiet","description":"","category":""}]}""",
+                        )
+                    else -> MockResponse().setBody("{}")
+                }
+            }
+        }
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/skills"
+        vm.onSend()
+        awaitCondition { vm.messages.any { it.kind == MsgKind.STATUS } }
+        val status = vm.messages.first { it.kind == MsgKind.STATUS }
+        assertTrue(status.text.contains("Skills (2)"))
+        assertTrue(status.text.contains("/pdf-tools — Make PDFs"))
+        assertTrue(status.text.contains("/quiet"))
+        vm.input = "/skills pending"
+        vm.onSend()
+        assertTrue(lastStatus(vm).contains("not supported"))
+        assertTrue(lastStatus(vm).contains("/skills pending"))
+        vm.input = "/skills list"
+        vm.onSend()
+        awaitCondition { vm.messages.count { it.kind == MsgKind.STATUS } >= 3 }
+    }
+
+    @Test
+    fun slashSkills_empty_reportsNone() = runVmTest {
+        server.enqueue(MockResponse().setBody("""{"skills":[]}"""))
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/skills"
+        vm.onSend()
+        awaitCondition { vm.messages.any { it.kind == MsgKind.STATUS } }
+        assertTrue(
+            vm.messages.first { it.kind == MsgKind.STATUS }.text.contains("No skills reported"),
+        )
+    }
+
+    @Test
+    fun slashToolsets_lists() = runVmTest {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"toolsets":[{"name":"fs","label":"Filesystem","description":"Read and write files","enabled":true,"configured":true},{"name":"web","label":"","description":"","enabled":false,"configured":false}]}""",
+            ),
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/toolsets"
+        vm.onSend()
+        awaitCondition { vm.messages.any { it.kind == MsgKind.STATUS } }
+        val status = vm.messages.first { it.kind == MsgKind.STATUS }
+        assertTrue(status.text.contains("Toolsets (2)"))
+        assertTrue(status.text.contains("Filesystem — Read and write files"))
+        assertTrue(status.text.contains("web"))
+    }
+
+    @Test
+    fun slashToolsets_empty_reportsNone() = runVmTest {
+        server.enqueue(MockResponse().setBody("""{"toolsets":[]}"""))
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/toolsets"
+        vm.onSend()
+        awaitCondition { vm.messages.any { it.kind == MsgKind.STATUS } }
+        assertTrue(
+            vm.messages.first { it.kind == MsgKind.STATUS }.text.contains("No toolsets reported"),
+        )
+    }
+
+    @Test
+    fun slashBg_startsRunOnNewSession() = runVmTest {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                return when {
+                    request.path == "/v1/runs" && request.method == "POST" ->
+                        MockResponse().setResponseCode(202)
+                            .setBody("""{"run_id":"bg1","status":"queued"}""")
+                    request.path == "/v1/runs/bg1" ->
+                        MockResponse().setBody(
+                            """{"run_id":"bg1","status":"running","session_id":"bg-session"}""",
+                        )
+                    else -> MockResponse().setBody("{}")
+                }
+            }
+        }
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/bg check the deploy"
+        vm.onSend()
+        awaitCondition { vm.messages.any { it.kind == MsgKind.STATUS } }
+        val status = vm.messages.first { it.kind == MsgKind.STATUS }
+        assertTrue(status.text.contains("background"))
+        assertTrue(status.text.contains("bg-session"))
+        assertFalse(vm.busy)
+        assertEquals("", vm.sessionId)
+        val bodies = pollBodies { it.startsWith("/v1/runs") }
+        assertTrue(bodies.any { it.contains("check the deploy") })
+    }
+
+    @Test
+    fun slashBg_sessionReadbackFails_stillReports() = runVmTest {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                return when {
+                    request.path == "/v1/runs" && request.method == "POST" ->
+                        MockResponse().setResponseCode(202)
+                            .setBody("""{"run_id":"bg1","status":"queued"}""")
+                    request.path == "/v1/runs/bg1" ->
+                        MockResponse().setResponseCode(500).setBody("boom")
+                    else -> MockResponse().setBody("{}")
+                }
+            }
+        }
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/bg check the deploy"
+        vm.onSend()
+        awaitCondition { vm.messages.any { it.kind == MsgKind.STATUS } }
+        assertTrue(
+            vm.messages.first { it.kind == MsgKind.STATUS }.text.contains("(session bg1)"),
+        )
+    }
+
+    @Test
+    fun slashBg_noPrompt_postsUsage() = runVmTest {
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/bg"
+        vm.onSend()
+        assertTrue(
+            vm.messages.first { it.kind == MsgKind.ERROR }.text.contains("Usage: /bg"),
+        )
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun slashBg_notConfigured_postsError() = runVmTest {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val vm = ChatViewModel(AppContainer(app), null)
+        vm.input = "/bg check the deploy"
+        vm.onSend()
+        awaitCondition { vm.messages.any { it.kind == MsgKind.ERROR } }
+        assertTrue(
+            vm.messages.first { it.kind == MsgKind.ERROR }.text.contains("Base URL and API key"),
+        )
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun slashApprove_defaultsToOnce() = runVmTest {
+        server.dispatcher = approvalDispatcher("""["once","session","always","deny"]""")
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        try {
+            vm.input = "hi"
+            vm.onSend()
+            awaitCondition { vm.approval != null }
+            vm.input = "/approve"
+            vm.onSend()
+            awaitCondition { vm.statusLine.contains("approved") }
+            val bodies = pollBodies { it.startsWith("/v1/runs/r1/approval") }
+            assertTrue(bodies.any { it.contains("\"choice\":\"once\"") })
+        } finally {
+            vm.viewModelScope.cancel()
+            testScheduler.advanceUntilIdle()
+        }
+    }
+
+    @Test
+    fun slashApprove_explicitOnce() = runVmTest {
+        server.dispatcher = approvalDispatcher("""["once","deny"]""")
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        try {
+            vm.input = "hi"
+            vm.onSend()
+            awaitCondition { vm.approval != null }
+            vm.input = "/approve once"
+            vm.onSend()
+            awaitCondition { vm.statusLine.contains("approved") }
+            val bodies = pollBodies { it.startsWith("/v1/runs/r1/approval") }
+            assertTrue(bodies.any { it.contains("\"choice\":\"once\"") })
+        } finally {
+            vm.viewModelScope.cancel()
+            testScheduler.advanceUntilIdle()
+        }
+    }
+
+    @Test
+    fun slashApprove_sessionChoice() = runVmTest {
+        server.dispatcher = approvalDispatcher("""["once","session","always","deny"]""")
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        try {
+            vm.input = "hi"
+            vm.onSend()
+            awaitCondition { vm.approval != null }
+            vm.input = "/approve session"
+            vm.onSend()
+            awaitCondition { vm.statusLine.contains("approved") }
+            val bodies = pollBodies { it.startsWith("/v1/runs/r1/approval") }
+            assertTrue(bodies.any { it.contains("\"choice\":\"session\"") })
+        } finally {
+            vm.viewModelScope.cancel()
+            testScheduler.advanceUntilIdle()
+        }
+    }
+
+    @Test
+    fun slashDeny_answersDeny() = runVmTest {
+        server.dispatcher = approvalDispatcher("""["once","session","always","deny"]""")
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        try {
+            vm.input = "hi"
+            vm.onSend()
+            awaitCondition { vm.approval != null }
+            vm.input = "/deny"
+            vm.onSend()
+            awaitCondition { vm.statusLine.contains("approved") }
+            val bodies = pollBodies { it.startsWith("/v1/runs/r1/approval") }
+            assertTrue(bodies.any { it.contains("\"choice\":\"deny\"") })
+        } finally {
+            vm.viewModelScope.cancel()
+            testScheduler.advanceUntilIdle()
+        }
+    }
+
+    @Test
+    fun slashApprove_unavailableAndUsage() = runVmTest {
+        server.dispatcher = approvalDispatcher("""["once","deny"]""")
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        try {
+            vm.input = "hi"
+            vm.onSend()
+            awaitCondition { vm.approval != null }
+            vm.input = "/approve always"
+            vm.onSend()
+            assertTrue(
+                vm.messages.last { it.kind == MsgKind.ERROR }.text.contains("not available"),
+            )
+            assertNotNull(vm.approval)
+            vm.input = "/approve bogus"
+            vm.onSend()
+            assertTrue(
+                vm.messages.last { it.kind == MsgKind.ERROR }.text.contains("Usage: /approve"),
+            )
+            assertNotNull(vm.approval)
+        } finally {
+            vm.viewModelScope.cancel()
+            testScheduler.advanceUntilIdle()
+        }
+    }
+
+    @Test
+    fun slashDeny_notOffered_postsError() = runVmTest {
+        server.dispatcher = approvalDispatcher("""["once"]""")
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        try {
+            vm.input = "hi"
+            vm.onSend()
+            awaitCondition { vm.approval != null }
+            vm.input = "/deny"
+            vm.onSend()
+            assertTrue(
+                vm.messages.last { it.kind == MsgKind.ERROR }.text.contains("not available"),
+            )
+            assertNotNull(vm.approval)
+        } finally {
+            vm.viewModelScope.cancel()
+            testScheduler.advanceUntilIdle()
+        }
+    }
+
+    @Test
+    fun slashApproveDeny_noWaiting_postsError() = runVmTest {
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/approve"
+        vm.onSend()
+        assertTrue(
+            vm.messages.last { it.kind == MsgKind.ERROR }.text.contains("No approval is waiting"),
+        )
+        vm.input = "/deny"
+        vm.onSend()
+        assertTrue(
+            vm.messages.last { it.kind == MsgKind.ERROR }.text.contains("No approval is waiting"),
+        )
+        assertEquals(0, server.requestCount)
+    }
 }
