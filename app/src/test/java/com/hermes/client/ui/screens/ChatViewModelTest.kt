@@ -2105,4 +2105,103 @@ class ChatViewModelTest {
         assertEquals("", vm.input)
         assertEquals(0, server.requestCount)
     }
+
+    @Test
+    fun slashStop_withoutRun_postsError() = runVmTest {
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/stop"
+        vm.onSend()
+        assertEquals("", vm.input)
+        val err = vm.messages.firstOrNull { it.kind == MsgKind.ERROR }
+        assertNotNull(err)
+        assertTrue(err!!.text.contains("Nothing is running"))
+        assertFalse(vm.busy)
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun slashModel_invalidFormsPostUsageError() = runVmTest {
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        // Slash form with an empty provider side.
+        vm.input = "/model /gpt-5"
+        vm.onSend()
+        // Slash form with an empty model side.
+        vm.input = "/model openai/"
+        vm.onSend()
+        // Bare model name containing whitespace.
+        vm.input = "/model gpt 5"
+        vm.onSend()
+        val errors = vm.messages.filter { it.kind == MsgKind.ERROR }
+        assertEquals(3, errors.size)
+        assertTrue(errors.all { it.text.contains("Usage: /model") })
+        assertEquals("", c.settingsStore.current().model)
+        assertEquals("", c.settingsStore.current().provider)
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun slashModelNoArg_modelIdsFallback_listsIds() = runVmTest {
+        // No provider rows: the lenient fallback reads the models array.
+        server.enqueue(
+            MockResponse().setBody(
+                """{"models":[{"id":"gpt-5"},{"id":"gpt-5-mini"}]}""",
+            ),
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/model"
+        vm.onSend()
+        awaitCondition { vm.messages.any { it.kind == MsgKind.STATUS } }
+        val status = vm.messages.first { it.kind == MsgKind.STATUS }
+        assertTrue(status.text.contains("gpt-5, gpt-5-mini"))
+        assertEquals("/api/model/options", server.takeRequest().path)
+    }
+
+    @Test
+    fun slashModelNoArg_emptyOptions_reportsNone() = runVmTest {
+        server.enqueue(MockResponse().setBody("""{}"""))
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/model"
+        vm.onSend()
+        awaitCondition { vm.messages.any { it.kind == MsgKind.STATUS } }
+        val status = vm.messages.first { it.kind == MsgKind.STATUS }
+        assertTrue(status.text.contains("(none reported by the server)"))
+    }
+
+    @Test
+    fun slashModelNoArg_providerOnlySettings_showsProviderAsCurrent() = runVmTest {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"providers":[{"name":"openai","models":["gpt-5"]}]}""",
+            ),
+        )
+        val c = containerWithSettings()
+        c.settingsStore.save(c.settingsStore.current().copy(provider = "openai"))
+        awaitCondition { c.settingsStore.current().provider == "openai" }
+        val vm = ChatViewModel(c, null)
+        vm.input = "/model"
+        vm.onSend()
+        awaitCondition { vm.messages.any { it.kind == MsgKind.STATUS } }
+        val status = vm.messages.first { it.kind == MsgKind.STATUS }
+        assertTrue(status.text.contains("Current model: openai"))
+    }
+
+    @Test
+    fun slashModelNoArg_providerWithoutModels_listsProviderName() = runVmTest {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"providers":[{"name":"local"}]}""",
+            ),
+        )
+        val c = containerWithSettings()
+        val vm = ChatViewModel(c, null)
+        vm.input = "/model"
+        vm.onSend()
+        awaitCondition { vm.messages.any { it.kind == MsgKind.STATUS } }
+        val status = vm.messages.first { it.kind == MsgKind.STATUS }
+        assertTrue(status.text.contains("local"))
+    }
 }

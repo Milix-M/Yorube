@@ -377,48 +377,53 @@ class ChatViewModel(
             }
             newProvider = null
         }
-        viewModelScope.launch {
-            refreshLanguage()
-            try {
-                val store = container.settingsStore
-                val cur = store.current()
-                val provider = newProvider ?: cur.provider
-                store.save(cur.copy(model = newModel, provider = provider))
-                postStatusMessage(s(R.string.cmd_model_set, displayModel(provider, newModel)))
-            } catch (e: Exception) {
-                postErrorMessage(friendlyError(e))
-            }
+        launchGuarded {
+            val store = container.settingsStore
+            val cur = store.current()
+            val provider = newProvider ?: cur.provider
+            store.save(cur.copy(model = newModel, provider = provider))
+            postStatusMessage(s(R.string.cmd_model_set, displayModel(provider, newModel)))
         }
     }
 
     private fun showModelOptions() {
-        viewModelScope.launch {
-            refreshLanguage()
+        launchGuarded {
             val cur = container.settingsStore.current()
             val current = displayModel(cur.provider, cur.model)
                 .ifBlank { s(R.string.cmd_model_unset) }
+            val body = container.api().getModelOptions()
+            val root = HermesJson.parseToJsonElement(body)
+            val lines = mutableListOf<String>()
+            val providers = extractProviderOptions(root)
+            if (providers.isNotEmpty()) {
+                for (p in providers) {
+                    lines.add(
+                        if (p.models.isEmpty()) p.name
+                        else "${p.name}: ${p.models.joinToString(", ")}"
+                    )
+                }
+            } else {
+                val ids = extractModelIds(root)
+                if (ids.isNotEmpty()) lines.add(ids.joinToString(", "))
+            }
+            val available = if (lines.isEmpty()) {
+                s(R.string.cmd_model_none)
+            } else {
+                lines.joinToString("\n")
+            }
+            postStatusMessage(s(R.string.cmd_model_list, current, available))
+        }
+    }
+
+    /**
+     * Runs a slash command's async work, surfacing any failure as a
+     * local ERROR message instead of crashing.
+     */
+    private fun launchGuarded(block: suspend () -> Unit) {
+        viewModelScope.launch {
+            refreshLanguage()
             try {
-                val body = container.api().getModelOptions()
-                val root = HermesJson.parseToJsonElement(body)
-                val lines = mutableListOf<String>()
-                val providers = extractProviderOptions(root)
-                if (providers.isNotEmpty()) {
-                    for (p in providers) {
-                        lines.add(
-                            if (p.models.isEmpty()) p.name
-                            else "${p.name}: ${p.models.joinToString(", ")}"
-                        )
-                    }
-                } else {
-                    val ids = extractModelIds(root)
-                    if (ids.isNotEmpty()) lines.add(ids.joinToString(", "))
-                }
-                val available = if (lines.isEmpty()) {
-                    s(R.string.cmd_model_none)
-                } else {
-                    lines.joinToString("\n")
-                }
-                postStatusMessage(s(R.string.cmd_model_list, current, available))
+                block()
             } catch (e: Exception) {
                 postErrorMessage(friendlyError(e))
             }
