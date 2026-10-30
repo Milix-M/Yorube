@@ -129,4 +129,8 @@
     <string name="not_now">稍后</string>
     <string name="retry">重试</string>
     <string name="app_version">版本</string>
+
+    <string name="stream_channel_name">运行连接</string>
+    <string name="stream_notification_title">运行中</string>
+    <string name="stream_notification_text">正在与运行中的任务保持连接。点按打开对话。</string>
 </resources>

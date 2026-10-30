@@ -17,17 +17,17 @@ import com.hermes.client.data.api.HermesJson
 import com.hermes.client.data.api.HistoryMessage
 import com.hermes.client.data.api.RunCreateRequest
 import com.hermes.client.data.api.RunEvent
-import com.hermes.client.data.api.RunStatusResponse
 import com.hermes.client.data.api.SessionMessage
 import com.hermes.client.data.api.long
 import com.hermes.client.data.api.str
+import com.hermes.client.data.stream.RunStreamService
+import com.hermes.client.data.stream.RunStreamUpdate
+import com.hermes.client.data.stream.isRunGoneFailure
 import com.hermes.client.data.store.LANGUAGE_SYSTEM
 import com.hermes.client.data.store.LocaleHelper
 import java.io.IOException
 import java.util.UUID
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -47,18 +47,6 @@ data class ClarifyPrompt(
     val executionGeneration: Long,
     val prompt: String,
 )
-
-/**
- * Consecutive fruitless resubscribes allowed before the stream is declared
- * dead. The counter resets on every received event, so it only binds a
- * persistent outage (no progress at all), never a long run over a flaky
- * network (Cloudflare idle kills, NAT timeouts, Doze, the DESIGN §8
- * five-minute transport buffer).
- */
-internal const val MAX_RECONNECT_ATTEMPTS = 15
-
-/** Reconnect backoff before each status poll: 1s, 2s, 4s, then 8s capped. */
-internal fun reconnectDelayMs(attempt: Int): Long = 1000L * (1L shl attempt.coerceIn(0, 3))
 
 class ChatViewModel(
     private val container: AppContainer,
@@ -115,15 +103,36 @@ class ChatViewModel(
     private var runId: String? = null
     private var eventsJob: Job? = null
     private var assistantIndex: Int = -1
-    private var reconnectAttempts: Int = 0
-    private var lastReconnectCause: Exception? = null
     private var idSeq = 0L
 
     private fun s(id: Int, vararg args: Any): String =
         LocaleHelper.getString(container.appContext, uiLanguage, id, *args)
 
     init {
-        if (sessionId.isNotBlank()) loadHistory(sessionId)
+        if (sessionId.isNotBlank()) {
+            loadHistory(sessionId)
+            reattachActiveRun()
+        }
+    }
+
+    /**
+     * The stream engine may still hold a live run for this session (the
+     * app was backgrounded, or the user left and came back): adopt it so
+     * its remaining stream, approval prompts and terminal state land in
+     * this chat instead of being lost. The engine re-polls the run status
+     * first, so pending controls resurface and a run that already ended
+     * settles from the poll rather than a replayed stream.
+     */
+    private fun reattachActiveRun() {
+        val active = container.runStreams.activeRun.value ?: return
+        if (active.sessionId != sessionId) return
+        runId = active.runId
+        busy = true
+        subscribe(active.runId)
+        container.runStreams.start(active.runId, active.sessionId, pollFirst = true)
+        // The service may have died with the old process: re-arm it so
+        // backgrounding again keeps this run's stream alive.
+        RunStreamService.start(container.appContext, active.runId, active.sessionId)
     }
 
     /**
@@ -290,11 +299,7 @@ class ChatViewModel(
      * reported as a dead conversation. Bare 404s (e.g. proxy pages without
      * a machine code) count as well.
      */
-    private fun isRunGone(e: Exception): Boolean {
-        if (e !is HermesApiException) return false
-        if (e.code == "not_found" || e.code == "run_not_found" || e.code == "unknown_execution") return true
-        return e.status == 404 && e.code == null
-    }
+    private fun isRunGone(e: Exception): Boolean = isRunGoneFailure(e)
 
     /**
      * Message for a gone run: the run ended server-side but the session
@@ -517,8 +522,6 @@ class ChatViewModel(
         error = null
         statusLine = s(R.string.st_starting)
         assistantIndex = -1
-        reconnectAttempts = 0
-        lastReconnectCause = null
         viewModelScope.launch { doStartRun(text, history) }
     }
 
@@ -588,32 +591,73 @@ class ChatViewModel(
             }
             return
         }
+        // Subscribe before starting the engine so no update slips past
+        // this chat, then hand the run to the app-scoped engine (which
+        // owns the SSE loop from here) and keep the process alive for it
+        // while the app is backgrounded.
         subscribe(id)
+        container.runStreams.start(id, sessionId)
+        RunStreamService.start(container.appContext, id, sessionId)
     }
 
+    /**
+     * Renders what the stream engine publishes for this run. The engine
+     * owns the subscription, the reconnect backoff and the status polls;
+     * this collector only settles the outcomes into chat state, with the
+     * same handlers the former in-ViewModel loop used.
+     */
     private fun subscribe(id: String) {
         eventsJob?.cancel()
         eventsJob = viewModelScope.launch {
             refreshLanguage()
-            try {
-                val api = container.api()
-                var terminalSeen = false
-                api.runEvents(id).collect { event ->
-                    // A delivered event proves the stream is healthy again:
-                    // reset the outage budget instead of letting hourly proxy
-                    // kills accumulate over a long run.
-                    reconnectAttempts = 0
-                    if (handleEvent(id, event)) terminalSeen = true
-                }
-                if (!terminalSeen) reconnectOrFinish(id)
-            } catch (e: CancellationException) {
-                // Resubscribe, Stop, or scope teardown: not a stream failure,
-                // never route into the reconnect path.
-                throw e
-            } catch (e: Exception) {
-                lastReconnectCause = e
-                reconnectOrFinish(id, cause = e)
+            container.runStreams.updatesFor(id).collect { update ->
+                handleStreamUpdate(id, update)
             }
+        }
+    }
+
+    private suspend fun handleStreamUpdate(id: String, update: RunStreamUpdate) {
+        when (update) {
+            is RunStreamUpdate.Event -> handleEvent(id, update.event)
+            is RunStreamUpdate.Reconnecting -> statusLine = s(R.string.st_reconnecting)
+            is RunStreamUpdate.Resync -> {
+                update.status.sessionId?.ifBlank { null }?.let { sessionId = it }
+                // A drop may have swallowed the approval/clarify request
+                // event while the run still waits: re-surface it.
+                surfacePendingControls(id, update.status.pendingControls)
+            }
+            is RunStreamUpdate.PollTerminal -> finishTerminal(
+                RunEvent.Terminal(
+                    update.status.status,
+                    update.status.output,
+                    update.status.error,
+                    update.status.pendingSteer,
+                )
+            )
+            is RunStreamUpdate.UnknownOutcome -> {
+                busy = false
+                runId = null
+                statusLine = ""
+                error = s(R.string.st_unknown_restart)
+            }
+            is RunStreamUpdate.Dead -> settleStreamDead(update.cause)
+        }
+    }
+
+    /**
+     * The stream engine gave up on this run (or the run vanished
+     * server-side): settle locally with the message the failure deserves.
+     * A gone run is an ended run, never a dead conversation; a clean-EOF
+     * outage with no recorded failure is a plain "stream ended".
+     */
+    private fun settleStreamDead(cause: Exception?) {
+        busy = false
+        runId = null
+        statusLine = ""
+        error = when {
+            cause != null && isRunGone(cause) -> runGoneError(cause)
+            cause != null -> friendlyError(cause)
+            else -> s(R.string.st_stream_ended)
         }
     }
 
@@ -694,136 +738,6 @@ class ChatViewModel(
         }
         // Chunk splits can strand half a tool block in the reply: sweep it out.
         foldMarkupOutOfReplies()
-    }
-
-    /**
-     * HTTP 401/403 and ownership failures cannot heal by polling: fail fast
-     * instead of burning the reconnect budget and masking the real error
-     * behind a later socket message. Run-level 404s (not_found/run_not_found
-     * or a bare 404) are NOT included here: the run expired server-side but
-     * the session itself is still usable, so they surface as an ended run
-     * (isRunGone) instead of err_foreign.
-     */
-    private fun isUnrecoverable(e: Exception): Boolean =
-        e is HermesApiException && (e.status == 401 || e.status == 403 ||
-            e.code == "permission_denied")
-
-    /**
-     * Status poll with a short retry for transport-level blips (the same
-     * abort that killed the stream often still lingers for a second).
-     * HTTP answers, including 5xx, are authoritative and not retried here.
-     */
-    private suspend fun getRunWithRetry(id: String): RunStatusResponse {
-        var last: Exception? = null
-        repeat(3) { i ->
-            try {
-                return container.api().getRun(id)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: HermesApiException) {
-                throw e
-            } catch (e: Exception) {
-                last = e
-                if (i < 2) delay(1000)
-            }
-        }
-        throw last!!
-    }
-
-    private suspend fun reconnectOrFinish(id: String, cause: Exception? = null) {
-        // The run is gone server-side but the session is still usable:
-        // report it as an ended run, never as a dead conversation.
-        if (cause != null && isRunGone(cause)) {
-            busy = false
-            runId = null
-            statusLine = ""
-            error = runGoneError(cause)
-            return
-        }
-        // Permanent auth/ownership failures fail fast.
-        if (cause != null && isUnrecoverable(cause)) {
-            busy = false
-            runId = null
-            statusLine = ""
-            error = friendlyError(cause)
-            return
-        }
-        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-            busy = false
-            runId = null
-            statusLine = ""
-            // Clean EOFs carry no cause: fall back to the latest real failure
-            // so a 45-transport-failure outage reports "connection lost",
-            // not a bare "stream ended".
-            error = (cause ?: lastReconnectCause)?.let { friendlyError(it) }
-                ?: s(R.string.st_stream_ended)
-            return
-        }
-        statusLine = s(R.string.st_reconnecting)
-        // Spread retries so half-open sockets and tight empty-stream loops
-        // (the §8 transport buffer expires after 5 min) don't spin.
-        // delay() is also the cancellation point: teardown during the wait
-        // throws here instead of polling pointlessly.
-        delay(reconnectDelayMs(reconnectAttempts))
-        val status = try {
-            getRunWithRetry(id)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            // A run-level 404/unknown_execution from the poll means the run
-            // expired server-side (the session is still usable): report it as
-            // an ended run, never as err_foreign. Permanent auth/ownership
-            // answers and authoritative HTTP errors (e.g. 5xx) surface
-            // immediately; a transient transport blip consumes one attempt
-            // and loops instead of killing the run (dead zones, tunnel
-            // restarts), so short total outages also heal on their own.
-            if (e is HermesApiException && isRunGone(e)) {
-                busy = false
-                runId = null
-                statusLine = ""
-                error = runGoneError(e)
-                return
-            }
-            if (e is HermesApiException && isUnrecoverable(e)) {
-                busy = false
-                runId = null
-                statusLine = ""
-                error = friendlyError(e)
-                return
-            }
-            if (e is HermesApiException) {
-                busy = false
-                runId = null
-                statusLine = ""
-                error = friendlyError(e)
-                return
-            }
-            reconnectAttempts++
-            lastReconnectCause = e
-            subscribe(id)
-            return
-        }
-        when (status.status) {
-            "completed", "failed", "cancelled", "interrupted" -> {
-                finishTerminal(
-                    RunEvent.Terminal(status.status, status.output, status.error, status.pendingSteer)
-                )
-                return
-            }
-            "unknown" -> {
-                busy = false
-                runId = null
-                statusLine = ""
-                error = s(R.string.st_unknown_restart)
-                return
-            }
-        }
-        status.sessionId?.ifBlank { null }?.let { sessionId = it }
-        // A drop may have swallowed the approval/clarify request event
-        // while the run still waits: re-surface it from status.
-        surfacePendingControls(id, status.pendingControls)
-        reconnectAttempts++
-        subscribe(id)
     }
 
     private fun friendlyError(e: Exception): String {
