@@ -1932,4 +1932,74 @@ class ChatViewModelTest {
             testScheduler.advanceUntilIdle()
         }
     }
+
+    @Test
+    fun runStart_registersWatchWhenNotificationsEnabled() = runVmTest {
+        val relay = MockWebServer()
+        relay.start()
+        try {
+            relay.enqueue(MockResponse().setResponseCode(202).setBody("{}"))
+            val url = server.url("").toString().removeSuffix("/")
+            val relayUrl = relay.url("").toString().removeSuffix("/")
+            val app = ApplicationProvider.getApplicationContext<Application>()
+            val c = AppContainer(app)
+            c.settingsStore.save(
+                ClientSettings(
+                    baseUrl = url, apiKey = "k",
+                    relayUrl = relayUrl, fcmToken = "tok",
+                )
+            )
+            awaitCondition { c.settingsStore.current().baseUrl == url }
+            server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+            server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running","session_id":"api-x"}"""))
+            server.enqueue(
+                events(frame("run.completed", """{"event":"run.completed","output":"hi"}"""))
+            )
+            val vm = ChatViewModel(c, null)
+            vm.input = "hi"
+            vm.onSend()
+            awaitCondition { !vm.busy }
+            val watch = relay.takeRequest(5, TimeUnit.SECONDS)!!
+            assertEquals("/watch", watch.path)
+            val watchBody = watch.body.readUtf8()
+            assertTrue(watchBody.contains("\"run_id\":\"r1\""))
+            assertTrue(watchBody.contains("\"fcm_token\":\"tok\""))
+        } finally {
+            relay.shutdown()
+        }
+    }
+
+    @Test
+    fun runStart_skipsWatchWhenNotificationsDisabled() = runVmTest {
+        val relay = MockWebServer()
+        relay.start()
+        try {
+            val url = server.url("").toString().removeSuffix("/")
+            val relayUrl = relay.url("").toString().removeSuffix("/")
+            val app = ApplicationProvider.getApplicationContext<Application>()
+            val c = AppContainer(app)
+            c.settingsStore.save(
+                ClientSettings(
+                    baseUrl = url, apiKey = "k",
+                    relayUrl = relayUrl, fcmToken = "tok",
+                    notificationsEnabled = false,
+                )
+            )
+            awaitCondition { c.settingsStore.current().baseUrl == url }
+            server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
+            server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running","session_id":"api-x"}"""))
+            server.enqueue(
+                events(frame("run.completed", """{"event":"run.completed","output":"hi"}"""))
+            )
+            val vm = ChatViewModel(c, null)
+            vm.input = "hi"
+            vm.onSend()
+            awaitCondition { !vm.busy }
+            // The run itself completes; only the watch registration is off.
+            assertTrue(vm.messages.any { it.kind == MsgKind.ASSISTANT && it.text == "hi" })
+            assertEquals(0, relay.requestCount)
+        } finally {
+            relay.shutdown()
+        }
+    }
 }

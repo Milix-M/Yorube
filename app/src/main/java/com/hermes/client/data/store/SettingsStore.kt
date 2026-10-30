@@ -39,6 +39,8 @@ data class ClientSettings(
     val language: String = LANGUAGE_SYSTEM,
     val showForeignSessions: Boolean = true,
     val enterToSend: Boolean = false,
+    /** Master switch for FCM push notifications (completion and approval). */
+    val notificationsEnabled: Boolean = true,
     /**
      * Session keys the app itself created or successfully ran on: explicit
      * proof of "made by this app", so the foreign-session filter never
@@ -76,6 +78,7 @@ class SettingsStore(private val context: Context) {
         val LANGUAGE = stringPreferencesKey("language")
         val SHOW_FOREIGN = booleanPreferencesKey("show_foreign_sessions")
         val ENTER_TO_SEND = booleanPreferencesKey("enter_to_send")
+        val NOTIF_ENABLED = booleanPreferencesKey("notifications_enabled")
         val APP_OWNED_IDS = stringSetPreferencesKey("app_owned_session_ids")
         val FOREIGN_IDS = stringSetPreferencesKey("foreign_session_ids")
     }
@@ -99,6 +102,7 @@ class SettingsStore(private val context: Context) {
                 ?: LANGUAGE_SYSTEM,
             showForeignSessions = p[Keys.SHOW_FOREIGN] ?: true,
             enterToSend = p[Keys.ENTER_TO_SEND] ?: false,
+            notificationsEnabled = p[Keys.NOTIF_ENABLED] ?: true,
             appOwnedSessionIds = p[Keys.APP_OWNED_IDS] ?: emptySet(),
             foreignSessionIds = p[Keys.FOREIGN_IDS] ?: emptySet(),
         )
@@ -128,6 +132,7 @@ class SettingsStore(private val context: Context) {
             p[Keys.LANGUAGE] = value.language.takeIf { it in SUPPORTED_LANGUAGES } ?: LANGUAGE_SYSTEM
             p[Keys.SHOW_FOREIGN] = value.showForeignSessions
             p[Keys.ENTER_TO_SEND] = value.enterToSend
+            p[Keys.NOTIF_ENABLED] = value.notificationsEnabled
             p[Keys.APP_OWNED_IDS] = value.appOwnedSessionIds
             p[Keys.FOREIGN_IDS] = value.foreignSessionIds } }
 
