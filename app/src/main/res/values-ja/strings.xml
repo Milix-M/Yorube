@@ -129,4 +129,8 @@
     <string name="not_now">後で</string>
     <string name="retry">再試行</string>
     <string name="app_version">バージョン</string>
+
+    <string name="stream_channel_name">実行の接続</string>
+    <string name="stream_notification_title">実行中</string>
+    <string name="stream_notification_text">実行中のタスクに接続しています。タップで会話を開きます。</string>
 </resources>

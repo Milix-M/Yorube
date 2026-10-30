@@ -128,4 +128,8 @@
     <string name="not_now">Not now</string>
     <string name="retry">Retry</string>
     <string name="app_version">Version</string>
+
+    <string name="stream_channel_name">Run connection</string>
+    <string name="stream_notification_title">Run in progress</string>
+    <string name="stream_notification_text">Staying connected to the running task. Tap to open the conversation.</string>
 </resources>
