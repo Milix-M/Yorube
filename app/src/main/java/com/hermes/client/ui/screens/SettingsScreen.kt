@@ -182,6 +182,12 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
                 title = stringResource(R.string.section_notifications),
                 icon = Icons.Filled.Notifications,
             ) {
+                SwitchRow(
+                    label = stringResource(R.string.notifications_enabled),
+                    checked = vm.notificationsEnabled,
+                    testTag = "notificationsEnabled",
+                    onChange = { vm.notificationsEnabled = it },
+                )
                 SettingField(stringResource(R.string.relay_optional), vm.relayUrl, "https://relay:port", tag = "relayUrl") { vm.relayUrl = it }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,

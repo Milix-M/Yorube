@@ -1,7 +1,10 @@
 """FCM relay for the Yorube Android client (M3).
 
 Watches one Hermes run to its terminal event, then pushes a single FCM
-data message. Hermes itself never talks to FCM; this small sidecar does.
+data message. If the run stops at an approval request on the way, an
+approval data message is pushed immediately (once per request) so a
+backgrounded app can call the user back. Hermes itself never talks to
+FCM; this small sidecar does.
 
 Endpoints:
   GET  /health
@@ -73,8 +76,12 @@ def hermes_headers() -> dict:
     return {"Authorization": f"Bearer {HERMES_API_KEY}"}
 
 
-def wait_terminal(run_id: str) -> dict:
-    """Stream GET /v1/runs/{id}/events until a terminal run.* event. Returns fields."""
+def wait_terminal(run_id: str, on_approval=None) -> dict:
+    """Stream GET /v1/runs/{id}/events until a terminal run.* event. Returns fields.
+
+    Approval requests seen on the way are reported through on_approval
+    (the run is still waiting then; the terminal event comes later).
+    """
     url = f"{HERMES_BASE_URL}/v1/runs/{run_id}/events"
     terminal = {"status": "done", "output": "", "error": ""}
     try:
@@ -91,11 +98,15 @@ def wait_terminal(run_id: str) -> dict:
                     payload = parse_frame(event_name, "\n".join(data_lines))
                     event_name = "message"
                     data_lines = []
-                    if payload is not None and payload.get("event", "").startswith("run."):
-                        terminal["status"] = payload["event"].split(".", 1)[1]
-                        terminal["output"] = str(payload.get("output") or "")
-                        terminal["error"] = str(payload.get("error") or "")
-                        return terminal
+                    if payload is not None:
+                        event = payload.get("event", "")
+                        if "approval" in event and on_approval is not None:
+                            on_approval(payload)
+                        elif event.startswith("run."):
+                            terminal["status"] = event.split(".", 1)[1]
+                            terminal["output"] = str(payload.get("output") or "")
+                            terminal["error"] = str(payload.get("error") or "")
+                            return terminal
                 elif line.startswith(":"):
                     continue  # keepalive comment
                 elif line.startswith("event:"):
@@ -121,28 +132,55 @@ def parse_frame(event_name: str, data: str):
     return {"event": event_name, "data": obj}
 
 
-def push_and_watch(run_id: str, session_id: str, fcm_token: str, title: str) -> None:
-    terminal = wait_terminal(run_id)
+def send_data(fcm_token: str, data: dict) -> bool:
     if not ensure_firebase():
-        return
+        return False
+    try:
+        messaging.send(messaging.Message(data=data, token=fcm_token))
+        return True
+    except Exception:
+        log.exception("FCM send failed")
+        return False
+
+
+def push_and_watch(run_id: str, session_id: str, fcm_token: str, title: str) -> None:
+    pushed_approvals: set = set()
+
+    def on_approval(payload: dict) -> None:
+        request_id = str(payload.get("request_id") or "")
+        if request_id in pushed_approvals:
+            return
+        pushed_approvals.add(request_id)
+        # Same preview the app would show: the command itself, else the
+        # description. Kept short like the completion body (DESIGN §15).
+        body = str(payload.get("command") or payload.get("description") or "")[:200]
+        if send_data(
+            fcm_token,
+            {
+                "type": "approval",
+                "body": body,
+                "session_id": session_id,
+                "run_id": run_id,
+                "request_id": request_id,
+            },
+        ):
+            log.info("pushed approval for run %s", run_id)
+
+    terminal = wait_terminal(run_id, on_approval)
     status = terminal["status"]
     body = (terminal["output"] or terminal["error"] or f"run {status}")[:200]
-    try:
-        messaging.send(
-            messaging.Message(
-                data={
-                    "title": title or "Yorube",
-                    "body": body,
-                    "session_id": session_id,
-                    "run_id": run_id,
-                    "status": status,
-                },
-                token=fcm_token,
-            )
-        )
+    if send_data(
+        fcm_token,
+        {
+            "type": "run_finished",
+            "title": title or "Yorube",
+            "body": body,
+            "session_id": session_id,
+            "run_id": run_id,
+            "status": status,
+        },
+    ):
         log.info("pushed %s for run %s", status, run_id)
-    except Exception:
-        log.exception("FCM send failed for run %s", run_id)
 
 
 class Handler(BaseHTTPRequestHandler):

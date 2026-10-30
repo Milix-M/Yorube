@@ -34,6 +34,7 @@ class SettingsViewModel(
     var language by mutableStateOf(LANGUAGE_SYSTEM)
     var showForeignSessions by mutableStateOf(true)
     var enterToSend by mutableStateOf(false)
+    var notificationsEnabled by mutableStateOf(true)
     var fcmToken by mutableStateOf("")
         private set
     var testResult by mutableStateOf("")
@@ -62,6 +63,7 @@ class SettingsViewModel(
             language = s.language
             showForeignSessions = s.showForeignSessions
             enterToSend = s.enterToSend
+            notificationsEnabled = s.notificationsEnabled
         }
     }
 
@@ -71,27 +73,31 @@ class SettingsViewModel(
             val stored = store.current()
             val keepForeign = stored.foreignSessionIds
             val keepAppOwned = stored.appOwnedSessionIds
-            store.save(
-                ClientSettings(
-                    baseUrl = baseUrl,
-                    apiKey = apiKey,
-                    model = model,
-                    provider = provider,
-                    relayUrl = relayUrl,
-                    fcmToken = fcmToken,
-                    firebaseProjectId = firebaseProjectId,
-                    firebaseAppId = firebaseAppId,
-                    firebaseApiKey = firebaseApiKey,
-                    firebaseSenderId = firebaseSenderId,
-                    cfClientId = cfClientId,
-                    cfClientSecret = cfClientSecret,
-                    language = language,
-                    showForeignSessions = showForeignSessions,
-                    enterToSend = enterToSend,
-                    appOwnedSessionIds = keepAppOwned,
-                    foreignSessionIds = keepForeign,
-                )
+            val newSettings = ClientSettings(
+                baseUrl = baseUrl,
+                apiKey = apiKey,
+                model = model,
+                provider = provider,
+                relayUrl = relayUrl,
+                fcmToken = fcmToken,
+                firebaseProjectId = firebaseProjectId,
+                firebaseAppId = firebaseAppId,
+                firebaseApiKey = firebaseApiKey,
+                firebaseSenderId = firebaseSenderId,
+                cfClientId = cfClientId,
+                cfClientSecret = cfClientSecret,
+                language = language,
+                showForeignSessions = showForeignSessions,
+                enterToSend = enterToSend,
+                notificationsEnabled = notificationsEnabled,
+                appOwnedSessionIds = keepAppOwned,
+                foreignSessionIds = keepForeign,
             )
+            store.save(newSettings)
+            // Start FCM as soon as Firebase settings land: the SDK then
+            // delivers a token via onNewToken instead of waiting for the
+            // connection test or the first run to initialize it.
+            FirebaseInit.ensureInitialized(container.appContext, newSettings)
             saved = true
         }
     }
@@ -147,6 +153,6 @@ class SettingsViewModel(
         firebaseApiKey = firebaseApiKey, firebaseSenderId = firebaseSenderId,
         cfClientId = cfClientId, cfClientSecret = cfClientSecret,
         language = language, showForeignSessions = showForeignSessions,
-        enterToSend = enterToSend,
+        enterToSend = enterToSend, notificationsEnabled = notificationsEnabled,
     )
 }

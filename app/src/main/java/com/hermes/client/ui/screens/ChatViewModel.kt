@@ -21,6 +21,7 @@ import com.hermes.client.data.api.RunStatusResponse
 import com.hermes.client.data.api.SessionMessage
 import com.hermes.client.data.api.long
 import com.hermes.client.data.api.str
+import com.hermes.client.data.fcm.FirebaseInit
 import com.hermes.client.data.store.LANGUAGE_SYSTEM
 import com.hermes.client.data.store.LocaleHelper
 import java.io.IOException
@@ -560,15 +561,23 @@ class ChatViewModel(
             // The server accepted our write on this key: provably made (or
             // adopted) by this app, so history never hides it as foreign.
             markAppOwned(sessionId)
-            // Best-effort FCM watch so a closed app still gets the finish notice.
+            // Initialize Firebase from settings (idempotent) so the SDK can
+            // deliver a token via onNewToken. Without this, FCM stayed
+            // uninitialized until the settings connection test ran once, no
+            // token was ever stored, and every watch below silently no-opped.
+            FirebaseInit.ensureInitialized(container.appContext, settings)
+            // Best-effort FCM watch so a closed app still gets the finish
+            // notice. Skipped entirely when notifications are turned off.
             // registerWatch never throws (returns false on failure), so no
             // try-catch needed here.
-            container.watchRegistrar.registerWatch(
-                relayBaseUrl = settings.relayUrl,
-                runId = id,
-                sessionId = sessionId,
-                fcmToken = settings.fcmToken,
-            )
+            if (settings.notificationsEnabled) {
+                container.watchRegistrar.registerWatch(
+                    relayBaseUrl = settings.relayUrl,
+                    runId = id,
+                    sessionId = sessionId,
+                    fcmToken = settings.fcmToken,
+                )
+            }
         } catch (e: Exception) {
             busy = false
             statusLine = ""
