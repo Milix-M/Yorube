@@ -3017,7 +3017,14 @@ class ChatViewModelTest {
     @Test
     fun slashBg_notConfigured_postsError() = runVmTest {
         val app = ApplicationProvider.getApplicationContext<Application>()
-        val vm = ChatViewModel(AppContainer(app), null)
+        val c = AppContainer(app)
+        // The settings DataStore is shared by every test in this class and
+        // earlier tests (containerWithSettings) leave a configured
+        // baseUrl/apiKey in it: reset to defaults so this test really
+        // starts unconfigured instead of posting a network error.
+        c.settingsStore.save(ClientSettings())
+        awaitCondition { !c.settingsStore.current().isConfigured }
+        val vm = ChatViewModel(c, null)
         vm.input = "/bg check the deploy"
         vm.onSend()
         awaitCondition { vm.messages.any { it.kind == MsgKind.ERROR } }
