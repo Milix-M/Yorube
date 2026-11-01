@@ -8,6 +8,7 @@ import com.hermes.client.HermesApp
 import com.hermes.client.data.store.ClientSettings
 import com.hermes.client.testutil.awaitCondition
 import com.hermes.client.testutil.runVmTest
+import com.hermes.client.testutil.shutdownServer
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.test.TestScope
 import okhttp3.mockwebserver.MockResponse
@@ -39,7 +40,10 @@ class RunStreamServiceTest {
 
     @After
     fun tearDown() {
-        server.shutdown()
+        // One test parks a stream on a 30 s headers delay; a plain
+        // server.shutdown() gives up on it after 5 s (see
+        // shutdownServer).
+        shutdownServer(server)
     }
 
     private fun app(): HermesApp =

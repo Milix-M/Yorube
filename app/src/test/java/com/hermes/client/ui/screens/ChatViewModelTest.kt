@@ -8,6 +8,7 @@ import com.hermes.client.HermesApp
 import com.hermes.client.data.store.ClientSettings
 import com.hermes.client.testutil.awaitCondition
 import com.hermes.client.testutil.runVmTest
+import com.hermes.client.testutil.shutdownServer
 import kotlinx.coroutines.cancel
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
@@ -49,7 +50,10 @@ class ChatViewModelTest {
 
     @After
     fun tearDown() {
-        server.shutdown()
+        // The reattach test parks a foreign run's stream on a 10 s
+        // headers delay; a plain server.shutdown() gives up on it
+        // after 5 s (see shutdownServer).
+        shutdownServer(server)
     }
 
     private suspend fun TestScope.containerWithSettings(): AppContainer {

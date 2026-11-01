@@ -8,6 +8,7 @@ import com.hermes.client.data.api.RunEvent
 import com.hermes.client.data.store.ClientSettings
 import com.hermes.client.testutil.awaitCondition
 import com.hermes.client.testutil.runVmTest
+import com.hermes.client.testutil.shutdownServer
 import java.util.Collections
 import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.milliseconds
@@ -43,7 +44,10 @@ class RunStreamEngineTest {
 
     @After
     fun tearDown() {
-        server.shutdown()
+        // Several tests park streams on 30 s headers delays; a plain
+        // server.shutdown() gives up on those after 5 s (see
+        // shutdownServer).
+        shutdownServer(server)
     }
 
     private suspend fun TestScope.containerWithSettings(): AppContainer {
