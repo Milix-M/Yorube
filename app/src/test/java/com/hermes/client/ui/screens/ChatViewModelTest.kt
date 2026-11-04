@@ -8,12 +8,15 @@ import com.hermes.client.HermesApp
 import com.hermes.client.data.store.ClientSettings
 import com.hermes.client.testutil.awaitCondition
 import com.hermes.client.testutil.runVmTest
+import com.hermes.client.testutil.shutdownServer
 import kotlinx.coroutines.cancel
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import com.hermes.client.data.api.HermesJson
+import com.hermes.client.data.stream.MAX_RECONNECT_ATTEMPTS
+import com.hermes.client.data.stream.reconnectDelayMs
 import kotlinx.serialization.json.jsonObject
 import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
@@ -47,7 +50,10 @@ class ChatViewModelTest {
 
     @After
     fun tearDown() {
-        server.shutdown()
+        // The reattach test parks a foreign run's stream on a 10 s
+        // headers delay; a plain server.shutdown() gives up on it
+        // after 5 s (see shutdownServer).
+        shutdownServer(server)
     }
 
     private suspend fun TestScope.containerWithSettings(): AppContainer {
@@ -3177,5 +3183,78 @@ class ChatViewModelTest {
             vm.messages.last { it.kind == MsgKind.ERROR }.text.contains("No approval is waiting"),
         )
         assertEquals(0, server.requestCount)
+    }
+    @Test
+    fun reattach_activeRun_resyncsAndSurfacesApproval() = runVmTest {
+        // The stream engine already keeps run r1 for s1 alive (the app was
+        // backgrounded): opening the chat must adopt the run, re-surface
+        // the pending approval from the status poll, and settle when the
+        // run completes.
+        val hold = arrayOf(true)
+        val eventsHits = java.util.concurrent.atomic.AtomicInteger(0)
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.path == "/api/sessions/s1/messages" ->
+                    MockResponse().setBody("""{"messages":[]}""")
+                request.method == "GET" && request.path == "/v1/runs/r1" ->
+                    MockResponse().setBody(
+                        """{"run_id":"r1","status":"waiting_for_approval","session_id":"s1",""" +
+                            """"pending_controls":[{"request_id":"a1","execution_generation":3,""" +
+                            """"command":"rm -rf /tmp/x","choices":["once","deny"]}]}"""
+                    )
+                request.method == "GET" && request.path == "/v1/runs/r1/events" -> {
+                    when (eventsHits.getAndIncrement()) {
+                        // First subscription ends at once, so the engine is
+                        // parked in its reconnect poll when the chat opens.
+                        0 -> MockResponse().setBody("")
+                        // Held open until the approval is asserted; the
+                        // reattach cancels this subscription client-side.
+                        1 -> {
+                            while (hold[0]) Thread.sleep(50)
+                            events(frame("run.completed", """{"event":"run.completed","output":"done"}"""))
+                        }
+                        else -> events(
+                            frame("run.completed", """{"event":"run.completed","output":"done"}""")
+                        )
+                    }
+                }
+                else -> MockResponse().setBody("{}")
+            }
+        }
+        val c = containerWithSettings()
+        c.runStreams.start("r1", "s1")
+        val vm = ChatViewModel(c, "s1")
+        try {
+            awaitCondition { vm.approval != null }
+            assertEquals("rm -rf /tmp/x", vm.approval!!.command)
+            assertTrue(vm.busy)
+        } finally {
+            hold[0] = false
+        }
+        awaitCondition { !vm.busy }
+        assertTrue(vm.messages.any { it.kind == MsgKind.ASSISTANT && it.text == "done" })
+        assertNull(vm.error)
+    }
+
+    @Test
+    fun reattach_otherSessionsRun_isIgnored() = runVmTest {
+        // The engine's active run belongs to another session: this chat
+        // must stay idle instead of adopting a foreign stream.
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.path == "/api/sessions/s1/messages" ->
+                    MockResponse().setBody("""{"messages":[]}""")
+                request.method == "GET" && request.path == "/v1/runs/r9/events" ->
+                    MockResponse().setHeadersDelay(10, TimeUnit.SECONDS)
+                else -> MockResponse().setBody("{}")
+            }
+        }
+        val c = containerWithSettings()
+        c.runStreams.start("r9", "s-other")
+        val vm = ChatViewModel(c, "s1")
+        awaitCondition { !vm.historyLoading }
+        assertFalse(vm.busy)
+        assertNull(vm.error)
+        assertEquals("s1", vm.sessionId)
     }
 }
