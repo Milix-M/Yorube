@@ -14,7 +14,9 @@ markdown-renderer = "0.28.0"
 firebase-messaging = "24.0.1"
 junit = "4.13.2"
 espresso = "3.5.1"
-robolectric = "4.13"
+robolectric = "4.17"
+robolectric-native = "1.0.20"
+conscrypt = "2.9.0"
 test-core = "1.5.0"
 
 [libraries]
@@ -44,4 +46,6 @@ compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4" }
 compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
 espresso-core = { module = "androidx.test.espresso:espresso-core", version.ref = "espresso" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+robolectric-native = { module = "org.robolectric:nativeruntime-dist-compat", version.ref = "robolectric-native" }
+conscrypt = { module = "org.conscrypt:conscrypt-openjdk-uber", version.ref = "conscrypt" }
 test-core = { module = "androidx.test:core", version.ref = "test-core" }

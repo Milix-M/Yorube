@@ -97,6 +97,9 @@ dependencies {
     testImplementation(libs.compose.ui.test)
     testImplementation(libs.compose.ui.test.junit4)
     testImplementation(libs.robolectric)
+    // Pin the native test libraries with Linux ARM64 support.
+    testImplementation(libs.robolectric.native)
+    testImplementation(libs.conscrypt)
     testImplementation(libs.test.core)
 }
 
@@ -113,6 +116,18 @@ jacoco {
 }
 
 tasks.withType<Test> {
+    // Robolectric 4.17 requires access to these JDK internals on Java 17+.
+    jvmArgs(
+        "--add-opens=java.base/java.lang=ALL-UNNAMED",
+        "--add-opens=java.base/java.util=ALL-UNNAMED",
+        "--add-opens=java.base/java.io=ALL-UNNAMED",
+        "--add-opens=java.base/java.net=ALL-UNNAMED",
+        "--add-opens=java.base/java.security=ALL-UNNAMED",
+        "--add-opens=java.base/java.text=ALL-UNNAMED",
+        "--add-opens=java.base/jdk.internal.access=ALL-UNNAMED",
+        "--add-opens=java.desktop/java.awt.font=ALL-UNNAMED",
+        "--add-opens=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED",
+    )
     configure<JacocoTaskExtension> {
         isIncludeNoLocationClasses = true
         excludes = listOf("jdk.internal.*")

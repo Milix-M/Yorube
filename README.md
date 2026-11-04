@@ -56,6 +56,10 @@ CLI / Discord 等が所有するセッションへの書き込みは `permission
 CI (`.github/workflows/android.yml`) でも同じものを作ります。成果物は debug APK です。
 単体テストは `./gradlew :app:testDebugUnitTest`、カバレッジ検証は `./gradlew :app:jacocoCoverageVerification` です。
 
+Linux ARM64 の単体テストは、Robolectric 4.17、Conscrypt 2.9.0、`nativeruntime-dist-compat` 1.0.20 を使います。
+Robolectric 4.17 の標準ローダーは Linux ARM64 を未対応として扱うため、テスト用の `LinuxArm64NativeRuntimeLoader` を SPI で登録し、公式配布の ARM64 ライブラリ・フォント・ICU データを読み込みます。対応範囲は API 26〜34 です。他のホストでは標準ローダーを使います。
+テストを省略したりネイティブ描画を無効化したりする設定は不要です。Linux ARM64 対応のテストランナーへ更新する際は、このローダーも見直してください。
+
 ## 既知の制限
 
 他インターフェイスセッションの一覧可否は、サーバーが所有者メタデータを返さない場合、過去の `permission_denied` 記録に依存します。SSE 購読は前面のみです。バックグラウンドでは Doze で切れるため、復帰時は状態取得で補います。`unknown` 終端の再送はしません (二重実行防止)。新規会話を始めてください。
