@@ -3,14 +3,14 @@ package com.hermes.client
 import android.app.Application
 import com.hermes.client.data.api.HermesApi
 import com.hermes.client.data.crash.CrashLog
-import com.hermes.client.data.fcm.WatchRegistrar
+import com.hermes.client.data.notifications.RunNotifications
 import com.hermes.client.data.stream.RunStreamEngine
 import com.hermes.client.data.store.ClientSettings
 import com.hermes.client.data.store.SettingsStore
 
 class AppContainer(val appContext: android.content.Context) {
     val settingsStore = SettingsStore(appContext)
-    val watchRegistrar = WatchRegistrar()
+    val runNotifications by lazy { RunNotifications(this) }
 
     /**
      * App-scoped owner of the active run's SSE stream, so the stream
@@ -20,8 +20,9 @@ class AppContainer(val appContext: android.content.Context) {
      */
     val runStreams: RunStreamEngine by lazy { RunStreamEngine(this) }
 
-    suspend fun api(): HermesApi {
-        val s: ClientSettings = settingsStore.current()
+    suspend fun api(): HermesApi = api(settingsStore.current())
+
+    fun api(s: ClientSettings): HermesApi {
         val extra = buildMap {
             if (s.cfClientId.isNotBlank() && s.cfClientSecret.isNotBlank()) {
                 put("CF-Access-Client-Id", s.cfClientId)

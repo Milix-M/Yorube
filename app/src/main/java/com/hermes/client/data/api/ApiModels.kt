@@ -95,6 +95,9 @@ data class RunRuntime(
 
 @Serializable
 data class RunStatusResponse(
+    val pendingControlsKnown: Boolean = false,
+    @SerialName("admission_id") val admissionId: String? = null,
+    @SerialName("execution_generation") val executionGeneration: Long? = null,
     @SerialName("run_id") val runId: String = "",
     val status: String = "",
     @SerialName("session_id") val sessionId: String? = null,

@@ -73,7 +73,7 @@ class SettingsScreenTest {
         compose.onNodeWithText("Server").assertIsDisplayed()
         compose.onNodeWithTag("baseUrl").performTextInput("https://example.com:8642")
         compose.onNodeWithTag("apiKey").performTextInput("k")
-        for (tag in listOf("relayUrl", "fbProject", "fbApp", "fbKey", "fbSender", "cfId", "cfSecret")) {
+        for (tag in listOf("cfId", "cfSecret")) {
             compose.onNodeWithTag(tag).performScrollTo()
             compose.onNodeWithTag(tag).performTextInput("v")
         }
@@ -99,7 +99,7 @@ class SettingsScreenTest {
         )
         assertTrue(
             compose.onAllNodesWithText("Firebase manual setup (optional)")
-                .fetchSemanticsNodes().isNotEmpty()
+                .fetchSemanticsNodes().isEmpty()
         )
     }
 
@@ -116,16 +116,14 @@ class SettingsScreenTest {
     }
 
     @Test
-    fun fcmToken_showsSnippetWhenSet() {
+    fun legacyFcmTokenIsNeverExposed() {
         saveSettings(ClientSettings(baseUrl = "https://example.com", apiKey = "k", fcmToken = "abcdef1234567890"))
         compose.setContent {
             HermesAppTheme {
                 SettingsScreen(onNavigateBack = {})
             }
         }
-        compose.waitUntil(timeoutMillis = 10_000) {
-            compose.onAllNodesWithText("abcdef123456", substring = true).fetchSemanticsNodes().isNotEmpty()
-        }
+        assertTrue(compose.onAllNodesWithText("abcdef123456", substring = true).fetchSemanticsNodes().isEmpty())
     }
 
     @Test

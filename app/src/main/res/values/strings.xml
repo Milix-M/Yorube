@@ -110,7 +110,7 @@
     <string name="cmd_stop_not_running">Nothing is running to stop.</string>
     <string name="cmd_steer_usage">Usage: /steer &lt;text&gt; — text is required.</string>
     <string name="cmd_steer_not_running">Nothing is running to steer. Send a normal message instead.</string>
-    <string name="cmd_model_usage">Usage: /model &lt;provider&gt;/&lt;model&gt; or /model &lt;model&gt;.</string>
+    <string name="cmd_model_usage">Usage: /model --provider &lt;provider&gt; &lt;model&gt; or /model &lt;model&gt;.</string>
     <string name="cmd_model_set">Model set to %1$s. Applies from the next run.</string>
     <string name="cmd_model_unset">server default</string>
     <string name="cmd_model_none">(none reported by the server)</string>
@@ -187,4 +187,15 @@
     <string name="stream_channel_name">Run connection</string>
     <string name="stream_notification_title">Run in progress</string>
     <string name="stream_notification_text">Staying connected to the running task. Tap to open the conversation.</string>
+    <string name="notif_tracking_lost">Run status unavailable. Open the conversation to check.</string>
+    <string name="notif_run_stopped">Run stopped</string>
+    <string name="cmd_resume_ambiguous">Multiple conversations match. Use a session ID:\n%1$s</string>
+    <string name="settings_connection_busy">Wait for active runs to finish before changing the server connection.</string>
+    <string name="stream_replay_truncated">Some progress expired while disconnected. The final reply will be synced on completion.</string>
+    <string name="cmd_next_run_option">/%1$s: %2$s (next run)</string>
+    <string name="cmd_discard_usage">Use /discard [run ID] only for a run whose outcome is unknown.</string>
+    <string name="cmd_discard_done">Unknown execution acknowledged. No prompt was resent.</string>
+    <string name="cmd_cron_usage">/cron list; /cron add name | schedule | prompt; /cron edit id name | schedule | prompt; /cron show|pause|resume|run|remove id</string>
+    <string name="cmd_cron_done">Cron: %1$s completed.</string>
+    <string name="cmd_cron_empty">No scheduled tasks.</string>
 </resources>

@@ -12,6 +12,7 @@ package com.hermes.client.ui.screens
 sealed interface SlashCommand {
     /** Not a command: submit as a normal message. */
     data object NotACommand : SlashCommand
+    data class Local(val name: String, val arg: String) : SlashCommand
 
     /** /stop — stop the current run. Extra words are ignored. */
     data object Stop : SlashCommand
@@ -99,13 +100,15 @@ sealed interface QueueOp {
 
     /** /queue rm <n> — drop the 1-based entry; [index] null when unparsable. */
     data class Remove(val index: Int?) : QueueOp
+    data class Edit(val index: Int?, val text: String) : QueueOp
+    data class Move(val from: Int?, val to: Int?) : QueueOp
 }
 
 /** How the app handles one Hermes command: the parse/dispatch shape. */
 enum class SlashAction {
     STOP, STEER, NEW_SESSION, HELP, COMMANDS, MODEL, RETRY, QUEUE, BRANCH,
     SESSIONS, RESUME, TITLE, STATUS, USAGE, SKILLS, TOOLSETS, BACKGROUND,
-    APPROVE, DENY, UNSUPPORTED,
+    APPROVE, DENY, LOCAL, UNSUPPORTED,
 }
 
 /**
@@ -130,11 +133,11 @@ val HERMES_COMMANDS: List<HermesCommand> = listOf(
     HermesCommand("new", aliases = listOf("reset"), action = SlashAction.NEW_SESSION, description = "Start a new session (fresh session ID + history)"),
     HermesCommand("topic", action = SlashAction.UNSUPPORTED, description = "Enable or inspect Telegram DM topic sessions"),
     HermesCommand("clear", action = SlashAction.NEW_SESSION, description = "Clear screen and start a new session"),
-    HermesCommand("redraw", action = SlashAction.UNSUPPORTED, description = "Force a full UI repaint"),
-    HermesCommand("history", action = SlashAction.UNSUPPORTED, description = "Show conversation history"),
-    HermesCommand("save", action = SlashAction.UNSUPPORTED, description = "Export the current conversation"),
+    HermesCommand("redraw", action = SlashAction.LOCAL, description = "Rebuild the current chat display"),
+    HermesCommand("history", action = SlashAction.LOCAL, description = "Show conversation history"),
+    HermesCommand("save", action = SlashAction.LOCAL, description = "Share conversation text with Android apps"),
     HermesCommand("retry", action = SlashAction.RETRY, description = "Retry the last message (resend to agent)"),
-    HermesCommand("prompt", aliases = listOf("compose"), action = SlashAction.UNSUPPORTED, description = "Compose your next prompt in \$EDITOR, then send it"),
+    HermesCommand("prompt", aliases = listOf("compose"), action = SlashAction.LOCAL, description = "Put text into the composer"),
     HermesCommand("undo", action = SlashAction.UNSUPPORTED, description = "Back up N user turns and re-prompt (default 1)"),
     HermesCommand("title", action = SlashAction.TITLE, description = "Set a title for the current session"),
     HermesCommand("handoff", action = SlashAction.UNSUPPORTED, description = "Hand off this session to a messaging platform"),
@@ -143,14 +146,14 @@ val HERMES_COMMANDS: List<HermesCommand> = listOf(
     HermesCommand("compress", aliases = listOf("compact"), action = SlashAction.UNSUPPORTED, description = "Compress conversation context"),
     HermesCommand("rollback", action = SlashAction.UNSUPPORTED, description = "List or restore filesystem checkpoints"),
     HermesCommand("snapshot", aliases = listOf("snap"), action = SlashAction.UNSUPPORTED, description = "Create or restore state snapshots of Hermes config/state"),
-    HermesCommand("stop", action = SlashAction.STOP, description = "Kill all running background processes"),
-    HermesCommand("discard", action = SlashAction.UNSUPPORTED, description = "Drop a turn lost when Hermes restarted"),
+    HermesCommand("stop", action = SlashAction.STOP, description = "Stop the current conversation run"),
+    HermesCommand("discard", action = SlashAction.LOCAL, description = "Drop a turn lost when Hermes restarted"),
     HermesCommand("pause", action = SlashAction.UNSUPPORTED, description = "Pause new work globally (emergency stop)"),
     HermesCommand("approve", action = SlashAction.APPROVE, description = "Approve a pending dangerous command"),
     HermesCommand("deny", action = SlashAction.DENY, description = "Deny a pending dangerous command"),
     HermesCommand("bg", action = SlashAction.BACKGROUND, description = "Run a prompt in a separate background session"),
     HermesCommand("btw", action = SlashAction.UNSUPPORTED, description = "Ask a side question about the current conversation"),
-    HermesCommand("agents", aliases = listOf("tasks"), action = SlashAction.UNSUPPORTED, description = "Show active agents and running tasks"),
+    HermesCommand("agents", aliases = listOf("tasks"), action = SlashAction.LOCAL, description = "Show runs tracked by this app"),
     HermesCommand("journey", aliases = listOf("learning", "memory-graph"), action = SlashAction.UNSUPPORTED, description = "Open the learning journey timeline"),
     HermesCommand("queue", aliases = listOf("q"), action = SlashAction.QUEUE, description = "Queue a prompt for the next turn"),
     HermesCommand("steer", aliases = listOf("s"), action = SlashAction.STEER, description = "Inject a message after the next tool call without interrupting"),
@@ -172,8 +175,8 @@ val HERMES_COMMANDS: List<HermesCommand> = listOf(
     HermesCommand("sessions", action = SlashAction.SESSIONS, description = "Browse and resume previous sessions"),
     HermesCommand("export", action = SlashAction.UNSUPPORTED, description = "Export a profile to a shareable archive"),
     HermesCommand("import", action = SlashAction.UNSUPPORTED, description = "Import a shared profile archive as a new profile"),
-    HermesCommand("config", action = SlashAction.UNSUPPORTED, description = "Show current configuration"),
-    HermesCommand("model", action = SlashAction.MODEL, description = "Switch model (session-scoped; --global to persist)"),
+    HermesCommand("config", action = SlashAction.LOCAL, description = "Show current configuration"),
+    HermesCommand("model", action = SlashAction.MODEL, description = "Set model for future runs; use --provider for a provider"),
     HermesCommand("codex-runtime", aliases = listOf("codex_runtime"), action = SlashAction.UNSUPPORTED, description = "Toggle codex app-server runtime"),
     HermesCommand("personality", action = SlashAction.UNSUPPORTED, description = "Set a predefined personality"),
     HermesCommand("statusbar", aliases = listOf("sb"), action = SlashAction.UNSUPPORTED, description = "Toggle the context/model status bar"),
@@ -185,36 +188,36 @@ val HERMES_COMMANDS: List<HermesCommand> = listOf(
     HermesCommand("footer", action = SlashAction.UNSUPPORTED, description = "Toggle gateway runtime-metadata footer on final replies"),
     HermesCommand("yolo", action = SlashAction.UNSUPPORTED, description = "Toggle YOLO mode (skip all dangerous command approvals)"),
     HermesCommand("approvals", action = SlashAction.UNSUPPORTED, description = "Show or set the persistent dangerous-command approval mode"),
-    HermesCommand("reasoning", action = SlashAction.UNSUPPORTED, description = "Manage reasoning effort and display"),
-    HermesCommand("fast", action = SlashAction.UNSUPPORTED, description = "Fast mode — provider priority/fast processing"),
+    HermesCommand("reasoning", action = SlashAction.LOCAL, description = "Set reasoning effort for future runs"),
+    HermesCommand("fast", action = SlashAction.LOCAL, description = "Select normal/default or fast/priority for future runs"),
     HermesCommand("skin", action = SlashAction.UNSUPPORTED, description = "Show or change the display skin/theme"),
     HermesCommand("indicator", action = SlashAction.UNSUPPORTED, description = "Pick the TUI busy-indicator style"),
     HermesCommand("voice", action = SlashAction.UNSUPPORTED, description = "Toggle voice mode"),
     HermesCommand("wake", action = SlashAction.UNSUPPORTED, description = "Toggle the 'Hey Hermes' wake word listener"),
     HermesCommand("busy", action = SlashAction.UNSUPPORTED, description = "Control how messages behave while Hermes is working"),
     HermesCommand("autoprune", action = SlashAction.UNSUPPORTED, description = "Turn automatic pruning of old sessions on or off"),
-    HermesCommand("tools", action = SlashAction.UNSUPPORTED, description = "Manage tools for the current session"),
+    HermesCommand("tools", action = SlashAction.LOCAL, description = "List server toolsets (configuration is read-only)"),
     HermesCommand("toolsets", action = SlashAction.TOOLSETS, description = "List available toolsets"),
-    HermesCommand("skills", action = SlashAction.SKILLS, description = "Search, install, inspect, or manage skills"),
+    HermesCommand("skills", action = SlashAction.SKILLS, description = "List, search or inspect installed skills (read-only)"),
     HermesCommand("memory", action = SlashAction.UNSUPPORTED, description = "Review pending memory writes / toggle the approval gate"),
     HermesCommand("bundles", action = SlashAction.UNSUPPORTED, description = "List skill bundles"),
     HermesCommand("pet", action = SlashAction.UNSUPPORTED, description = "Toggle or adopt a petdex mascot"),
     HermesCommand("hatch", aliases = listOf("generate-pet"), action = SlashAction.UNSUPPORTED, description = "Generate a new petdex pet from a description"),
     HermesCommand("learn", action = SlashAction.UNSUPPORTED, description = "Learn a reusable skill from anything you describe"),
     HermesCommand("init", action = SlashAction.UNSUPPORTED, description = "Generate or update AGENTS.md project instructions"),
-    HermesCommand("cron", action = SlashAction.UNSUPPORTED, description = "Manage scheduled tasks"),
+    HermesCommand("cron", action = SlashAction.LOCAL, description = "Manage scheduled tasks"),
     HermesCommand("suggestions", aliases = listOf("suggest"), action = SlashAction.UNSUPPORTED, description = "Review suggested automations"),
     HermesCommand("blueprint", aliases = listOf("bp"), action = SlashAction.UNSUPPORTED, description = "Set up an automation from a blueprint template"),
     HermesCommand("curator", action = SlashAction.UNSUPPORTED, description = "Background skill maintenance"),
     HermesCommand("kanban", action = SlashAction.UNSUPPORTED, description = "Multi-profile collaboration board"),
     HermesCommand("reload", action = SlashAction.UNSUPPORTED, description = "Reload .env variables into the running session"),
     HermesCommand("reload-mcp", aliases = listOf("reload_mcp"), action = SlashAction.UNSUPPORTED, description = "Reload MCP servers from config"),
-    HermesCommand("reload-skills", aliases = listOf("reload_skills"), action = SlashAction.UNSUPPORTED, description = "Re-scan installed skills"),
+    HermesCommand("reload-skills", aliases = listOf("reload_skills"), action = SlashAction.LOCAL, description = "Refresh the installed skills list"),
     HermesCommand("browser", action = SlashAction.UNSUPPORTED, description = "Connect browser tools to your live Chromium browser"),
     HermesCommand("plugins", action = SlashAction.UNSUPPORTED, description = "List installed plugins and their status"),
     HermesCommand("commands", action = SlashAction.COMMANDS, description = "Browse all commands and skills (paginated)"),
     HermesCommand("help", action = SlashAction.HELP, description = "Show available commands"),
-    HermesCommand("palette", action = SlashAction.UNSUPPORTED, description = "Open the fuzzy command palette"),
+    HermesCommand("palette", action = SlashAction.LOCAL, description = "List commands available in this app"),
     HermesCommand("restart", action = SlashAction.UNSUPPORTED, description = "Gracefully restart the gateway"),
     HermesCommand("usage", action = SlashAction.USAGE, description = "Show token usage and rate limits"),
     HermesCommand("subscription", aliases = listOf("upgrade"), action = SlashAction.UNSUPPORTED, description = "View your Nous plan and change it in the browser"),
@@ -223,11 +226,11 @@ val HERMES_COMMANDS: List<HermesCommand> = listOf(
     HermesCommand("insights", action = SlashAction.UNSUPPORTED, description = "Show usage insights and analytics"),
     HermesCommand("platforms", aliases = listOf("gateway"), action = SlashAction.UNSUPPORTED, description = "Show gateway/messaging platform status"),
     HermesCommand("platform", action = SlashAction.UNSUPPORTED, description = "Pause, resume, or list a failing gateway platform"),
-    HermesCommand("copy", action = SlashAction.UNSUPPORTED, description = "Copy the last assistant response to clipboard"),
+    HermesCommand("copy", action = SlashAction.LOCAL, description = "Copy the last assistant response to clipboard"),
     HermesCommand("paste", action = SlashAction.UNSUPPORTED, description = "Attach a clipboard image"),
     HermesCommand("image", action = SlashAction.UNSUPPORTED, description = "Attach a local image file for your next prompt"),
     HermesCommand("update", action = SlashAction.UNSUPPORTED, description = "Update Hermes Agent to the latest version"),
-    HermesCommand("version", aliases = listOf("v"), action = SlashAction.UNSUPPORTED, description = "Show Hermes Agent version"),
+    HermesCommand("version", aliases = listOf("v"), action = SlashAction.LOCAL, description = "Show Yorube app version"),
     HermesCommand("debug", action = SlashAction.UNSUPPORTED, description = "Upload debug report and get shareable links"),
     HermesCommand("quit", aliases = listOf("exit"), action = SlashAction.UNSUPPORTED, description = "Exit the CLI"),
 )
@@ -286,7 +289,8 @@ private fun parseQueue(token: String, rest: String): SlashCommand {
         "add" ->
             if (tail.isEmpty()) SlashCommand.Queue(QueueOp.ShowList)
             else SlashCommand.Queue(QueueOp.Add(tail))
-        "edit", "move" -> SlashCommand.Unsupported("$token $head")
+        "edit" -> SlashCommand.Queue(QueueOp.Edit(tail.substringBefore(' ').toIntOrNull(), tail.substringAfter(' ', "").trim()))
+        "move" -> SlashCommand.Queue(QueueOp.Move(tail.substringBefore(' ').toIntOrNull(), tail.substringAfter(' ', "").trim().toIntOrNull()))
         else -> SlashCommand.Queue(QueueOp.Add(rest))
     }
 }
@@ -305,6 +309,7 @@ fun parseSlashCommand(raw: String): SlashCommand {
     val rest = if (splitAt < 0) "" else text.substring(splitAt).trim()
     val info = findHermesCommand(token.removePrefix("/")) ?: return SlashCommand.Unknown(token)
     return when (info.action) {
+        SlashAction.LOCAL -> SlashCommand.Local(info.name, rest)
         SlashAction.STOP -> SlashCommand.Stop
         SlashAction.STEER -> SlashCommand.Steer(rest.ifEmpty { null })
         SlashAction.NEW_SESSION -> SlashCommand.NewSession(sessionNameArg(rest))

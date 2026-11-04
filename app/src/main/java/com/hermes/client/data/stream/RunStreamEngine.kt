@@ -4,6 +4,8 @@ import com.hermes.client.AppContainer
 import com.hermes.client.data.api.HermesApiException
 import com.hermes.client.data.api.RunEvent
 import com.hermes.client.data.api.RunStatusResponse
+import com.hermes.client.data.api.str
+import com.hermes.client.data.api.long
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -17,17 +19,10 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
-
-/**
- * Consecutive fruitless resubscribes allowed before the stream is declared
- * dead. The counter resets on every received event, so it only binds a
- * persistent outage (no progress at all), never a long run over a flaky
- * network (Cloudflare idle kills, NAT timeouts, Doze, the DESIGN §8
- * five-minute transport buffer).
- */
-internal const val MAX_RECONNECT_ATTEMPTS = 15
+import kotlinx.coroutines.async
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** Reconnect backoff before each status poll: 1s, 2s, 4s, then 8s capped. */
 internal fun reconnectDelayMs(attempt: Int): Long = 1000L * (1L shl attempt.coerceIn(0, 3))
@@ -46,7 +41,7 @@ internal fun isRunGoneFailure(e: Exception): Boolean {
 
 /**
  * HTTP 401/403 and ownership failures cannot heal by polling: fail fast
- * instead of burning the reconnect budget and masking the real error
+ * instead of repeatedly polling and masking the real error
  * behind a later socket message. Run-level 404s (not_found/run_not_found
  * or a bare 404) are NOT included here: the run expired server-side but
  * the session itself is still usable, so they surface as an ended run
@@ -56,7 +51,7 @@ internal fun isUnrecoverableFailure(e: Exception): Boolean =
     e is HermesApiException && (e.status == 401 || e.status == 403 ||
         e.code == "permission_denied")
 
-/** The one run whose SSE stream the engine currently keeps alive. */
+/** A server execution being tracked independently of its chat screen. */
 data class ActiveRun(val runId: String, val sessionId: String)
 
 /**
@@ -67,6 +62,10 @@ data class ActiveRun(val runId: String, val sessionId: String)
  */
 sealed interface RunStreamUpdate {
     val runId: String
+
+    data class QueueStarting(override val runId: String) : RunStreamUpdate
+    data class NextRun(override val runId: String, val next: ActiveRun, val prompt: String) : RunStreamUpdate
+    data class ControlsCleared(override val runId: String) : RunStreamUpdate
 
     /** A live SSE frame for the run. */
     data class Event(override val runId: String, val event: RunEvent) : RunStreamUpdate
@@ -92,165 +91,308 @@ sealed interface RunStreamUpdate {
 }
 
 /**
- * Owns the SSE subscription for the one active run, at app scope, so the
- * stream survives the chat screen: the ChatViewModel only renders what
- * this engine publishes, and [RunStreamService] keeps the process in the
- * foreground state while a run is active. This replaces the former
- * ViewModel-owned loop with the same policy (DESIGN §8): on a drop, poll
- * the run status, re-surface pending controls, resubscribe while the run
- * is going, and give up after [MAX_RECONNECT_ATTEMPTS] fruitless cycles.
- *
- * The control loop runs on the main dispatcher, mirroring the old
- * viewModelScope loop: every blocking call hops to IO inside HermesApi.
+ * App-scoped streams and queues. Each run has an independent connection and a
+ * retained UI journal. Accepted run references survive process recreation;
+ * transient outages are polled with backoff until the server reports an outcome.
+ * All record mutations run on Main; network and durable commits run on IO.
  */
 class RunStreamEngine(private val container: AppContainer) {
-
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-
-    private val mutableUpdates = MutableSharedFlow<RunStreamUpdate>(extraBufferCapacity = 256)
-    val updates: SharedFlow<RunStreamUpdate> = mutableUpdates.asSharedFlow()
-
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val records = linkedMapOf<String, Record>()
+    private val mutableActiveRuns = MutableStateFlow<List<ActiveRun>>(emptyList())
+    val activeRuns: StateFlow<List<ActiveRun>> = mutableActiveRuns.asStateFlow()
     private val mutableActiveRun = MutableStateFlow<ActiveRun?>(null)
     val activeRun: StateFlow<ActiveRun?> = mutableActiveRun.asStateFlow()
+    private val mutableUpdates = MutableSharedFlow<RunStreamUpdate>(extraBufferCapacity = 256)
+    val updates: SharedFlow<RunStreamUpdate> = mutableUpdates.asSharedFlow()
+    private val mutableWorking = MutableStateFlow(false)
+    val working: StateFlow<Boolean> = mutableWorking.asStateFlow()
+    private var starting = 0
+    private val persistenceMutex = Mutex()
+    private val saved = container.appContext.getSharedPreferences("active_runs", 0)
 
-    private var loopJob: Job? = null
-    private var generation = 0
+    private class Record(val active: ActiveRun, var endpoint: String = "") {
+        val journal = ArrayList<RunStreamUpdate>()
+        val version = MutableStateFlow(0L)
+        var job: Job? = null
+        var cursor: Long? = null
+        var finished = false
+        var finishedAt = 0L
+        var completed = false
+        var sessionId = active.sessionId
+    }
 
-    /** Updates for one run only: the UI never sees another run's frames. */
-    fun updatesFor(runId: String): Flow<RunStreamUpdate> = updates.filter { it.runId == runId }
-
-    /**
-     * Starts (or restarts) the stream loop for [runId]. One run at a
-     * time: a new start supersedes the previous loop, whose cleanup never
-     * clears the new loop's record (the generation check also covers a
-     * restart of the same run). With [pollFirst] the loop polls the run
-     * status before subscribing, so a UI (re)attaching to a live run
-     * immediately re-derives its state (pending controls, terminal,
-     * unknown) instead of waiting for the next frame.
-     */
-    fun start(runId: String, sessionId: String, pollFirst: Boolean = false) {
-        val gen = ++generation
-        mutableActiveRun.value = ActiveRun(runId, sessionId)
-        loopJob?.cancel()
-        loopJob = scope.launch {
-            try {
-                loop(runId, pollFirst)
-            } finally {
-                if (generation == gen && mutableActiveRun.value?.runId == runId) {
-                    mutableActiveRun.value = null
+    /** Retained per-run journal: a slow or absent UI cannot lose frames. */
+    fun updatesFor(runId: String): Flow<RunStreamUpdate> = kotlinx.coroutines.flow.flow {
+        val record = records.getOrPut(runId) { Record(ActiveRun(runId, "")) }
+        var index = 0
+        var deltaLength = 0
+        record.version.collect {
+            while (index < record.journal.size) {
+                val update = record.journal[index]
+                val delta = (update as? RunStreamUpdate.Event)?.event as? RunEvent.Delta
+                if (delta != null) {
+                    val suffix = delta.text.drop(deltaLength)
+                    if (suffix.isNotEmpty()) emit(RunStreamUpdate.Event(runId, RunEvent.Delta(suffix)))
+                    deltaLength = delta.text.length
+                    if (index == record.journal.lastIndex) break
+                } else {
+                    emit(update)
                 }
+                index++
+                deltaLength = 0
             }
         }
     }
 
-    private suspend fun loop(runId: String, pollFirst: Boolean) {
-        var attempts = 0
-        var lastCause: Exception? = null
-        var needPoll = pollFirst
-        while (true) {
-            if (needPoll) {
-                needPoll = false
-                val status = try {
-                    getRunWithRetry(runId)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    // HTTP answers are authoritative: report and stop.
-                    // A transient transport blip consumes one attempt and
-                    // loops back to the stream instead of killing the run
-                    // (dead zones, tunnel restarts).
-                    if (e is HermesApiException) {
-                        mutableUpdates.tryEmit(RunStreamUpdate.Dead(runId, e))
-                        return
-                    }
-                    attempts++
-                    lastCause = e
-                    null
-                }
-                if (status != null) {
-                    when (status.status) {
-                        "completed", "failed", "cancelled", "interrupted" -> {
-                            mutableUpdates.tryEmit(RunStreamUpdate.PollTerminal(runId, status))
-                            return
-                        }
-                        "unknown" -> {
-                            mutableUpdates.tryEmit(RunStreamUpdate.UnknownOutcome(runId))
-                            return
-                        }
-                    }
-                    mutableUpdates.tryEmit(RunStreamUpdate.Resync(runId, status))
-                    attempts++
-                }
-                continue
+    fun activeForSession(sessionId: String): ActiveRun? = activeRuns.value.lastOrNull { it.sessionId == sessionId }
+
+    /** Idempotent; other runs and subscribers keep their original stream. */
+    fun start(runId: String, sessionId: String, pollFirst: Boolean = false) {
+        val previous = records[runId]
+        if (previous?.job?.isActive == true || previous?.finished == true) return
+        val record = if (previous != null && previous.active.sessionId == sessionId) previous
+            else Record(ActiveRun(runId, sessionId)).also {
+                // updatesFor can subscribe before start, so keep its journal signal.
+                if (previous != null) return startExisting(previous, sessionId, pollFirst)
+                records[runId] = it
             }
-            var terminalSeen = false
-            var cause: Exception? = null
+        launchRecord(record, pollFirst)
+    }
+
+    private fun startExisting(record: Record, sessionId: String, pollFirst: Boolean) {
+        record.sessionId = sessionId
+        launchRecord(record, pollFirst)
+    }
+
+    private fun publishActive() {
+        mutableActiveRuns.value = records.values.filter { it.job != null && !it.finished }
+            .map { ActiveRun(it.active.runId, it.sessionId) }
+        mutableActiveRun.value = mutableActiveRuns.value.lastOrNull()
+        mutableWorking.value = starting > 0 || mutableActiveRuns.value.isNotEmpty()
+    }
+
+    /** Creation belongs to app scope too: leaving the screen must not orphan an accepted run. */
+    suspend fun createTracked(request: com.hermes.client.data.api.RunCreateRequest,
+        settings: com.hermes.client.data.store.ClientSettings, key: String = java.util.UUID.randomUUID().toString(),
+        onAccepted: suspend () -> Unit = {}): ActiveRun {
+        return scope.async {
+            starting++
+            publishActive()
+            // Start while the user action is still in the foreground, before waiting on the network.
+            RunStreamService.start(container.appContext, "", request.sessionId.orEmpty())
             try {
-                val api = container.api()
-                api.runEvents(runId).collect { event ->
-                    // A delivered event proves the stream is healthy again:
-                    // reset the outage budget instead of letting hourly
-                    // proxy kills accumulate over a long run.
-                    attempts = 0
-                    mutableUpdates.tryEmit(RunStreamUpdate.Event(runId, event))
-                    if (event is RunEvent.Terminal) terminalSeen = true
-                }
+                val api = container.api(settings)
+                val accepted = api.createRun(request, key)
+                // Persist the accepted ID before the optional session lookup.
+                // Hermes uses run_id for a fresh session when neither session nor response chain is supplied.
+                // Keep that ID even if the optional status lookup is temporarily unavailable.
+                val session = request.sessionId ?: if (request.previousResponseId == null) accepted.runId else ""
+                val record = Record(ActiveRun(accepted.runId, session), settings.baseUrl)
+                records[accepted.runId] = record
+                persist()
+                try {
+                    val status = api.getRun(accepted.runId)
+                    status.sessionId?.takeIf { it.isNotBlank() }?.let { record.sessionId = it }
+                } catch (e: CancellationException) { throw e } catch (_: Exception) { }
+                if (record.sessionId.isNotBlank()) container.settingsStore.markAppOwned(record.sessionId)
+                onAccepted()
+                launchRecord(record, pollFirst = false, settings = settings)
+                ActiveRun(accepted.runId, record.sessionId)
+            } finally {
+                starting--
+                publishActive()
+            }
+        }.await()
+    }
+
+    private fun launchRecord(record: Record, pollFirst: Boolean, settings: com.hermes.client.data.store.ClientSettings? = null) {
+        record.job = scope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
+            try {
+                val configuration = settings ?: container.settingsStore.current()
+                record.endpoint = configuration.baseUrl
+                persist()
+                val api = container.api(configuration)
+                loop(record, api, pollFirst)
+                if (record.completed) sendQueued(record)
             } catch (e: CancellationException) {
-                // Superseded by a newer start or scope teardown: not a
-                // stream failure, never route into the reconnect path.
                 throw e
             } catch (e: Exception) {
-                cause = e
-                lastCause = e
+                publish(record, RunStreamUpdate.Dead(record.active.runId, e))
+            } finally {
+                record.finished = true
+                record.finishedAt = android.os.SystemClock.elapsedRealtime()
+                publishActive()
+                persist()
+                // Keep recently completed journals for screens still loading their history.
+                records.entries.removeAll { it.value.finished && it.value !== record &&
+                    android.os.SystemClock.elapsedRealtime() - it.value.finishedAt > 300_000 &&
+                    it.value.version.subscriptionCount.value == 0 }
             }
-            if (terminalSeen) return
-            // The run is gone server-side but the session is still usable:
-            // report it as an ended run, never as a dead conversation.
-            if (cause != null && isRunGoneFailure(cause)) {
-                mutableUpdates.tryEmit(RunStreamUpdate.Dead(runId, cause))
-                return
+        }
+        publishActive()
+        record.job!!.start()
+    }
+
+    private suspend fun persist() = persistenceMutex.withLock {
+        val value = kotlinx.serialization.json.buildJsonArray {
+            records.values.filter { !it.finished && it.endpoint.isNotBlank() }.forEach { r ->
+                add(kotlinx.serialization.json.buildJsonObject {
+                    put("run", kotlinx.serialization.json.JsonPrimitive(r.active.runId))
+                    put("session", kotlinx.serialization.json.JsonPrimitive(r.sessionId))
+                    put("endpoint", kotlinx.serialization.json.JsonPrimitive(r.endpoint))
+                    // Do not persist the cursor without its transcript; restore replays the retained stream.
+                })
             }
-            // Permanent auth/ownership failures fail fast.
-            if (cause != null && isUnrecoverableFailure(cause)) {
-                mutableUpdates.tryEmit(RunStreamUpdate.Dead(runId, cause))
-                return
+        }.toString()
+        kotlinx.coroutines.withContext(Dispatchers.IO) { saved.edit().putString("runs", value).commit() }
+    }
+
+    suspend fun restore() {
+        val endpoint = container.settingsStore.current().baseUrl
+        val list = runCatching {
+            com.hermes.client.data.api.HermesJson.parseToJsonElement(saved.getString("runs", "[]")!!)
+                as kotlinx.serialization.json.JsonArray
+        }.getOrNull() ?: return
+        for (item in list) {
+            val obj = item as? kotlinx.serialization.json.JsonObject ?: continue
+            fun text(key: String) = (obj[key] as? kotlinx.serialization.json.JsonPrimitive)?.content.orEmpty()
+            if (text("endpoint") == endpoint && text("run").isNotBlank() && !records.containsKey(text("run"))) {
+                start(text("run"), text("session"), pollFirst = true)
             }
-            if (attempts >= MAX_RECONNECT_ATTEMPTS) {
-                // Clean EOFs carry no cause: fall back to the latest real
-                // failure so a transport outage reports "connection lost",
-                // not a bare "stream ended".
-                mutableUpdates.tryEmit(RunStreamUpdate.Dead(runId, cause ?: lastCause))
-                return
+        }
+    }
+
+    private suspend fun publish(record: Record, update: RunStreamUpdate) {
+        val last = record.journal.lastOrNull() as? RunStreamUpdate.Event
+        val delta = (update as? RunStreamUpdate.Event)?.event as? RunEvent.Delta
+        if (delta != null && last?.event is RunEvent.Delta) {
+            record.journal[record.journal.lastIndex] = RunStreamUpdate.Event(update.runId,
+                RunEvent.Delta((last.event as RunEvent.Delta).text + delta.text))
+        } else {
+            record.journal.add(update)
+        }
+        record.version.value++
+        mutableUpdates.emit(update)
+        try {
+            container.runNotifications.onUpdate(ActiveRun(record.active.runId, record.sessionId), update)
+        } catch (e: CancellationException) { throw e } catch (_: Exception) {
+            // A notification failure must never break the execution stream.
+        }
+    }
+
+    private suspend fun loop(record: Record, api: com.hermes.client.data.api.HermesApi, pollFirst: Boolean) {
+        val id = record.active.runId
+        var attempts = 0
+        var needPoll = pollFirst
+        while (true) {
+            try {
+                if (needPoll) {
+                    val status = api.getRun(id)
+                    status.sessionId?.takeIf { it.isNotBlank() }?.let { record.sessionId = it; publishActive(); persist() }
+                    when (status.status) {
+                        "completed", "failed", "cancelled", "interrupted" -> {
+                            record.completed = status.status == "completed"
+                            publish(record, RunStreamUpdate.PollTerminal(id, status)); return
+                        }
+                        "unknown" -> { publish(record, RunStreamUpdate.UnknownOutcome(id)); return }
+                    }
+                    publish(record, RunStreamUpdate.Resync(id, status))
+                }
+                var terminal = false
+                api.runEventFrames(id, record.cursor).collect { frame ->
+                    if (frame.sequence == null || record.cursor == null || frame.sequence > record.cursor!!) {
+                        // A restored stream can replay already answered prompts. Confirm controls
+                        // against the current server generation before showing or notifying them.
+                        val control = when (val event = frame.event) {
+                            is RunEvent.ApprovalRequested -> event.request.requestId to event.request.executionGeneration
+                            is RunEvent.ClarifyRequested -> event.requestId to event.executionGeneration
+                            else -> null
+                        }
+                        if (pollFirst && control != null) {
+                            val current = api.getRun(id)
+                            if (current.pendingControlsKnown && current.pendingControls.none {
+                                    it.str("request_id", "prompt_id", "id") == control.first &&
+                                        (it.long("execution_generation", "generation") ?: 0L) == control.second
+                                }) {
+                                frame.sequence?.let { record.cursor = it }
+                                return@collect
+                            }
+                        }
+                        publish(record, RunStreamUpdate.Event(id, frame.event))
+                        frame.sequence?.let { record.cursor = it }
+                    }
+                    if (frame.event is RunEvent.Terminal) record.completed = frame.event.status == "completed"
+                    terminal = terminal || frame.event is RunEvent.Terminal
+                    attempts = 0
+                }
+                if (terminal) return
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (isRunGoneFailure(e) || isUnrecoverableFailure(e) ||
+                    (e is HermesApiException && e.status in 400..499 && e.status !in listOf(408, 429))) {
+                    publish(record, RunStreamUpdate.Dead(id, e)); return
+                }
             }
-            mutableUpdates.tryEmit(RunStreamUpdate.Reconnecting(runId))
-            // Spread retries so half-open sockets and tight empty-stream
-            // loops (the §8 transport buffer expires after 5 min) don't
-            // spin. delay() is also the cancellation point: teardown
-            // during the wait throws here instead of polling pointlessly.
-            delay(reconnectDelayMs(attempts))
+            publish(record, RunStreamUpdate.Reconnecting(id))
+            // Offline/5xx/429 are not a completed run. Keep trying while the service owns it.
+            delay(if (attempts < 4) reconnectDelayMs(attempts) else 30_000L)
+            attempts = (attempts + 1).coerceAtMost(30)
             needPoll = true
         }
     }
 
-    /**
-     * Status poll with a short retry for transport-level blips (the same
-     * abort that killed the stream often still lingers for a second).
-     * HTTP answers, including 5xx, are authoritative and not retried here.
-     */
-    private suspend fun getRunWithRetry(id: String): RunStatusResponse {
-        var last: Exception? = null
-        repeat(3) { i ->
-            try {
-                return container.api().getRun(id)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: HermesApiException) {
-                throw e
-            } catch (e: Exception) {
-                last = e
-                if (i < 2) delay(1000)
-            }
+    private val queuePreferences = container.appContext.getSharedPreferences("run_queue", 0)
+    private val sendingQueues = mutableSetOf<String>()
+    fun queueBusy(session: String) = session in sendingQueues
+    private val queues = mutableMapOf<String, MutableList<String>>()
+    private fun queueKey(session: String, endpoint: String) = "$endpoint|$session"
+    fun queue(session: String, endpoint: String = container.settingsStore.snapshot.baseUrl): MutableList<String> {
+        val key = queueKey(session, endpoint)
+        return queues.getOrPut(key) {
+            runCatching {
+                val array = com.hermes.client.data.api.HermesJson.parseToJsonElement(
+                    queuePreferences.getString(key, "[]")!!) as kotlinx.serialization.json.JsonArray
+                array.map { (it as kotlinx.serialization.json.JsonPrimitive).content }.toMutableList()
+            }.getOrDefault(mutableListOf())
         }
-        throw last!!
     }
+    fun saveQueue(session: String) {
+        val array = kotlinx.serialization.json.JsonArray(queue(session).map { kotlinx.serialization.json.JsonPrimitive(it) })
+        queuePreferences.edit().putString(queueKey(session, container.settingsStore.snapshot.baseUrl), array.toString()).apply()
+    }
+    private suspend fun sendQueued(record: Record) {
+        val session = record.sessionId
+        if (session.isBlank() || activeRuns.value.any { it.sessionId == session && it.runId != record.active.runId }) return
+        val pending = queue(session, record.endpoint)
+        val prompt = pending.firstOrNull() ?: return
+        // A saved key makes a retry of this queued turn idempotent after process death.
+        val storageKey = queueKey(session, record.endpoint)
+        val keyName = "key:$storageKey"
+        val key = queuePreferences.getString(keyName, null) ?: java.util.UUID.randomUUID().toString()
+        sendingQueues.add(session)
+        try {
+            kotlinx.coroutines.withContext(Dispatchers.IO) { queuePreferences.edit().putString(keyName, key).commit() }
+            publish(record, RunStreamUpdate.QueueStarting(record.active.runId))
+            val nextSettings = container.settingsStore.current()
+            if (nextSettings.baseUrl != record.endpoint) return
+            val next = createTracked(com.hermes.client.data.api.RunCreateRequest(input = prompt, sessionId = session,
+                model = nextSettings.model.ifBlank { null }, provider = nextSettings.provider.ifBlank { null }, modelOptions = nextSettings.modelOptions), nextSettings, key) {
+                if (pending.firstOrNull() == prompt) pending.removeAt(0)
+                val array = kotlinx.serialization.json.JsonArray(pending.map { kotlinx.serialization.json.JsonPrimitive(it) })
+                kotlinx.coroutines.withContext(Dispatchers.IO) {
+                    queuePreferences.edit().putString(storageKey, array.toString()).remove(keyName).commit()
+                }
+            }
+            publish(record, RunStreamUpdate.NextRun(record.active.runId, next, prompt))
+        } finally { sendingQueues.remove(session) }
+    }
+
+    fun controlAnswered(runId: String) {
+        val record = records[runId] ?: return
+        scope.launch { publish(record, RunStreamUpdate.ControlsCleared(runId)) }
+    }
+
+    fun close() { scope.coroutineContext[Job]?.cancel() }
 }

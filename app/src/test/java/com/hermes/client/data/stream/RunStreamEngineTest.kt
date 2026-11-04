@@ -198,7 +198,9 @@ class RunStreamEngineTest {
             withContext(Dispatchers.IO) { Thread.sleep(50) }
         }
         c.runStreams.start("r2", "s2")
-        awaitCondition { c.runStreams.activeRun.value == null }
+        awaitCondition { c.runStreams.activeRuns.value.none { it.runId == "r2" } }
+        assertTrue(c.runStreams.activeRuns.value.any { it.runId == "r1" })
+        c.runStreams.close()
     }
 
     @Test

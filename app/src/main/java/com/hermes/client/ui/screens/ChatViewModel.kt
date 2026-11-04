@@ -25,7 +25,6 @@ import com.hermes.client.data.api.str
 import com.hermes.client.data.stream.RunStreamService
 import com.hermes.client.data.stream.RunStreamUpdate
 import com.hermes.client.data.stream.isRunGoneFailure
-import com.hermes.client.data.fcm.FirebaseInit
 import com.hermes.client.data.store.LANGUAGE_SYSTEM
 import com.hermes.client.data.store.LocaleHelper
 import java.io.IOException
@@ -117,7 +116,7 @@ class ChatViewModel(
     /** Most recent run id, kept after it ends so /usage can read it back. */
     private var lastRunId: String? = null
     /** Prompts queued by /queue while a run is active (FIFO). */
-    private val pendingQueue = mutableListOf<String>()
+    private val pendingQueue: MutableList<String> get() = container.runStreams.queue(sessionId)
     private var reconnectAttempts: Int = 0
     private var lastReconnectCause: Exception? = null
     private var idSeq = 0L
@@ -128,28 +127,7 @@ class ChatViewModel(
     init {
         if (sessionId.isNotBlank()) {
             loadHistory(sessionId)
-            reattachActiveRun()
         }
-    }
-
-    /**
-     * The stream engine may still hold a live run for this session (the
-     * app was backgrounded, or the user left and came back): adopt it so
-     * its remaining stream, approval prompts and terminal state land in
-     * this chat instead of being lost. The engine re-polls the run status
-     * first, so pending controls resurface and a run that already ended
-     * settles from the poll rather than a replayed stream.
-     */
-    private fun reattachActiveRun() {
-        val active = container.runStreams.activeRun.value ?: return
-        if (active.sessionId != sessionId) return
-        runId = active.runId
-        busy = true
-        subscribe(active.runId)
-        container.runStreams.start(active.runId, active.sessionId, pollFirst = true)
-        // The service may have died with the old process: re-arm it so
-        // backgrounding again keeps this run's stream alive.
-        RunStreamService.start(container.appContext, active.runId, active.sessionId)
     }
 
     /**
@@ -173,8 +151,23 @@ class ChatViewModel(
             statusLine = s(R.string.st_loading)
             try {
                 val api = container.api()
-                renderHistory(api.getSessionMessages(id))
+                container.runStreams.restore()
+                val active = container.runStreams.activeForSession(id)
+                val history = api.getSessionMessages(id)
+                if (sessionId != id) return@launch
+                renderHistory(history)
                 statusLine = ""
+                if (active != null) {
+                    // The journal owns the running turn. History can already contain its partial output.
+                    val lastUser = messages.indexOfLast { it.kind == MsgKind.USER }
+                    if (lastUser >= 0) while (messages.size > lastUser + 1) messages.removeAt(messages.lastIndex)
+                    assistantIndex = -1
+                    runId = active.runId
+                    busy = true
+                    subscribe(active.runId)
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 statusLine = ""
                 error = if (e is HermesApiException && e.status == 404) {
@@ -236,7 +229,7 @@ class ChatViewModel(
         val text = input.trim()
         if (text.isEmpty()) return
         if (dispatchCommand(text)) return
-        if (busy) return
+        if (busy || historyLoading || foreignBlocked || commandRunning) return
         input = ""
         messages.add(UiMessage(idSeq++, MsgKind.USER, text))
         startRun(text, history = null)
@@ -259,6 +252,8 @@ class ChatViewModel(
             try {
                 container.api().steerRun(id, text)
                 statusLine = s(R.string.st_steered)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 if (isRunGone(e)) {
                     // The run already ended server-side (finished, expired or
@@ -286,6 +281,8 @@ class ChatViewModel(
             try {
                 container.api().stopRun(id)
                 statusLine = s(R.string.st_stopping)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 if (isRunGone(e)) {
                     // Nothing left to stop: settle locally without an error.
@@ -314,8 +311,13 @@ class ChatViewModel(
      * ([SlashCommand.Unsupported]) instead of reaching the agent as prose.
      */
     private fun dispatchCommand(text: String): Boolean {
-        when (val cmd = parseSlashCommand(text)) {
+        val cmd = parseSlashCommand(text)
+        if (historyLoading && cmd != SlashCommand.NotACommand && cmd != SlashCommand.Help && cmd != SlashCommand.StatusInfo) {
+            postErrorMessage(s(R.string.cmd_while_running)); return true
+        }
+        when (cmd) {
             SlashCommand.NotACommand -> return false
+            is SlashCommand.Local -> { input = ""; handleLocal(cmd.name, cmd.arg) }
             SlashCommand.Stop -> {
                 input = ""
                 if (busy && runId != null) {
@@ -341,7 +343,7 @@ class ChatViewModel(
             }
             SlashCommand.Help -> {
                 input = ""
-                postStatusMessage(s(R.string.cmd_help))
+                postStatusMessage(s(R.string.cmd_help) + "\n" + HERMES_COMMANDS.filter { it.action == SlashAction.LOCAL }.joinToString("  ") { "/${it.name}" })
             }
             is SlashCommand.Commands -> {
                 input = ""
@@ -415,6 +417,125 @@ class ChatViewModel(
         return true
     }
 
+    private fun handleLocal(name: String, arg: String) {
+        if (arg.isNotEmpty() && name !in setOf("prompt", "tools", "cron", "reasoning", "fast", "discard")) {
+            postErrorMessage(s(R.string.cmd_unsupported, "/$name $arg")); return
+        }
+        when (name) {
+            "cron" -> handleCron(arg)
+            "reasoning", "fast" -> handleRunOption(name, arg)
+            "discard" -> discardUnknown(arg)
+            "history", "redraw" -> {
+                if (busy || historyLoading) postErrorMessage(s(R.string.cmd_while_running))
+                else if (sessionId.isBlank()) postErrorMessage(s(R.string.cmd_no_session))
+                else loadHistory(sessionId)
+            }
+            "prompt" -> input = arg
+            "palette" -> postStatusMessage(HERMES_COMMANDS.filter { it.action != SlashAction.UNSUPPORTED }
+                .joinToString("\n") { "/${it.name} — ${it.description}" })
+            "version" -> postStatusMessage("Yorube ${com.hermes.client.BuildConfig.VERSION_NAME}")
+            "config" -> launchGuarded {
+                val cur = container.settingsStore.current()
+                // Credentials, proxy secrets and tokens never enter a chat transcript.
+                postStatusMessage("${android.net.Uri.parse(cur.baseUrl).host.orEmpty()}\n${displayModel(cur.provider, cur.model)}")
+            }
+            "agents" -> postStatusMessage(container.runStreams.activeRuns.value
+                .joinToString("\n") { "${it.runId}  ${it.sessionId}" }.ifEmpty { s(R.string.cmd_stop_not_running) })
+            "tools" -> if (arg.isEmpty() || arg == "list") listToolsets()
+                else postErrorMessage(s(R.string.cmd_unsupported, "/tools $arg"))
+            "reload-skills" -> handleSkills(null)
+            "copy" -> {
+                val text = messages.lastOrNull { it.kind == MsgKind.ASSISTANT }?.text
+                if (text != null) {
+                    val clipboard = container.appContext.getSystemService(android.content.ClipboardManager::class.java)
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Yorube", text))
+                } else postErrorMessage(s(R.string.cmd_retry_none))
+            }
+            "save" -> {
+                val text = messages.filter { it.kind == MsgKind.USER || it.kind == MsgKind.ASSISTANT }
+                    .joinToString("\n\n") { "${it.kind.name.lowercase()}:\n${it.text}" }
+                if (text.isBlank()) { postErrorMessage(s(R.string.cmd_no_session)); return }
+                val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(android.content.Intent.EXTRA_TEXT, text)
+                }
+                try {
+                    container.appContext.startActivity(android.content.Intent.createChooser(intent, null)
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                } catch (e: android.content.ActivityNotFoundException) { postErrorMessage(friendlyError(e)) }
+            }
+        }
+    }
+
+    private fun handleRunOption(name: String, arg: String) {
+        val key = if (name == "reasoning") "reasoning_effort" else "service_tier"
+        val value = if (name == "reasoning") arg.lowercase() else when (arg.lowercase()) {
+            "on", "fast" -> "priority"
+            "off", "normal" -> "default"
+            else -> arg.lowercase()
+        }
+        val valid = if (name == "reasoning") setOf("none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra")
+            else setOf("default", "priority")
+        launchGuarded {
+            val settings = container.settingsStore.current()
+            if (arg.isBlank() || arg == "status") {
+                postStatusMessage("/$name: " + (if (name == "reasoning") settings.reasoningEffort else settings.serviceTier).ifBlank { "default" })
+            } else if (value in valid) {
+                container.settingsStore.setRunOption(key, value)
+                postStatusMessage(s(R.string.cmd_next_run_option, name, value))
+            } else postErrorMessage(s(R.string.cmd_unsupported, "/$name $arg"))
+        }
+    }
+
+    private fun discardUnknown(arg: String) {
+        val id = arg.ifBlank { lastRunId.orEmpty() }
+        if (busy || id.isBlank()) { postErrorMessage(s(R.string.cmd_discard_usage)); return }
+        launchGuarded {
+            val api = container.api()
+            val status = api.getRun(id)
+            if (status.status != "unknown" || status.admissionId == null || status.executionGeneration == null) {
+                postErrorMessage(s(R.string.cmd_discard_usage)); return@launchGuarded
+            }
+            api.resolveUnknownRun(id, status.admissionId, status.executionGeneration)
+            error = null
+            postStatusMessage(s(R.string.cmd_discard_done))
+        }
+    }
+
+    private fun handleCron(arg: String) {
+        val action = arg.substringBefore(' ').ifBlank { "list" }.lowercase()
+        val rest = arg.substringAfter(' ', "").trim()
+        var id: String? = null
+        var body: JsonObject? = null
+        when (action) {
+            "add", "create", "edit" -> {
+                val fields = if (action == "edit") {
+                    id = rest.substringBefore(' ').takeIf { it.isNotBlank() }
+                    rest.substringAfter(' ', "")
+                } else rest
+                val parts = fields.split('|', limit = 3).map { it.trim() }
+                if (parts.size != 3 || parts.any { it.isBlank() }) { postErrorMessage(s(R.string.cmd_cron_usage)); return }
+                body = JsonObject(mapOf("name" to JsonPrimitive(parts[0]), "schedule" to JsonPrimitive(parts[1]), "prompt" to JsonPrimitive(parts[2])))
+            }
+            "show", "pause", "resume", "run", "remove" -> {
+                if (rest.isBlank() || rest.any { it.isWhitespace() }) { postErrorMessage(s(R.string.cmd_cron_usage)); return }
+                id = rest
+            }
+            "list" -> if (rest.isNotBlank()) { postErrorMessage(s(R.string.cmd_cron_usage)); return }
+            else -> { postErrorMessage(s(R.string.cmd_cron_usage)); return }
+        }
+        launchGuarded {
+            val response = container.api().cron(action, id, body)
+            val root = HermesJson.parseToJsonElement(response) as? JsonObject
+            val jobs = root?.get("jobs") as? JsonArray
+            val job = root?.get("job") as? JsonObject
+            fun describe(o: JsonObject): String = listOfNotNull(o.str("id", "job_id"), o.str("name"), o.str("schedule"), o.str("status")).joinToString("  ")
+            val text = jobs?.mapNotNull { it as? JsonObject }?.joinToString("\n", transform = ::describe)
+                ?: job?.let(::describe) ?: s(R.string.cmd_cron_done, action)
+            postStatusMessage(text.ifBlank { s(R.string.cmd_cron_empty) })
+        }
+    }
+
     /** /commands [page] — the full Hermes catalog with app support marks. */
     private fun showCommands(arg: String?) {
         val pageSize = 20
@@ -437,7 +558,7 @@ class ChatViewModel(
 
     /** /retry — resend the last prompt as a new run in this session. */
     private fun retryLast() {
-        val text = lastSentText
+        val text = lastSentText ?: messages.lastOrNull { it.kind == MsgKind.USER }?.text
         when {
             busy -> postErrorMessage(s(R.string.cmd_while_running))
             text == null -> postErrorMessage(s(R.string.cmd_retry_none))
@@ -450,10 +571,12 @@ class ChatViewModel(
 
     /**
      * /queue — app-local queue: prompts typed while a run is active go
-     * out as the next turn from [finishTerminal]. With nothing running,
+     * out as the next turn from the app-scoped engine. With nothing running,
      * a queued prompt is simply sent at once (its turn is now).
      */
     private fun handleQueue(op: QueueOp) {
+        if (historyLoading || foreignBlocked || (busy && runId == null)) { postErrorMessage(s(R.string.cmd_while_running)); return }
+        if (container.runStreams.queueBusy(sessionId)) { postErrorMessage(s(R.string.cmd_while_running)); return }
         when (op) {
             is QueueOp.Add -> {
                 if (busy) {
@@ -463,6 +586,18 @@ class ChatViewModel(
                     messages.add(UiMessage(idSeq++, MsgKind.USER, op.text))
                     startRun(op.text, history = null)
                 }
+            }
+            is QueueOp.Edit -> {
+                val index = op.index
+                if (index == null || index !in 1..pendingQueue.size || op.text.isBlank())
+                    postErrorMessage(s(R.string.cmd_queue_rm_invalid))
+                else { pendingQueue[index - 1] = op.text; postStatusMessage(queueListText()) }
+            }
+            is QueueOp.Move -> {
+                val from = op.from; val to = op.to
+                if (from == null || to == null || from !in 1..pendingQueue.size || to !in 1..pendingQueue.size)
+                    postErrorMessage(s(R.string.cmd_queue_rm_invalid))
+                else { pendingQueue.add(to - 1, pendingQueue.removeAt(from - 1)); postStatusMessage(queueListText()) }
             }
             QueueOp.ShowList -> postStatusMessage(queueListText())
             QueueOp.Clear -> {
@@ -479,6 +614,7 @@ class ChatViewModel(
                 }
             }
         }
+        container.runStreams.saveQueue(sessionId)
     }
 
     private fun queueListText(): String {
@@ -523,6 +659,9 @@ class ChatViewModel(
                     postErrorMessage(s(R.string.cmd_branch_failed))
                 } else {
                     sessionId = forked
+                    lastSentText = null
+                    lastRunId = null
+                    assistantIndex = -1
                     // Our own copy: never hide it as foreign.
                     markAppOwned(forked)
                     renderHistory(api.getSessionMessages(forked))
@@ -541,7 +680,7 @@ class ChatViewModel(
             } else {
                 val lines = sessions.take(20).map { info ->
                     val mark = if (info.key == sessionId) " " + s(R.string.cmd_sessions_current) else ""
-                    "• ${info.displayTitle}$mark"
+                    "• ${info.key}  ${info.displayTitle}$mark"
                 }
                 postStatusMessage(s(R.string.cmd_sessions_list, lines.joinToString("\n")))
             }
@@ -557,12 +696,27 @@ class ChatViewModel(
             busy -> postErrorMessage(s(R.string.cmd_while_running))
             name == null -> postErrorMessage(s(R.string.cmd_resume_usage))
             else -> launchGuarded {
-                val sessions = container.api().listSessions()
-                val match = sessions.firstOrNull { it.key == name }
-                    ?: sessions.firstOrNull { it.title.equals(name, ignoreCase = true) }
-                    ?: sessions.firstOrNull {
-                        it.key.startsWith(name) || it.title?.contains(name, ignoreCase = true) == true
-                    }
+                val api = container.api()
+                val sessions = mutableListOf<com.hermes.client.data.api.SessionInfo>()
+                var offset = 0
+                while (true) {
+                    val page = api.listSessions(limit = 50, offset = offset)
+                    val added = page.filter { item -> sessions.none { it.key == item.key } }
+                    sessions.addAll(added)
+                    if (page.size < 50 || added.isEmpty()) break
+                    offset += page.size
+                }
+                val exact = sessions.filter { it.key == name }.ifEmpty {
+                    sessions.filter { it.title.equals(name, ignoreCase = true) }
+                }
+                val matches = exact.ifEmpty { sessions.filter {
+                    it.key.startsWith(name) || it.title?.contains(name, ignoreCase = true) == true
+                } }
+                if (matches.size > 1) {
+                    postErrorMessage(s(R.string.cmd_resume_ambiguous, matches.joinToString("\n") { "${it.key}  ${it.displayTitle}" }))
+                    return@launchGuarded
+                }
+                val match = matches.singleOrNull()
                 when {
                     match == null -> postErrorMessage(s(R.string.cmd_resume_not_found, name))
                     match.key == sessionId -> postStatusMessage(s(R.string.cmd_resume_current))
@@ -578,6 +732,10 @@ class ChatViewModel(
      * the caller has already established that nothing is running.
      */
     private fun openSession(id: String) {
+        eventsJob?.cancel()
+        lastSentText = null
+        lastRunId = null
+        assistantIndex = -1
         sessionId = id
         approval = null
         clarify = null
@@ -590,13 +748,14 @@ class ChatViewModel(
 
     /** /title — show the current title, or PATCH a new one. */
     private fun handleTitle(name: String?) {
+        val targetSessionId = sessionId
         if (sessionId.isBlank()) {
             postErrorMessage(s(R.string.cmd_no_session))
             return
         }
         if (name == null) {
             launchGuarded {
-                val title = container.api().getSession(sessionId)?.title?.ifBlank { null }
+                val title = container.api().getSession(targetSessionId)?.title?.ifBlank { null }
                 if (title == null) {
                     postStatusMessage(s(R.string.cmd_title_unset))
                 } else {
@@ -605,7 +764,7 @@ class ChatViewModel(
             }
         } else {
             launchGuarded {
-                container.api().updateSessionTitle(sessionId, name)
+                container.api().updateSessionTitle(targetSessionId, name)
                 postStatusMessage(s(R.string.cmd_title_set, name))
             }
         }
@@ -668,21 +827,23 @@ class ChatViewModel(
      * the unsupported notice.
      */
     private fun handleSkills(arg: String?) {
-        if (arg != null && !arg.equals("list", ignoreCase = true)) {
-            postStatusMessage(s(R.string.cmd_unsupported, "/skills $arg"))
-            return
+        val operation = arg?.substringBefore(' ')?.lowercase() ?: "list"
+        val query = arg?.substringAfter(' ', "")?.trim().orEmpty()
+        if (operation !in setOf("list", "search", "show", "inspect") ||
+            (operation != "list" && query.isBlank())) {
+            postStatusMessage(s(R.string.cmd_unsupported, "/skills ${arg.orEmpty()}")); return
         }
         launchGuarded {
-            val skills = container.api().getSkills()
-            if (skills.isEmpty()) {
-                postStatusMessage(s(R.string.cmd_skills_none))
-            } else {
-                val lines = skills.take(30).map { skill ->
-                    if (skill.description.isBlank()) "/${skill.name}"
-                    else "/${skill.name} — ${skill.description.take(80)}"
+            val skills = container.api().getSkills().filter {
+                when (operation) {
+                    "search" -> it.name.contains(query, true) || it.description.contains(query, true)
+                    "show", "inspect" -> it.name.equals(query, true)
+                    else -> true
                 }
-                postStatusMessage(s(R.string.cmd_skills_list, skills.size, lines.joinToString("\n")))
             }
+            if (skills.isEmpty()) postStatusMessage(s(R.string.cmd_skills_none))
+            else postStatusMessage(s(R.string.cmd_skills_list, skills.size,
+                skills.joinToString("\n") { "/${it.name} — ${it.description}" }))
         }
     }
 
@@ -704,11 +865,8 @@ class ChatViewModel(
     }
 
     /**
-     * /bg <prompt> — start a run on a fresh session and leave it there:
-     * no subscription is taken, so the result is read later from the
-     * conversation list (an FCM watch is registered like a normal run,
-     * so a closed app still gets the finish notice). The foreground
-     * conversation and any active run are untouched.
+     * /bg <prompt> — track a new session in the app-scoped stream engine.
+     * The foreground conversation and its subscription are untouched.
      */
     private fun startBackground(prompt: String?) {
         if (prompt == null) {
@@ -721,28 +879,10 @@ class ChatViewModel(
                 postErrorMessage(s(R.string.err_not_configured))
                 return@launchGuarded
             }
-            val api = container.api()
-            val accepted = api.createRun(
-                RunCreateRequest(
-                    input = prompt,
-                    sessionId = null,
-                    model = settings.model.ifBlank { null },
-                    provider = settings.provider.ifBlank { null },
-                ),
-                idempotencyKey = UUID.randomUUID().toString(),
-            )
-            val bgSessionId = try {
-                api.getRun(accepted.runId).sessionId?.ifBlank { null }
-            } catch (e: Exception) {
-                null
-            }
-            if (bgSessionId != null) markAppOwned(bgSessionId)
-            container.watchRegistrar.registerWatch(
-                relayBaseUrl = settings.relayUrl,
-                runId = accepted.runId,
-                sessionId = bgSessionId.orEmpty(),
-                fcmToken = settings.fcmToken,
-            )
+            val accepted = container.runStreams.createTracked(RunCreateRequest(
+                input = prompt, model = settings.model.ifBlank { null }, provider = settings.provider.ifBlank { null }, modelOptions = settings.modelOptions,
+            ), settings)
+            val bgSessionId = accepted.sessionId.ifBlank { null }
             postStatusMessage(s(R.string.cmd_bg_started, bgSessionId ?: accepted.runId))
         }
     }
@@ -812,31 +952,26 @@ class ChatViewModel(
             showModelOptions()
             return
         }
-        val slash = arg.indexOf('/')
+        val parts = arg.trim().split(Regex("\\s+"))
         val newProvider: String?
         val newModel: String
-        if (slash >= 0) {
-            newProvider = arg.substring(0, slash).trim()
-            newModel = arg.substring(slash + 1).trim()
-            if (newProvider.isEmpty() || newModel.isEmpty() ||
-                newProvider.any { it.isWhitespace() } || newModel.any { it.isWhitespace() }
-            ) {
-                postErrorMessage(s(R.string.cmd_model_usage))
-                return
-            }
-        } else {
-            newModel = arg.trim()
-            if (newModel.isEmpty() || newModel.any { it.isWhitespace() }) {
-                postErrorMessage(s(R.string.cmd_model_usage))
-                return
-            }
+        if (parts.size == 3 && parts[0] == "--provider") {
+            newProvider = parts[1]
+            newModel = parts[2]
+        } else if (parts.size == 1 && !parts[0].startsWith("--")) {
             newProvider = null
+            newModel = parts[0]
+        } else {
+            postErrorMessage(s(R.string.cmd_model_usage)); return
+        }
+        if (newModel.startsWith("/") || newModel.endsWith("/")) {
+            postErrorMessage(s(R.string.cmd_model_usage)); return
         }
         launchGuarded {
             val store = container.settingsStore
             val cur = store.current()
             val provider = newProvider ?: cur.provider
-            store.save(cur.copy(model = newModel, provider = provider))
+            store.setModel(newModel, newProvider)
             postStatusMessage(s(R.string.cmd_model_set, displayModel(provider, newModel)))
         }
     }
@@ -874,14 +1009,19 @@ class ChatViewModel(
      * Runs a slash command's async work, surfacing any failure as a
      * local ERROR message instead of crashing.
      */
+    private var commandRunning = false
     private fun launchGuarded(block: suspend () -> Unit) {
+        if (commandRunning) { postErrorMessage(s(R.string.cmd_while_running)); return }
+        commandRunning = true
         viewModelScope.launch {
             refreshLanguage()
             try {
                 block()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 postErrorMessage(friendlyError(e))
-            }
+            } finally { commandRunning = false }
         }
     }
 
@@ -937,6 +1077,7 @@ class ChatViewModel(
             refreshLanguage()
             try {
                 container.api().answerApproval(id, ApprovalAnswer(req.requestId, req.executionGeneration, choice))
+                container.runStreams.controlAnswered(id)
                 statusLine = s(R.string.st_approved, choice)
             } catch (e: HermesApiException) {
                 // Stale generations recover via DESIGN §9.4 first: a 409 here
@@ -953,6 +1094,8 @@ class ChatViewModel(
                     statusLine = ""
                     error = runGoneError(e)
                 } else if (isSessionGone(e)) abandonRun(friendlyError(e)) else error = friendlyError(e)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 if (isRunGone(e)) {
                     busy = false
@@ -975,6 +1118,7 @@ class ChatViewModel(
                     prompt.runId,
                     ClarifyRequest(prompt.requestId, prompt.executionGeneration, answer),
                 )
+                container.runStreams.controlAnswered(prompt.runId)
                 statusLine = s(R.string.st_answered)
             } catch (e: HermesApiException) {
                 // Same §9.4 recovery as approvals: the answer may have
@@ -989,6 +1133,8 @@ class ChatViewModel(
                     statusLine = ""
                     error = runGoneError(e)
                 } else if (isSessionGone(e)) abandonRun(friendlyError(e)) else error = friendlyError(e)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 if (isRunGone(e)) {
                     busy = false
@@ -1060,9 +1206,7 @@ class ChatViewModel(
      */
     private suspend fun markAppOwned(id: String) {
         if (id.isBlank()) return
-        val cur = container.settingsStore.current()
-        if (cur.appOwnedSessionIds.contains(id)) return
-        container.settingsStore.save(cur.copy(appOwnedSessionIds = cur.appOwnedSessionIds + id))
+        container.settingsStore.markAppOwned(id)
     }
 
     /**
@@ -1073,8 +1217,7 @@ class ChatViewModel(
      */
     private suspend fun markForeignSession(id: String) {
         if (id.isBlank()) return
-        val cur = container.settingsStore.current()
-        container.settingsStore.save(cur.copy(foreignSessionIds = cur.foreignSessionIds + id))
+        container.settingsStore.markForeign(id)
     }
 
     /**
@@ -1125,6 +1268,8 @@ class ChatViewModel(
                     busy = false
                     statusLine = ""
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 busy = false
                 statusLine = ""
@@ -1152,53 +1297,16 @@ class ChatViewModel(
             error = s(R.string.err_not_configured)
             return
         }
-        val api = try {
-            container.api()
-        } catch (e: Exception) {
-            busy = false
-            error = friendlyError(e)
-            return
-        }
         val id: String
         try {
-            val accepted = api.createRun(
-                RunCreateRequest(
-                    input = text,
-                    sessionId = sessionId.ifBlank { null },
-                    conversationHistory = history,
-                    model = settings.model.ifBlank { null },
-                    provider = settings.provider.ifBlank { null },
-                ),
-                idempotencyKey = UUID.randomUUID().toString(),
-            )
+            val accepted = container.runStreams.createTracked(
+                RunCreateRequest(input = text, sessionId = sessionId.ifBlank { null }, conversationHistory = history,
+                    model = settings.model.ifBlank { null }, provider = settings.provider.ifBlank { null }, modelOptions = settings.modelOptions), settings)
             id = accepted.runId
             runId = id
-            // Runs responses do not carry the session id. Read it back once.
-            try {
-                val status = api.getRun(id)
-                status.sessionId?.ifBlank { null }?.let { sessionId = it }
-            } catch (_: Exception) {
-            }
-            // The server accepted our write on this key: provably made (or
-            // adopted) by this app, so history never hides it as foreign.
-            markAppOwned(sessionId)
-            // Initialize Firebase from settings (idempotent) so the SDK can
-            // deliver a token via onNewToken. Without this, FCM stayed
-            // uninitialized until the settings connection test ran once, no
-            // token was ever stored, and every watch below silently no-opped.
-            FirebaseInit.ensureInitialized(container.appContext, settings)
-            // Best-effort FCM watch so a closed app still gets the finish
-            // notice. Skipped entirely when notifications are turned off.
-            // registerWatch never throws (returns false on failure), so no
-            // try-catch needed here.
-            if (settings.notificationsEnabled) {
-                container.watchRegistrar.registerWatch(
-                    relayBaseUrl = settings.relayUrl,
-                    runId = id,
-                    sessionId = sessionId,
-                    fcmToken = settings.fcmToken,
-                )
-            }
+            sessionId = accepted.sessionId
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             busy = false
             statusLine = ""
@@ -1218,13 +1326,9 @@ class ChatViewModel(
             }
             return
         }
-        // Subscribe before starting the engine so no update slips past
-        // this chat, then hand the run to the app-scoped engine (which
-        // owns the SSE loop from here) and keep the process alive for it
-        // while the app is backgrounded.
+        // The retained journal also delivers events received during creation.
         subscribe(id)
-        container.runStreams.start(id, sessionId)
-        RunStreamService.start(container.appContext, id, sessionId)
+
     }
 
     /**
@@ -1245,12 +1349,23 @@ class ChatViewModel(
 
     private suspend fun handleStreamUpdate(id: String, update: RunStreamUpdate) {
         when (update) {
+            is RunStreamUpdate.ControlsCleared -> { approval = null; clarify = null }
+            is RunStreamUpdate.QueueStarting -> { busy = true; statusLine = s(R.string.st_starting) }
+            is RunStreamUpdate.NextRun -> {
+                messages.add(UiMessage(idSeq++, MsgKind.USER, update.prompt))
+                assistantIndex = -1
+                runId = update.next.runId
+                lastSentText = update.prompt
+                busy = true
+                subscribe(update.next.runId)
+            }
             is RunStreamUpdate.Event -> handleEvent(id, update.event)
             is RunStreamUpdate.Reconnecting -> statusLine = s(R.string.st_reconnecting)
             is RunStreamUpdate.Resync -> {
                 update.status.sessionId?.ifBlank { null }?.let { sessionId = it }
                 // A drop may have swallowed the approval/clarify request
                 // event while the run still waits: re-surface it.
+                if (update.status.pendingControlsKnown) { approval = null; clarify = null }
                 surfacePendingControls(id, update.status.pendingControls)
             }
             is RunStreamUpdate.PollTerminal -> finishTerminal(
@@ -1262,6 +1377,9 @@ class ChatViewModel(
                 )
             )
             is RunStreamUpdate.UnknownOutcome -> {
+                lastRunId = runId
+                approval = null
+                clarify = null
                 busy = false
                 runId = null
                 statusLine = ""
@@ -1320,6 +1438,10 @@ class ChatViewModel(
                 messages.add(UiMessage(idSeq++, MsgKind.STATUS, s(R.string.delegating, event.summary)))
             is RunEvent.SubagentCompleted ->
                 messages.add(UiMessage(idSeq++, MsgKind.STATUS, s(R.string.child_done, event.status, event.summary)))
+            is RunEvent.ControlResolved -> {
+                if (event.requestId == null || approval?.requestId == event.requestId) approval = null
+                if (event.requestId == null || clarify?.requestId == event.requestId) clarify = null
+            }
             is RunEvent.ApprovalRequested -> {
                 approval = event.request
                 statusLine = s(R.string.st_waiting_approval)
@@ -1338,7 +1460,7 @@ class ChatViewModel(
                 return true
             }
             is RunEvent.Unknown -> {
-                statusLine = event.name
+                statusLine = if (event.name == "replay.truncated") s(R.string.stream_replay_truncated) else event.name
             }
         }
         return false
@@ -1346,7 +1468,9 @@ class ChatViewModel(
 
     private fun finishTerminal(event: RunEvent.Terminal) {
         lastRunId = runId
-        busy = false
+        approval = null
+        clarify = null
+        busy = event.status == "completed" && pendingQueue.isNotEmpty()
         runId = null
         statusLine = when (event.status) {
             "completed" -> ""
@@ -1354,8 +1478,10 @@ class ChatViewModel(
             "failed" -> s(R.string.st_failed)
             else -> event.status
         }
-        if (assistantIndex < 0 && !event.output.isNullOrBlank()) {
-            messages.add(UiMessage(idSeq++, MsgKind.ASSISTANT, event.output))
+        if (!event.output.isNullOrBlank()) {
+            if (assistantIndex >= 0 && assistantIndex < messages.size) {
+                messages[assistantIndex] = messages[assistantIndex].copy(text = event.output)
+            } else messages.add(UiMessage(idSeq++, MsgKind.ASSISTANT, event.output))
         }
         if (!event.error.isNullOrBlank() && event.status != "completed") {
             val shown = summarizeMachineJson(event.error.trim()) ?: event.error
@@ -1366,13 +1492,7 @@ class ChatViewModel(
         }
         // Chunk splits can strand half a tool block in the reply: sweep it out.
         foldMarkupOutOfReplies()
-        // /queue prompts go out as the next turn once this run is over,
-        // however it ended (the gateway drains its queue the same way).
-        if (pendingQueue.isNotEmpty()) {
-            val next = pendingQueue.removeAt(0)
-            messages.add(UiMessage(idSeq++, MsgKind.USER, next))
-            startRun(next, history = null)
-        }
+
     }
 
     private fun friendlyError(e: Exception): String {
@@ -1407,7 +1527,7 @@ class ChatViewModel(
     private fun appendDeltaText(chunk: String) {
         val split = splitUserFacing(chunk)
         for (summary in split.folded) messages.add(UiMessage(idSeq++, MsgKind.TOOL, summary))
-        if (split.visible.isNotBlank()) appendAssistantText(split.visible)
+        if (split.visible.isNotEmpty()) appendAssistantText(split.visible)
     }
 
     private fun appendAssistantText(text: String) {
@@ -1614,7 +1734,7 @@ internal fun parsePendingControl(o: JsonObject): PendingControl? {
         ?.mapNotNull { (it as? JsonPrimitive)?.content }
         ?.takeIf { it.isNotEmpty() }
     if (command != null || choices != null ||
-        o.str("type").equals("approval", ignoreCase = true)
+        o.str("type", "kind").equals("approval", ignoreCase = true)
     ) {
         if (requestId.isBlank() && command == null) return null
         return PendingControl.Approval(

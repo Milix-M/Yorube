@@ -13,7 +13,9 @@
 | 承認フロー | 危険コマンドの承認ダイアログ、実行中の質問への回答 |
 | 履歴 | 日付セクションつきサイドバー、ピン留め、検索、削除 |
 | 他インターフェイスセッション | Discord 等が所有する会話は読み取り専用で開き、ワンタップで分岐 (fork) して続行 |
-| 通知 | FCM 中継経由の完了通知、タップで該当会話を開く |
+| 通知 | 完了・承認・質問を端末内で通知。タップで該当会話を開く。FCM・中継サーバーは不要 |
+| バックグラウンド | フォアグラウンドサービスで複数の実行を監視し、切断後は状態取得とSSEの再接続を行う |
+| コマンド | 104個を認識し、35個にAPIまたは端末内の操作を割り当て。[対応範囲](docs/COMMANDS.md) |
 | 表示言語 | 日本語・English・中文・한국어＋システム既定の切替え (設定画面) |
 
 ## 必要なもの
@@ -26,7 +28,7 @@ Hermes API サーバー (`gateway/platforms/api_server.py`) を HTTPS で公開�
    - Cloudflare Access で保護している場合は `Client ID / Client Secret` も入れます
 2. `接続試験` で `health` と機能検出 (`run_status` / `run_events_sse` / `run_stop` / `run_steer` / …) を確認します
 3. 会話を開いて送信します。中断は ■ ボタンを使います。実行中の一言は入力欄の ↑ ボタン (steer) で送ります
-4. 通知が要る場合は [`server/fcm-relay/README.md`](server/fcm-relay/README.md) に従い中継を立てます。Firebase の4項目 (Project ID / App ID / APIキー / Sender ID) は設定画面に入れます。`google-services.json` は不要です
+4. Androidの通知を許可し、設定画面の通知をオンにします。Firebaseの登録や外部の通知サービスは不要です
 
 ## 構成
 
@@ -34,9 +36,9 @@ Hermes API サーバー (`gateway/platforms/api_server.py`) を HTTPS で公開�
 app/                   Androidクライアント (Kotlin + Jetpack Compose)
   data/api/            HermesApi: REST + SSE、型、事象の解釈
   data/store/          設定の保存 (DataStore)、言語ロケール
-  data/fcm/            FCM受信と中継登録
+  data/stream/         実行の監視、再接続、バックグラウンドサービス
+  data/notifications/  端末内での通知
   ui/                  一覧、会話、設定、ナビゲーション
-server/fcm-relay/      完了通知の中継
 ```
 
 ## 他インターフェイスから開始した会話について
@@ -62,4 +64,12 @@ Robolectric 4.17 の標準ローダーは Linux ARM64 を未対応として扱�
 
 ## 既知の制限
 
-他インターフェイスセッションの一覧可否は、サーバーが所有者メタデータを返さない場合、過去の `permission_denied` 記録に依存します。SSE 購読は前面のみです。バックグラウンドでは Doze で切れるため、復帰時は状態取得で補います。`unknown` 終端の再送はしません (二重実行防止)。新規会話を始めてください。
+他インターフェイスセッションの一覧可否は、サーバーが所有者メタデータを返さない場合、過去の `permission_denied` 記録に依存します。
+
+バックグラウンドでのSSE受信には常駐通知が表示されます。ネットワーク切断後は再接続し、アプリのプロセスが再作成された場合は保存した実行IDから監視を再開します。端末の強制停止中や再起動後は、アプリを開くまで監視を再開できません。Dozeやメーカー独自の省電力制御で通信が止まっている間は通知も遅れます。必要に応じてAndroidの設定からYorubeのバッテリー制限を見直してください。[AndroidのDoze仕様](https://developer.android.com/training/monitoring-device-state/doze-standby)
+
+現在のtargetSdkは34です。将来35以上へ変更する場合は、`dataSync` サービスの24時間あたり6時間の制限と `onTimeout` 対応を見直す必要があります。[フォアグラウンドサービスの時間制限](https://developer.android.com/develop/background-work/services/fgs/timeout)
+
+SSEの再送バッファから消えた途中経過は復元できません。完了時はサーバーの最終出力に合わせます。`unknown` と判定された実行や失敗・中断した実行のあとに、キューのプロンプトを自動送信することはありません。結果不明の実行を確認したうえで `/discard` を使うか、新しい会話を始めてください。
+
+通知はこの端末が監視している実行が対象です。他のクライアントや定期実行から始まった処理を、自動的に発見して通知する機能はありません。旧バージョンのFirebase設定は読み込まれても通信には使いません。

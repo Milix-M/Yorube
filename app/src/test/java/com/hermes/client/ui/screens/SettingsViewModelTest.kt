@@ -15,6 +15,7 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -169,7 +170,7 @@ class SettingsViewModelTest {
         vm.test()
         val result = awaitTested(vm)
         assertTrue(result.contains("health=true"))
-        assertTrue(result.contains("fcm_ready=false"))
+        assertFalse(result.contains("fcm_ready"))
     }
 
     @Test
@@ -223,7 +224,8 @@ class SettingsViewModelTest {
         c.settingsStore.save(ClientSettings(baseUrl = "notaurl", apiKey = "k"))
         awaitStored(c, "notaurl")
         val vm = SettingsViewModel(c)
-        vm.baseUrl = "https://example.com"
+        awaitCondition { vm.baseUrl == "notaurl" }
+        vm.baseUrl = "notaurl"
         vm.apiKey = "k"
         vm.test()
         val result = awaitTested(vm)

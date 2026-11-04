@@ -71,7 +71,7 @@ class RunStreamServiceTest {
     }
 
     @Test
-    fun startCommand_noRunId_stopsSelf() {
+    fun startCommand_noRunId_stopsSelf() = runVmTest {
         val controller = Robolectric.buildService(RunStreamService::class.java, serviceIntent(null))
             .create()
         val service = controller.get()
@@ -80,17 +80,17 @@ class RunStreamServiceTest {
         // startForeground ran (the startForegroundService contract), then
         // the service gave up: nothing to keep alive.
         assertNotNull(shadow.lastForegroundNotification)
-        assertTrue(shadow.isStoppedBySelf)
+        awaitCondition { shadow.isStoppedBySelf }
         controller.destroy()
     }
 
     @Test
-    fun startCommand_blankRunId_stopsSelf() {
+    fun startCommand_blankRunId_stopsSelf() = runVmTest {
         val controller = Robolectric.buildService(RunStreamService::class.java, serviceIntent(""))
             .create()
         val service = controller.get()
         controller.startCommand(0, 1)
-        assertTrue(Shadows.shadowOf(service).isStoppedBySelf)
+        awaitCondition { Shadows.shadowOf(service).isStoppedBySelf }
         controller.destroy()
     }
 

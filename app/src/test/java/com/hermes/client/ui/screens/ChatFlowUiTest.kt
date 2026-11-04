@@ -138,7 +138,7 @@ class ChatFlowUiTest {
         // Note: the terminal "final" is not rendered on its own — the streamed
         // "answer" already holds the reply. Waiting for it would time out.
         // Error tool results stay as visible error rows; the rest lives in the activity log.
-        for (text in listOf("answer", "terminal", "boom", "working", "delegating", "child ok")) {
+        for (text in listOf("final", "terminal", "boom", "working", "delegating", "child ok")) {
             compose.waitUntil(timeoutMillis = 30_000) {
                 compose.onAllNodesWithText(text, substring = true, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
             }
@@ -155,7 +155,7 @@ class ChatFlowUiTest {
                     "message.delta",
                     """{"event":"message.delta","delta":"Here is **bold** text\n\n```kotlin\nval x = 1\n```"}""",
                 ),
-                frame("run.completed", """{"event":"run.completed","output":"done"}"""),
+                frame("run.completed", """{"event":"run.completed","output":"Here is **bold** text\n\n```kotlin\nval x = 1\n```"}"""),
             )
         )
         kotlinx.coroutines.runBlocking { saveSettings() }
