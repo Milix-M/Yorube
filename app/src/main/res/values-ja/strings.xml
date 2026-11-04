@@ -29,6 +29,10 @@
     <string name="relay_optional">中継URL (オプション)</string>
     <string name="fcm_token">FCMトークン: %1$s…</string>
     <string name="fcm_token_none">FCMトークン: (まだなし)</string>
+    <string name="notifications_enabled">通知を有効にする</string>
+    <string name="notif_channel_runs">実行の通知</string>
+    <string name="notif_channel_approvals">承認リクエスト</string>
+    <string name="notif_run_finished">実行が完了しました</string>
     <string name="section_firebase">Firebase手動設定 (オプション)</string>
     <string name="section_firebase_help">google-services.jsonを使わず通知を受ける場合のみ必要です。Firebaseコンソールの4つの値を写します。</string>
     <string name="fb_project">プロジェクトID</string>
