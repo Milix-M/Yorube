@@ -31,6 +31,9 @@ import java.io.IOException
 import java.util.UUID
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -117,8 +120,6 @@ class ChatViewModel(
     private var lastRunId: String? = null
     /** Prompts queued by /queue while a run is active (FIFO). */
     private val pendingQueue: MutableList<String> get() = container.runStreams.queue(sessionId)
-    private var reconnectAttempts: Int = 0
-    private var lastReconnectCause: Exception? = null
     private var idSeq = 0L
 
     private fun s(id: Int, vararg args: Any): String =
@@ -1097,13 +1098,8 @@ class ChatViewModel(
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                if (isRunGone(e)) {
-                    busy = false
-                    runId = null
-                    clarify = null
-                    statusLine = ""
-                    error = runGoneError(e)
-                } else if (isSessionGone(e)) abandonRun(friendlyError(e)) else error = friendlyError(e)
+                // API status failures were handled by the HermesApiException catch above.
+                error = friendlyError(e)
             }
         }
     }
@@ -1136,13 +1132,7 @@ class ChatViewModel(
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                if (isRunGone(e)) {
-                    busy = false
-                    runId = null
-                    approval = null
-                    statusLine = ""
-                    error = runGoneError(e)
-                } else if (isSessionGone(e)) abandonRun(friendlyError(e)) else error = friendlyError(e)
+                error = friendlyError(e)
             }
         }
     }
@@ -1180,12 +1170,12 @@ class ChatViewModel(
             statusLine = s(R.string.st_waiting_approval)
             return true
         }
-        parsed.filterIsInstance<PendingControl.Clarify>().lastOrNull()?.let {
-            clarify = ClarifyPrompt(id, it.requestId, it.executionGeneration, it.prompt)
-            statusLine = s(R.string.st_question)
-            return true
-        }
-        return false
+        // PendingControl has only Approval and Clarify variants. A nonempty list
+        // without approvals therefore always contains a question.
+        val question = parsed.filterIsInstance<PendingControl.Clarify>().last()
+        clarify = ClarifyPrompt(id, question.requestId, question.executionGeneration, question.prompt)
+        statusLine = s(R.string.st_question)
+        return true
     }
 
     fun dismissError() {
@@ -1206,7 +1196,7 @@ class ChatViewModel(
      */
     private suspend fun markAppOwned(id: String) {
         if (id.isBlank()) return
-        container.settingsStore.markAppOwned(id)
+        return container.settingsStore.markAppOwned(id)
     }
 
     /**
@@ -1217,7 +1207,7 @@ class ChatViewModel(
      */
     private suspend fun markForeignSession(id: String) {
         if (id.isBlank()) return
-        container.settingsStore.markForeign(id)
+        return container.settingsStore.markForeign(id)
     }
 
     /**
@@ -1284,8 +1274,6 @@ class ChatViewModel(
         statusLine = s(R.string.st_starting)
         assistantIndex = -1
         lastSentText = text
-        reconnectAttempts = 0
-        lastReconnectCause = null
         viewModelScope.launch { doStartRun(text, history) }
     }
 
@@ -1339,12 +1327,10 @@ class ChatViewModel(
      */
     private fun subscribe(id: String) {
         eventsJob?.cancel()
-        eventsJob = viewModelScope.launch {
-            refreshLanguage()
-            container.runStreams.updatesFor(id).collect { update ->
-                handleStreamUpdate(id, update)
-            }
-        }
+        eventsJob = container.runStreams.updatesFor(id)
+            .onStart { refreshLanguage() }
+            .onEach { update -> handleStreamUpdate(id, update) }
+            .launchIn(viewModelScope)
     }
 
     private suspend fun handleStreamUpdate(id: String, update: RunStreamUpdate) {
@@ -1392,18 +1378,14 @@ class ChatViewModel(
     /**
      * The stream engine gave up on this run (or the run vanished
      * server-side): settle locally with the message the failure deserves.
-     * A gone run is an ended run, never a dead conversation; a clean-EOF
-     * outage with no recorded failure is a plain "stream ended".
+     * A gone run is an ended run, never a dead conversation. Transient
+     * EOFs keep reconnecting in the engine and do not reach this handler.
      */
-    private fun settleStreamDead(cause: Exception?) {
+    private fun settleStreamDead(cause: Exception) {
         busy = false
         runId = null
         statusLine = ""
-        error = when {
-            cause != null && isRunGone(cause) -> runGoneError(cause)
-            cause != null -> friendlyError(cause)
-            else -> s(R.string.st_stream_ended)
-        }
+        error = if (isRunGone(cause)) runGoneError(cause) else friendlyError(cause)
     }
 
     /** Returns true when a terminal event arrived. */
@@ -1676,15 +1658,15 @@ internal fun summarizeMachineJson(trimmed: String): String? {
         if (!isMachineJsonObject(el)) return null
         return summarizeJsonObject(el)
     }
-    if (el is JsonArray) {
-        if (el.isEmpty()) return null
-        val first = el.first() as? JsonObject ?: return null
-        if (first.keys.none { it == "url" || it == "link" || it == "href" || it == "title" }) return null
-        val head = (first["title"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.trim().orEmpty()
-        val links = if (head.isEmpty()) "${el.size} links" else "$head (+${el.size - 1})"
-        return "links: $links"
-    }
-    return null
+    // A successfully parsed value starting with '[' is necessarily an array;
+    // the opening-character guard above rules out primitive JSON values.
+    val array = el as JsonArray
+    if (array.isEmpty()) return null
+    val first = array.first() as? JsonObject ?: return null
+    if (first.keys.none { it == "url" || it == "link" || it == "href" || it == "title" }) return null
+    val head = (first["title"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.trim().orEmpty()
+    val links = if (head.isEmpty()) "${array.size} links" else "$head (+${array.size - 1})"
+    return "links: $links"
 }
 
 /** Summarize a whole-message tag-wrapped dump (<foo>…</foo>). Null for prose. */

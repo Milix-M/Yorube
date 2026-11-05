@@ -83,11 +83,10 @@ sealed interface RunStreamUpdate {
     data class UnknownOutcome(override val runId: String) : RunStreamUpdate
 
     /**
-     * The stream is over without a terminal frame. [cause] is the failure
-     * to report (null when the outage was only clean EOFs: the UI falls
-     * back to its plain "stream ended" message).
+     * The stream stopped on a non-recoverable failure. Transient EOFs
+     * reconnect and never publish this outcome.
      */
-    data class Dead(override val runId: String, val cause: Exception?) : RunStreamUpdate
+    data class Dead(override val runId: String, val cause: Exception) : RunStreamUpdate
 }
 
 /**

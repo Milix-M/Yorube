@@ -20,11 +20,8 @@ object CrashLog {
             } catch (_: Exception) {
                 error.toString()
             }
-            try {
-                writeReport(context, report)
-            } catch (_: Exception) {
-                // Never crash the crash reporter.
-            }
+            // writeReport already contains its own best-effort storage guard.
+            writeReport(context, report)
             prev?.uncaughtException(thread, error)
         }
     }

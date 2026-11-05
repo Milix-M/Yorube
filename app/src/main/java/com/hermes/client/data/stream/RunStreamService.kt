@@ -19,8 +19,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.launchIn
 
 /** Keeps active run tracking in a foreground service; restores saved runs on restart. */
 class RunStreamService : Service() {
@@ -38,18 +40,18 @@ class RunStreamService : Service() {
         startForeground(NOTIFICATION_ID, buildNotification(sessionId))
         val engine = (application as HermesApp).container.runStreams
         watchJob?.cancel()
-        watchJob = scope.launch {
-            if (runId != null) engine.start(runId, sessionId)
-            else if (intent == null) engine.restore()
-            combine(engine.working, engine.activeRuns) { working, runs -> working to runs }.collect { (working, runs) ->
+        watchJob = combine(engine.working, engine.activeRuns) { working, runs -> working to runs }
+            .onStart {
+                if (runId != null) engine.start(runId, sessionId)
+                else if (intent == null) engine.restore()
+            }.onEach { (working, runs) ->
                 if (!working) {
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     stopSelf(startId)
                 } else {
                     startForeground(NOTIFICATION_ID, buildNotification(runs.lastOrNull()?.sessionId.orEmpty()))
                 }
-            }
-        }
+            }.launchIn(scope)
         return START_STICKY
     }
 

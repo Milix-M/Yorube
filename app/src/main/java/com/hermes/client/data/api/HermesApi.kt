@@ -370,8 +370,6 @@ class HermesApi(
             } else {
                 info
             }
-        } catch (e: CancellationException) {
-            throw e
         } catch (_: Exception) {
             null
         }

@@ -14,6 +14,13 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.Implementation
 import org.robolectric.annotation.Implements
 import org.robolectric.shadows.ShadowAudioManager
+import androidx.test.core.app.ApplicationProvider
+import com.hermes.client.data.store.ClientSettings
+import kotlinx.coroutines.runBlocking
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.SocketPolicy
+import org.robolectric.Shadows.shadowOf
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33], shadows = [MainActivityTest.Api33AudioManagerShadow::class])
@@ -31,6 +38,45 @@ class MainActivityTest {
     class Api33AudioManagerShadow : ShadowAudioManager() {
         @Implementation(minSdk = 33, maxSdk = 33)
         protected fun areNavigationRepeatSoundEffectsEnabled(): Boolean = false
+    }
+
+    @Test
+    fun launchingRestoresTrackedRunAndStartsForegroundService() {
+        val app = ApplicationProvider.getApplicationContext<HermesApp>()
+        MockWebServer().use { server ->
+            server.start()
+            val endpoint = server.url("/").toString().trimEnd('/')
+            runBlocking { app.container.settingsStore.save(ClientSettings(baseUrl = endpoint, apiKey = "k")) }
+            app.getSharedPreferences("active_runs", 0).edit().putString("runs",
+                """[{"run":"r","session":"s","endpoint":"$endpoint"}]""").commit()
+            val polled = java.util.concurrent.atomic.AtomicBoolean(false)
+            val subscribed = java.util.concurrent.atomic.AtomicBoolean(false)
+            server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+                override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse = when (request.path) {
+                    "/v1/runs/r" -> {
+                        polled.set(true)
+                        MockResponse().setBody("""{"status":"running","session_id":"s"}""")
+                    }
+                    "/v1/runs/r/events" -> {
+                        subscribed.set(true)
+                        MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE)
+                    }
+                    else -> MockResponse().setBody("""{"sessions":[]}""")
+                }
+            }
+            try {
+                Robolectric.buildActivity(MainActivity::class.java).use { controller ->
+                    compose.runOnUiThread { controller.setup() }
+                    compose.waitUntil(timeoutMillis = 15_000) {
+                        shadowOf(android.os.Looper.getMainLooper()).idle()
+                        polled.get() && subscribed.get()
+                    }
+                    val service = shadowOf(app).nextStartedService
+                    assertEquals("r", service.getStringExtra("run_id"))
+                    assertEquals("s", service.getStringExtra("session_id"))
+                }
+            } finally { compose.runOnUiThread { app.container.runStreams.close() } }
+        }
     }
 
     @Test

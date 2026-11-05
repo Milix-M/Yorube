@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
@@ -71,6 +72,26 @@ class ChatFlowUiTest {
             if (System.currentTimeMillis() >= deadline) error("timed out saving settings")
             withContext(Dispatchers.IO) { Thread.sleep(100) }
         }
+    }
+
+    @Test
+    fun copyAnswerShowsConfirmationAndWritesClipboard() {
+        server.enqueue(MockResponse().setBody("""{"messages":[{"role":"assistant","content":"copy this answer"}]}"""))
+        kotlinx.coroutines.runBlocking { saveSettings() }
+        compose.setContent { HermesAppTheme { ChatScreen(sessionId = "s", onNavigateBack = {}) } }
+        compose.waitUntil(timeoutMillis = 15_000) {
+            compose.onAllNodesWithText("copy this answer").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithContentDescription("Copy").performClick()
+        compose.mainClock.advanceTimeBy(300)
+        compose.onNodeWithText("Copied").assertIsDisplayed()
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val clipboard = app.getSystemService(android.content.ClipboardManager::class.java)
+        org.junit.Assert.assertEquals("copy this answer", clipboard.primaryClip!!.getItemAt(0).text)
+        compose.mainClock.advanceTimeBy(1500)
+        compose.onNodeWithText("Copied").assertDoesNotExist()
+        compose.mainClock.autoAdvance = true
     }
 
     @Test

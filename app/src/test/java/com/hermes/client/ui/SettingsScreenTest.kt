@@ -167,6 +167,23 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun failedConnectionDisplaysFailureAndCanBeDismissed() {
+        saveSettings(ClientSettings(baseUrl = server.url("/").toString().trimEnd('/'), apiKey = "k"))
+        server.enqueue(MockResponse().setResponseCode(503))
+        server.enqueue(MockResponse().setResponseCode(503))
+        compose.setContent { HermesAppTheme { SettingsScreen(onNavigateBack = {}) } }
+        compose.onNodeWithText("Test connection").performScrollTo().performClick()
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val failed = app.getString(com.hermes.client.R.string.test_failed)
+        compose.waitUntil(timeoutMillis = 15_000) {
+            compose.onAllNodesWithText(failed).fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithText(failed).assertIsDisplayed()
+        compose.onNodeWithText("Close").performClick()
+        compose.onNodeWithText(failed).assertDoesNotExist()
+    }
+
+    @Test
     fun testButton_showsHealthResult() {
         val want = server.url("").toString().removeSuffix("/")
         saveSettings(ClientSettings(baseUrl = want, apiKey = "k"))
