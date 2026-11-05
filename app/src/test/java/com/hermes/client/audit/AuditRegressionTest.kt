@@ -248,15 +248,25 @@ class AuditRegressionTest {
         val c = container()
         val vm = com.hermes.client.ui.screens.ChatViewModel(c, null)
         vm.input = "/reasoning high"; vm.onSend()
-        awaitCondition { c.settingsStore.current().reasoningEffort == "high" }
+        // DataStore can expose the new value before the command's coroutine
+        // resumes and clears commandRunning. Wait for its UI acknowledgement
+        // before sending the next command, as a real user would.
+        awaitCondition { vm.messages.size == 1 }
+        assertEquals(com.hermes.client.ui.screens.MsgKind.STATUS, vm.messages.last().kind)
+        assertEquals("high", c.settingsStore.current().reasoningEffort)
         vm.input = "/fast on"; vm.onSend()
-        awaitCondition { c.settingsStore.current().serviceTier == "priority" }
+        awaitCondition { vm.messages.size == 2 }
+        assertEquals(com.hermes.client.ui.screens.MsgKind.STATUS, vm.messages.last().kind)
+        assertEquals("priority", c.settingsStore.current().serviceTier)
         server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"a"}"""))
         server.enqueue(MockResponse().setBody("""{"status":"running","session_id":"sa"}"""))
         server.enqueue(sse(done()))
         vm.input = "hello"; vm.onSend()
+        assertTrue(vm.busy)
         awaitCondition { !vm.busy }
-        val body = server.takeRequest().body.readUtf8()
+        val request = server.takeRequest(5, TimeUnit.SECONDS)
+        assertNotNull(request)
+        val body = request!!.body.readUtf8()
         assertTrue(body.contains("\"reasoning_effort\":\"high\""))
         assertTrue(body.contains("\"service_tier\":\"priority\""))
     }
