@@ -29,6 +29,10 @@
     <string name="relay_optional">中转 URL (可选)</string>
     <string name="fcm_token">FCM 令牌: %1$s…</string>
     <string name="fcm_token_none">FCM 令牌: (暂无)</string>
+    <string name="notifications_enabled">启用通知</string>
+    <string name="notif_channel_runs">运行通知</string>
+    <string name="notif_channel_approvals">审批请求</string>
+    <string name="notif_run_finished">运行已完成</string>
     <string name="section_firebase">Firebase 手动设置 (可选)</string>
     <string name="section_firebase_help">不使用 google-services.json 接收推送时才需要。从 Firebase 控制台复制四个值。</string>
     <string name="fb_project">项目 ID</string>

@@ -74,6 +74,7 @@ class SettingsViewModelTest {
         vm.language = "ja"
         vm.showForeignSessions = false
         vm.enterToSend = true
+        vm.notificationsEnabled = false
         vm.save()
 
         // Wait for the ViewModel-side completion first: distinguishes a lost
@@ -95,6 +96,7 @@ class SettingsViewModelTest {
             assertEquals("ja", saved.language)
             assertEquals(false, saved.showForeignSessions)
             assertEquals(true, saved.enterToSend)
+            assertEquals(false, saved.notificationsEnabled)
     }
 
     private suspend fun TestScope.awaitStored(c: AppContainer, expectedBaseUrl: String): ClientSettings {

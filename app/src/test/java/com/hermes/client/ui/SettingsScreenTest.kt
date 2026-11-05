@@ -145,6 +145,8 @@ class SettingsScreenTest {
         compose.onNodeWithTag("showForeign").performClick()
         compose.onNodeWithTag("enterToSend").performScrollTo()
         compose.onNodeWithTag("enterToSend").performClick()
+        compose.onNodeWithTag("notificationsEnabled").performScrollTo()
+        compose.onNodeWithTag("notificationsEnabled").performClick()
         compose.onNodeWithTag("save").performScrollTo()
         compose.onNodeWithTag("save").performClick()
         val app = ApplicationProvider.getApplicationContext<Application>() as HermesApp
@@ -162,6 +164,7 @@ class SettingsScreenTest {
             val saved = app.container.settingsStore.current()
             assertTrue(saved.showForeignSessions == false)
             assertTrue(saved.enterToSend == true)
+            assertTrue(saved.notificationsEnabled == false)
         }
     }
 

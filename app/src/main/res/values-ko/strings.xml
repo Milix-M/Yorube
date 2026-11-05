@@ -29,6 +29,10 @@
     <string name="relay_optional">릴레이 URL (선택)</string>
     <string name="fcm_token">FCM 토큰: %1$s…</string>
     <string name="fcm_token_none">FCM 토큰: (아직 없음)</string>
+    <string name="notifications_enabled">알림 사용</string>
+    <string name="notif_channel_runs">실행 알림</string>
+    <string name="notif_channel_approvals">승인 요청</string>
+    <string name="notif_run_finished">실행이 완료되었습니다</string>
     <string name="section_firebase">Firebase 수동 설정 (선택)</string>
     <string name="section_firebase_help">google-services.json 없이 푸시를 받을 때만 필요합니다. Firebase 콘솔의 네 값을 입력하세요.</string>
     <string name="fb_project">프로젝트 ID</string>

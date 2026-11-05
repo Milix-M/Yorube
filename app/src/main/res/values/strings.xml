@@ -28,6 +28,10 @@
     <string name="section_notifications">Notifications (M3)</string>
     <string name="relay_optional">Relay URL (optional)</string>    <string name="fcm_token">FCM token: %1$s…</string>
     <string name="fcm_token_none">FCM token: (none yet)</string>
+    <string name="notifications_enabled">Enable notifications</string>
+    <string name="notif_channel_runs">Run updates</string>
+    <string name="notif_channel_approvals">Approval requests</string>
+    <string name="notif_run_finished">Run finished</string>
     <string name="section_firebase">Firebase manual setup (optional)</string>
     <string name="section_firebase_help">Required only for push notifications without google-services.json. Copy the four values from the Firebase console.</string>
     <string name="fb_project">Project ID</string>
