@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -96,6 +97,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -115,9 +119,11 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -544,6 +550,14 @@ private fun ChatInputBar(
 ) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
+    val inputFocus = remember { FocusRequester() }
+    var inputFocused by remember { mutableStateOf(false) }
+    var fieldValue by remember { mutableStateOf(TextFieldValue(input, TextRange(input.length))) }
+    // External updates (command completion, /prompt, sending) place the caret at the end.
+    if (fieldValue.text != input) {
+        fieldValue = TextFieldValue(input, TextRange(input.length))
+    }
+    val suggestions = remember(input) { slashCommandSuggestions(input) }
     // The attach picker needs an ActivityResultRegistryOwner. On some hosts
     // the bottom-bar subcomposition recomposes without one and
     // rememberLauncherForActivityResult throws, killing startup outright —
@@ -580,6 +594,12 @@ private fun ChatInputBar(
                 onFork = onFork,
                 modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
             )
+        }
+        if (enabled && inputFocused && suggestions.isNotEmpty()) {
+            SlashCommandHints(input, suggestions) { command ->
+                onInputChange(completeSlashCommand(input, command))
+                inputFocus.requestFocus()
+            }
         }
         Surface(
             shape = RoundedCornerShape(32.dp),
@@ -628,10 +648,12 @@ private fun ChatInputBar(
                     Modifier
                 }
                 TextField(
-                    value = input,
-                    onValueChange = onInputChange,
+                    value = fieldValue,
+                    onValueChange = { fieldValue = it; onInputChange(it.text) },
                     enabled = enabled,
-                    modifier = keyModifier.weight(1f).testTag("chatInput"),
+                    modifier = keyModifier.weight(1f).testTag("chatInput")
+                        .focusRequester(inputFocus)
+                        .onFocusChanged { inputFocused = it.isFocused },
                     placeholder = {
                         Text(
                             when {
@@ -669,6 +691,69 @@ private fun ChatInputBar(
                         onClick = sendAndClose,
                         modifier = Modifier.testTag("sendButton"),
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SlashCommandHints(
+    input: String,
+    suggestions: List<HermesCommand>,
+    onSelect: (HermesCommand) -> Unit,
+) {
+    val exact = findHermesCommand(input.trimStart().drop(1).takeWhile { !it.isWhitespace() })
+    val listState = rememberLazyListState()
+    LaunchedEffect(suggestions) { listState.scrollToItem(0) }
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).testTag("slashCommandHints"),
+    ) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.heightIn(max = 220.dp).testTag("slashHintsList"),
+            contentPadding = PaddingValues(vertical = 4.dp),
+        ) {
+            suggestions.forEach { command ->
+                item(key = command.name) {
+                    val help = SLASH_COMMAND_HELP[command.name]
+                    Column(
+                        Modifier.fillMaxWidth()
+                            .clickable(enabled = help != null) { onSelect(command) }
+                            .testTag("slashHint-${command.name}")
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        val usage = help?.let { stringResource(it.usage) } ?: "/${command.name}"
+                        Text(
+                            usage.substringBefore('\n'),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            help?.let { stringResource(it.description) } ?: command.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        if (command == exact && usage.contains('\n')) {
+                            Text(
+                                usage.substringAfter('\n'),
+                                style = MaterialTheme.typography.labelLarge,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                        if (help == null) {
+                            Text(
+                                stringResource(R.string.slash_unavailable),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
                 }
             }
         }

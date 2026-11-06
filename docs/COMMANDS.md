@@ -2,6 +2,8 @@
 
 Hermesの組み込みコマンド104個を認識し、そのうち35個に操作を割り当てています。引数や動作は以下の範囲に限ります。未対応の操作はチャット本文としてエージェントへ送らず、未対応と表示します。
 
+入力欄で `/` を打つと、利用できるコマンドの説明と書式が表示されます。続けて文字を入力すると候補を絞り込み、タップするとコマンド名を補完します。引数の入力中も使い方を確認できます。候補の選択だけでは実行されません。
+
 一覧の照合先は [Hermesのコマンド定義](https://github.com/NousResearch/hermes-agent/blob/27cbcb122ff47a1d6878cf3c390b24395f98ee14/hermes_cli/commands.py) です。操作の可否は同じ版の [APIルート](https://github.com/NousResearch/hermes-agent/blob/27cbcb122ff47a1d6878cf3c390b24395f98ee14/gateway/platforms/api_server.py) に基づいています。古いサーバーで存在しないAPIを呼んだ場合はエラーを表示します。
 
 | コマンド | Yorubeでの動作 |
