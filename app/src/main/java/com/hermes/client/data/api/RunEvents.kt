@@ -4,6 +4,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonObject
 
+data class RunFrame(val sequence: Long?, val event: RunEvent)
+
 /** One parsed SSE frame from GET /v1/runs/{id}/events. */
 sealed interface RunEvent {
     data class Delta(val text: String) : RunEvent
@@ -18,6 +20,7 @@ sealed interface RunEvent {
     data class SubagentStarted(val summary: String) : RunEvent
     data class SubagentCompleted(val status: String, val summary: String) : RunEvent
     data class Reasoning(val text: String) : RunEvent
+    data class ControlResolved(val requestId: String?) : RunEvent
     data class ApprovalRequested(val request: ApprovalRequest) : RunEvent
     data class ClarifyRequested(
         val requestId: String,
@@ -74,14 +77,16 @@ fun parseRunEvent(eventName: String, data: JsonObject): RunEvent {
                 summary = data.str("summary", "output_tail", "preview") ?: "",
             )
         }
-        "clarify" in name -> {
+        name == "approval.responded" || name == "clarify.responded" || name == "clarify.answered" ->
+            RunEvent.ControlResolved(data.str("request_id", "prompt_id", "id"))
+        name == "clarify.request" || name == "clarify.requested" -> {
             RunEvent.ClarifyRequested(
                 requestId = data.str("request_id", "prompt_id", "id") ?: "",
                 executionGeneration = data.long("execution_generation", "generation") ?: 0L,
                 prompt = data.str("prompt", "question", "text") ?: "",
             )
         }
-        "approval" in name -> {
+        name == "approval.request" || name == "approval.requested" -> {
             val requestId = data.str("request_id", "prompt_id", "id") ?: ""
             val generation = data.long("execution_generation", "generation") ?: 0L
             val choices = (data["choices"] as? kotlinx.serialization.json.JsonArray)

@@ -111,7 +111,7 @@
     <string name="cmd_stop_not_running">没有可以停止的运行。</string>
     <string name="cmd_steer_usage">用法:/steer &lt;文本&gt; — 需要输入文本。</string>
     <string name="cmd_steer_not_running">当前没有运行中的任务。请发送普通消息。</string>
-    <string name="cmd_model_usage">用法:/model &lt;provider&gt;/&lt;model&gt; 或 /model &lt;model&gt;</string>
+    <string name="cmd_model_usage">用法:/model --provider &lt;provider&gt; &lt;model&gt; 或 /model &lt;model&gt;</string>
     <string name="cmd_model_set">已将模型设置为 %1$s,将从下一次运行起生效。</string>
     <string name="cmd_model_unset">服务器默认</string>
     <string name="cmd_model_none">(服务器未返回候选)</string>
@@ -188,4 +188,15 @@
     <string name="stream_channel_name">运行连接</string>
     <string name="stream_notification_title">运行中</string>
     <string name="stream_notification_text">正在与运行中的任务保持连接。点按打开对话。</string>
+    <string name="notif_tracking_lost">无法获取运行状态。请打开会话查看。</string>
+    <string name="notif_run_stopped">运行已停止</string>
+    <string name="cmd_resume_ambiguous">匹配多个会话。请指定会话 ID：\n%1$s</string>
+    <string name="settings_connection_busy">请等待运行结束后再修改服务器连接。</string>
+    <string name="stream_replay_truncated">断线期间的部分进度已过期。运行完成后将获取最终回复。</string>
+    <string name="cmd_next_run_option">/%1$s: %2$s（从下次运行起生效）</string>
+    <string name="cmd_discard_usage">仅对结果未知的运行使用 /discard [运行 ID]。</string>
+    <string name="cmd_discard_done">已确认丢弃结果未知的运行。未重新发送提示。</string>
+    <string name="cmd_cron_usage">/cron list；/cron add 名称 | 计划 | 提示；/cron edit ID 名称 | 计划 | 提示；/cron show|pause|resume|run|remove ID</string>
+    <string name="cmd_cron_done">定时任务：%1$s 已完成。</string>
+    <string name="cmd_cron_empty">没有定时任务。</string>
 </resources>

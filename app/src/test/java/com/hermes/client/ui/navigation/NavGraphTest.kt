@@ -69,6 +69,31 @@ class NavGraphTest {
     }
 
     @Test
+    fun slashCommandsNavigateToNewAndResumedConversations() {
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest) = when {
+                request.path!!.startsWith("/api/sessions/s1/messages") ->
+                    MockResponse().setBody("""{"messages":[{"role":"user","content":"saved question"}]}""")
+                request.path!!.startsWith("/api/sessions") ->
+                    MockResponse().setBody("""{"sessions":[{"id":"s1","title":"Saved chat"}]}""")
+                else -> MockResponse().setBody("{}")
+            }
+        }
+        saveSettings()
+        compose.setContent { HermesAppTheme { NavGraph("s1") } }
+        waitFor("saved question")
+        compose.onNodeWithTag("chatInput").performTextInput("/new")
+        compose.onNodeWithTag("sendButton").performClick()
+        compose.waitUntil(timeoutMillis = 10_000) {
+            compose.onAllNodesWithText("saved question").fetchSemanticsNodes().isEmpty()
+        }
+        compose.onNodeWithTag("chatInput").performTextInput("/resume s1")
+        compose.onNodeWithTag("sendButton").performClick()
+        waitFor("saved question")
+        compose.onNodeWithText("saved question").assertIsDisplayed()
+    }
+
+    @Test
     fun fullFlow_chatToDrawerToSettingsAndBack() {
         server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
             override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
@@ -308,7 +333,7 @@ class NavGraphTest {
             override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
                 return when {
                     (request.path ?: "").startsWith("/api/sessions/") ->
-                        MockResponse().setBody("""{"messages":[]}""")
+                        MockResponse().setBody("""{"messages":[{"role":"user","content":"opened from search"}]}""")
                     (request.path ?: "").startsWith("/api/sessions") ->
                         MockResponse().setBody(
                             """{"sessions":[{"id":"s1","title":"Hello"},{"id":"s2","title":"Other"}]}"""
@@ -337,5 +362,13 @@ class NavGraphTest {
         // Back returns to the home chat.
         compose.onNodeWithTag("searchBack").performClick()
         compose.onNodeWithTag("chatInput").assertIsDisplayed()
+        compose.onNodeWithTag("menuButton").performClick()
+        compose.onNodeWithTag("drawerSearch").performClick()
+        waitFor("Hello")
+        compose.onNode(hasTextExactly("Hello", includeEditableText = false)).performClick()
+        compose.onNodeWithTag("chatInput").assertIsDisplayed()
+        compose.onNodeWithTag("searchScreenInput").assertDoesNotExist()
+        waitFor("opened from search")
+        compose.onNodeWithText("opened from search").assertIsDisplayed()
     }
 }

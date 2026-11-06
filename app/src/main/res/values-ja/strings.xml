@@ -111,7 +111,7 @@
     <string name="cmd_stop_not_running">停止できる実行中の処理がありません。</string>
     <string name="cmd_steer_usage">使い方: /steer &lt;テキスト&gt; — テキストが必要です。</string>
     <string name="cmd_steer_not_running">実行中の処理がありません。通常のメッセージとして送信してください。</string>
-    <string name="cmd_model_usage">使い方: /model &lt;provider&gt;/&lt;model&gt; または /model &lt;model&gt;</string>
+    <string name="cmd_model_usage">使い方: /model --provider &lt;provider&gt; &lt;model&gt; または /model &lt;model&gt;</string>
     <string name="cmd_model_set">モデルを %1$s に設定しました。次の実行から反映されます。</string>
     <string name="cmd_model_unset">サーバー既定</string>
     <string name="cmd_model_none">（サーバーから候補が返りませんでした）</string>
@@ -188,4 +188,15 @@
     <string name="stream_channel_name">実行の接続</string>
     <string name="stream_notification_title">実行中</string>
     <string name="stream_notification_text">実行中のタスクに接続しています。タップで会話を開きます。</string>
+    <string name="notif_tracking_lost">実行状態を確認できません。会話を開いて確認してください。</string>
+    <string name="notif_run_stopped">実行が停止しました</string>
+    <string name="cmd_resume_ambiguous">複数の会話が該当します。IDを指定してください。\n%1$s</string>
+    <string name="settings_connection_busy">実行が終わってから接続先を変更してください。</string>
+    <string name="stream_replay_truncated">切断中の途中経過の一部は取得できません。完了後に最終応答を取得します。</string>
+    <string name="cmd_next_run_option">/%1$s: %2$s（次回の実行から適用）</string>
+    <string name="cmd_discard_usage">結果不明の実行に /discard [実行ID] を使用してください。</string>
+    <string name="cmd_discard_done">結果不明の実行を破棄しました。プロンプトは再送していません。</string>
+    <string name="cmd_cron_usage">/cron list、/cron add 名前 | スケジュール | プロンプト、/cron edit ID 名前 | スケジュール | プロンプト、/cron show|pause|resume|run|remove ID</string>
+    <string name="cmd_cron_done">定期実行: %1$s が完了しました。</string>
+    <string name="cmd_cron_empty">定期実行はありません。</string>
 </resources>

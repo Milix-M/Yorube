@@ -4,7 +4,7 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -189,106 +189,75 @@ class HermesApi(
     }
 
     suspend fun getRun(runId: String): RunStatusResponse {
-        val body = execute(get("/v1/runs/$runId"))
-        return HermesJson.decodeFromString(body)
+        val body = execute(get("/v1/runs/${runId.pathSegment()}"))
+        return HermesJson.decodeFromString<RunStatusResponse>(body).copy(
+            pendingControlsKnown = "pending_controls" in HermesJson.parseToJsonElement(body).jsonObject)
     }
 
-    suspend fun stopRun(runId: String) { execute(post("/v1/runs/$runId/stop", "{}")) }
+    suspend fun stopRun(runId: String) { execute(post("/v1/runs/${runId.pathSegment()}/stop", "{}")) }
 
-    suspend fun steerRun(runId: String, text: String) { execute(post("/v1/runs/$runId/steer", HermesJson.encodeToString(SteerRequest(text)))) }
+    suspend fun steerRun(runId: String, text: String) { execute(post("/v1/runs/${runId.pathSegment()}/steer", HermesJson.encodeToString(SteerRequest(text)))) }
 
-    suspend fun answerApproval(runId: String, answer: ApprovalAnswer) { execute(post("/v1/runs/$runId/approval", HermesJson.encodeToString(answer))) }
+    suspend fun answerApproval(runId: String, answer: ApprovalAnswer) { execute(post("/v1/runs/${runId.pathSegment()}/approval", HermesJson.encodeToString(answer))) }
 
-    suspend fun answerClarify(runId: String, request: ClarifyRequest) { execute(post("/v1/runs/$runId/clarify", HermesJson.encodeToString(request))) }
+    suspend fun answerClarify(runId: String, request: ClarifyRequest) { execute(post("/v1/runs/${runId.pathSegment()}/clarify", HermesJson.encodeToString(request))) }
 
-    suspend fun resolveUnknown(runId: String, request: ResolveUnknownRequest) { execute(post("/v1/runs/$runId/resolve-unknown", HermesJson.encodeToString(request))) }
+    suspend fun resolveUnknown(runId: String, request: ResolveUnknownRequest) { execute(post("/v1/runs/${runId.pathSegment()}/resolve-unknown", HermesJson.encodeToString(request))) }
 
     /**
      * SSE stream of run events. Skips keepalive comment lines.
      * Ends after a terminal run.* event or when the collector cancels.
      */
-    fun runEvents(runId: String): Flow<RunEvent> = callbackFlow {
-        val call = client.newCall(get("/v1/runs/$runId/events"))
-        val response = try {
-            call.execute()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            close(e)
-            return@callbackFlow
-        }
-        // The blocking reader below cannot notice cancellation on its own:
-        // drop the socket as soon as this producer goes away (resubscribe,
-        // collector gone) so the read unblocks and no duplicate SSE
-        // subscription lingers on the server.
-        val completionHook = coroutineContext[Job]?.invokeOnCompletion {
-            try { response.close() } catch (_: Exception) { }
-            try { call.cancel() } catch (_: Exception) { }
-        }
-        if (!response.isSuccessful) {
-            val body = try { response.body?.string() ?: "" } catch (_: Exception) { "" }
-            response.close()
+    fun runEvents(runId: String): Flow<RunEvent> = runEventFrames(runId).let { frames ->
+        kotlinx.coroutines.flow.flow { frames.collect { emit(it.event) } }
+    }
+
+    /** Resume with the last frame acknowledged by the engine, never the socket reader. */
+    fun runEventFrames(runId: String, after: Long? = null): Flow<RunFrame> = callbackFlow {
+        val headers = after?.let { mapOf("Last-Event-ID" to it.toString()) } ?: emptyMap()
+        val call = client.newCall(get("/v1/runs/${runId.pathSegment()}/events", headers))
+        val readerJob = launch(Dispatchers.IO) {
             try {
-                throw parseError(response.code, body)
-            } catch (e: HermesApiException) {
-                close(e)
-                return@callbackFlow
-            }
-        }
-        try {
-            // OkHttp always delivers a body here, even when empty.
-            val responseBody = response.body ?: throw IOException("empty response")
-            val reader = responseBody.charStream().buffered()
-            var eventName = "message"
-            val dataLines = StringBuilder()
-            var terminated = false
-            fun dispatch() {
-                val data = parseSseData(dataLines.toString())
-                dataLines.clear()
-                if (data == null) {
-                    eventName = "message"
-                    return
-                }
-                val name = data.str("event")?.takeIf { it.isNotBlank() } ?: eventName
-                trySend(parseRunEvent(name, data))
-                if (data.str("event")?.startsWith("run.") == true) {
-                    terminated = true
-                    close()
-                    return
-                }
-                eventName = "message"
-            }
-            reader.useLines { lines ->
-                for (line in lines) {
-                    when {
-                        line.isEmpty() -> dispatch()
-                        line.startsWith(":") -> { /* keepalive comment, skip */ }
-                        line.startsWith("event:") -> eventName = line.removePrefix("event:").trim()
-                        line.startsWith("data:") -> dataLines.append(line.removePrefix("data:").trim()).append('\n')
+                call.execute().use { response ->
+                    if (!response.isSuccessful) throw parseError(response.code, runCatching { response.body?.string().orEmpty() }.getOrDefault(""))
+                    val reader = (response.body ?: throw IOException("empty response")).charStream().buffered()
+                    var name = "message"
+                    var sequence: Long? = null
+                    val data = StringBuilder()
+                    var terminal = false
+                    suspend fun dispatch() {
+                        val obj = parseSseData(data.toString())
+                        if (obj != null) {
+                            val payload = (obj["data"] as? JsonObject) ?: obj
+                            val event = parseRunEvent(obj.str("event")?.ifBlank { null } ?: name, payload)
+                            send(RunFrame(sequence ?: obj.long("seq"), event))
+                            terminal = event is RunEvent.Terminal
+                        }
+                        data.clear()
+                        name = "message"
+                        sequence = null
                     }
-                    if (terminated || isClosedForSend) break
+                    while (!terminal) {
+                        val line = reader.readLine() ?: break
+                        when {
+                            line.isEmpty() -> dispatch()
+                            line.startsWith("event:") -> name = line.substring(6).trim()
+                            line.startsWith("id:") -> sequence = line.substring(3).trim().toLongOrNull()
+                            line.startsWith("data:") -> data.append(line.substring(5).removePrefix(" ")).append('\n')
+                        }
+                    }
+                    if (!terminal && data.isNotEmpty()) dispatch()
                 }
-                if (dataLines.isNotBlank()) dispatch()
+                close()
+            } catch (e: CancellationException) {
+                close(e)
+            } catch (e: Exception) {
+                close(e)
             }
-            // A clean EOF without a terminal event ends the stream: close so the
-            // collector can poll the run status and re-subscribe instead of hanging.
-            if (!terminated) close()
-        } catch (e: Exception) {
-            // Our own cancel-close above also lands here as an IOException
-            // while the channel is already gone: don't report it as a failure.
-            // Cancellation during collection also lands here: propagate it
-            // without reporting as a stream failure.
-            if (e is CancellationException) {
-                try { close() } catch (_: Exception) { }
-                throw e
-            }
-            if (isClosedForSend) close() else close(e)
-        } finally {
-            try { completionHook?.dispose() } catch (_: Exception) { }
-            try { response.close() } catch (_: Exception) { }
         }
-        awaitClose { call.cancel() }
-    }.flowOn(Dispatchers.IO)
+        // Runs concurrently with the blocking reader, including while awaiting headers.
+        awaitClose { call.cancel(); readerJob.cancel() }
+    }
 
     // -- sessions (list and history display) --
 
@@ -323,7 +292,7 @@ class HermesApi(
     }
 
     suspend fun getSessionMessages(sessionId: String): List<SessionMessage> {
-        val body = execute(get("/api/sessions/$sessionId/messages"))
+        val body = execute(get("/api/sessions/${sessionId.pathSegment()}/messages"))
         return try {
             val el = HermesJson.parseToJsonElement(body)
             val arr = when {
@@ -349,14 +318,16 @@ class HermesApi(
         }
     }
 
-    suspend fun deleteSession(sessionId: String) { execute(delete("/api/sessions/$sessionId")) }
+    suspend fun deleteSession(sessionId: String) { execute(delete("/api/sessions/${sessionId.pathSegment()}")) }
 
     suspend fun forkSession(sessionId: String, title: String? = null): String? {
         val payload = if (title != null) "{\"title\":${title.jsonQuote()}}" else "{}"
         return try {
-            val body = execute(post("/api/sessions/$sessionId/fork", payload))
+            val body = execute(post("/api/sessions/${sessionId.pathSegment()}/fork", payload))
             val o = HermesJson.parseToJsonElement(body) as? JsonObject
             o?.str("session_id", "id")
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             null
         }
@@ -375,6 +346,8 @@ class HermesApi(
             val o = HermesJson.parseToJsonElement(body) as? JsonObject
             val session = o?.get("session") as? JsonObject ?: o
             session?.str("session_id", "id")
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             null
         }
@@ -386,7 +359,7 @@ class HermesApi(
      * callers can tell a dead session from an untitled one.
      */
     suspend fun getSession(sessionId: String): SessionInfo? {
-        val body = execute(get("/api/sessions/$sessionId"))
+        val body = execute(get("/api/sessions/${sessionId.pathSegment()}"))
         return try {
             val root = HermesJson.parseToJsonElement(body) as? JsonObject ?: return null
             val o = root["session"] as? JsonObject ?: root
@@ -404,7 +377,26 @@ class HermesApi(
 
     /** PATCH /api/sessions/{id} — rename a session (the /title path). */
     suspend fun updateSessionTitle(sessionId: String, title: String) {
-        execute(patch("/api/sessions/$sessionId", "{\"title\":${title.jsonQuote()}}"))
+        execute(patch("/api/sessions/${sessionId.pathSegment()}", "{\"title\":${title.jsonQuote()}}"))
+    }
+
+    suspend fun resolveUnknownRun(id: String, admission: String, generation: Long) {
+        val body = kotlinx.serialization.json.buildJsonObject {
+            put("admission_id", kotlinx.serialization.json.JsonPrimitive(admission))
+            put("execution_generation", kotlinx.serialization.json.JsonPrimitive(generation))
+        }
+        execute(post("/v1/runs/${id.pathSegment()}/resolve-unknown", body.toString()))
+    }
+
+    /** Explicit cron operations exposed by the Hermes API; no generic command forwarding. */
+    suspend fun cron(action: String, id: String? = null, body: JsonObject? = null): String = when (action) {
+        "list" -> execute(get("/api/jobs?include_disabled=true"))
+        "show" -> execute(get("/api/jobs/${requireNotNull(id).pathSegment()}"))
+        "add", "create" -> execute(post("/api/jobs", requireNotNull(body).toString()))
+        "edit" -> execute(patch("/api/jobs/${requireNotNull(id).pathSegment()}", requireNotNull(body).toString()))
+        "remove" -> execute(delete("/api/jobs/${requireNotNull(id).pathSegment()}"))
+        "pause", "resume", "run" -> execute(post("/api/jobs/${requireNotNull(id).pathSegment()}/$action", "{}"))
+        else -> throw IllegalArgumentException("Unknown cron operation")
     }
 
     companion object {
@@ -419,7 +411,8 @@ class HermesApi(
             .retryOnConnectionFailure(true)
             .build()
 
-        private fun String.jsonQuote(): String =
-            "\"" + replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+        private fun String.pathSegment(): String = java.net.URLEncoder.encode(this, "UTF-8").replace("+", "%20")
+
+        private fun String.jsonQuote(): String = kotlinx.serialization.json.JsonPrimitive(this).toString()
     }
 }

@@ -551,8 +551,10 @@ class HermesApiTest {
         // error (callbackFlow treats CancellationException as cancel, not
         // failure). The producer still executes the CancellationException
         // branch for line coverage; the collector sees an empty stream.
-        val events = cancellingReadApi.runEvents("r1").toList()
-        assertTrue(events.isEmpty())
+        try {
+            cancellingReadApi.runEvents("r1").toList()
+            fail("expected cancellation")
+        } catch (_: kotlinx.coroutines.CancellationException) { }
     }
 
     @Test

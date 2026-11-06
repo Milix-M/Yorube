@@ -1,61 +1,39 @@
 # Yorube
 
-[Hermes Agent](https://github.com/nousresearch/hermes-agent) の非公式 Android クライアントです。
+[Hermes Agent](https://github.com/nousresearch/hermes-agent) の非公式 Android クライアントです。サーバー上のHermesに接続し、チャットや実行状況の確認、承認・質問への回答ができます。
 
-名前の **Yorube**（ヨルベ）は「寄る辺」、つまり頼りにできる場所に由来します。サーバー上のエージェントに、いつでも頼れる窓口を、という思いを込めています。
+- 会話の履歴・検索・ピン留め
+- 複数会話のバックグラウンド受信と、完了・承認・質問の端末内通知
+- スラッシュコマンドによる操作（[対応コマンド](docs/COMMANDS.md)）
 
-## できること
+## はじめ方
 
-| 機能 | 内容 |
-| --- | --- |
-| チャット | 送信・中断・実行中の一言 (steer)・再接続つきの SSE ストリーミング受信 |
-| 進捗表示 | 思考中インジケータ、ツール実行の折りたたみログ (失敗も控えめな一行表示) |
-| 承認フロー | 危険コマンドの承認ダイアログ、実行中の質問への回答 |
-| 履歴 | 日付セクションつきサイドバー、ピン留め、検索、削除 |
-| 他インターフェイスセッション | Discord 等が所有する会話は読み取り専用で開き、ワンタップで分岐 (fork) して続行 |
-| 通知 | FCM 中継経由の完了通知、タップで該当会話を開く |
-| 表示言語 | 日本語・English・中文・한국어＋システム既定の切替え (設定画面) |
+Android 8.0以上と、HTTPSで接続できるHermes APIサーバーが必要です。サーバー側で `API_SERVER_ENABLED=true` と `API_SERVER_KEY` を設定してください。
 
-## 必要なもの
+1. アプリの設定で `Base URL` と `APIキー` を入力し、保存します。Cloudflare Accessを使う場合は `Client ID / Client Secret` も入力します。
+2. `接続試験` で接続を確認します。
+3. Androidの通知を許可し、アプリの「通知を有効にする」をオンにします。
+4. 新しい会話を開いてメッセージを送ります。
 
-Hermes API サーバー (`gateway/platforms/api_server.py`) を HTTPS で公開したものが必要です。推奨は Cloudflare Tunnel と Cloudflare Access です。Hermes 本体は `127.0.0.1:8642` のまま置きます。トンネルで `https://hermes.example.com` に出す構成です。サーバー側では `API_SERVER_ENABLED=true` と `API_SERVER_KEY` を設定します。Android 8.0 (API 26) 以上が必要です。
+## 利用上の注意
 
-## 動かし方
-
-1. アプリの設定画面で `Base URL` と `APIキー` を入れます
-   - Cloudflare Access で保護している場合は `Client ID / Client Secret` も入れます
-2. `接続試験` で `health` と機能検出 (`run_status` / `run_events_sse` / `run_stop` / `run_steer` / …) を確認します
-3. 会話を開いて送信します。中断は ■ ボタンを使います。実行中の一言は入力欄の ↑ ボタン (steer) で送ります
-4. 通知が要る場合は [`server/fcm-relay/README.md`](server/fcm-relay/README.md) に従い中継を立てます。Firebase の4項目 (Project ID / App ID / APIキー / Sender ID) は設定画面に入れます。`google-services.json` は不要です
-
-## 構成
-
-```
-app/                   Androidクライアント (Kotlin + Jetpack Compose)
-  data/api/            HermesApi: REST + SSE、型、事象の解釈
-  data/store/          設定の保存 (DataStore)、言語ロケール
-  data/fcm/            FCM受信と中継登録
-  ui/                  一覧、会話、設定、ナビゲーション
-server/fcm-relay/      完了通知の中継
-```
-
-## 他インターフェイスから開始した会話について
-
-Hermes サーバーはセッションの単一所有者を強制します。これは並行実行によるセッション破壊を防ぐためです。
-CLI / Discord 等が所有するセッションへの書き込みは `permission_denied` で拒否されます。
-これはサーバー側の仕様で、アプリの設定では変えられません。
-アプリではその会話を読み取り専用で開き、「分岐して続ける」ダイアログから自分のコピーに分岐して続けられます。
-アプリから送信に成功した会話は端末内に「アプリ所有」として記録されます。その会話は他インターフェイス非表示をオンにしても隠れません。
+- バックグラウンド受信中は常駐通知が表示されます。省電力制御で通知が遅れる場合があります。強制停止や端末の再起動後は、アプリを開いて監視を再開してください。
+- 通知対象は、このアプリが追跡している実行です。他のクライアントや定期実行から始まった処理は自動で監視しません。
+- CLI・Discordなどが所有する会話は読み取り専用です。「分岐して続ける」で続行できます。
+- 実行中に追加指示や `/queue` を送るには、「Enterで送信する」をオンにしてください。失敗・中断・結果不明の実行後は、キューを自動送信しません。
 
 ## ビルド
+
+JDK 17とAndroid SDKを用意し、次を実行します。
 
 ```sh
 ./gradlew :app:assembleDebug
 ```
 
-CI (`.github/workflows/android.yml`) でも同じものを作ります。成果物は debug APK です。
-単体テストは `./gradlew :app:testDebugUnitTest`、カバレッジ検証は `./gradlew :app:jacocoCoverageVerification` です。
+Windowsでは `gradlew.bat :app:assembleDebug` を使います。APKは `app/build/outputs/apk/debug/app-debug.apk` に生成されます。
 
-## 既知の制限
+## 詳細
 
-他インターフェイスセッションの一覧可否は、サーバーが所有者メタデータを返さない場合、過去の `permission_denied` 記録に依存します。SSE 購読は前面のみです。バックグラウンドでは Doze で切れるため、復帰時は状態取得で補います。`unknown` 終端の再送はしません (二重実行防止)。新規会話を始めてください。
+- [対応コマンドと引数](docs/COMMANDS.md)
+- [設計・API仕様](docs/DESIGN.md)
+- [修正内容と検証範囲](docs/PR-AUDIT.md)

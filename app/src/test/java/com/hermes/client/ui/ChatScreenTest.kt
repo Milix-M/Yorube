@@ -3,6 +3,11 @@ package com.hermes.client.ui
 import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertWidthIsEqualTo
+import androidx.compose.ui.test.assertHeightIsEqualTo
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
@@ -31,6 +36,14 @@ class ChatScreenTest {
 
     @get:Rule
     val compose = createComposeRule()
+
+    @Test
+    fun assistantAvatarHasUsableDefaultDimensions() {
+        compose.setContent {
+            HermesAppTheme { com.hermes.client.ui.theme.GeminiSparkAvatar(modifier = Modifier.testTag("avatar")) }
+        }
+        compose.onNodeWithTag("avatar").assertWidthIsEqualTo(28.dp).assertHeightIsEqualTo(28.dp)
+    }
 
     @Test
     fun emptySettingsSend_showsConfigError() {

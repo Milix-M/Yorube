@@ -169,11 +169,11 @@ class SlashCommandTest {
         )
         // edit/move manage the gateway's shared queue: no app equivalent.
         assertEquals(
-            SlashCommand.Unsupported("/queue edit"),
+            SlashCommand.Queue(QueueOp.Edit(1, "x")),
             parseSlashCommand("/queue edit 1 x"),
         )
         assertEquals(
-            SlashCommand.Unsupported("/queue move"),
+            SlashCommand.Queue(QueueOp.Move(1, 2)),
             parseSlashCommand("/queue move 1 2"),
         )
     }
@@ -182,21 +182,21 @@ class SlashCommandTest {
     fun unsupportedCommands_areRecognized() {
         // A spread across every registry category, incl. aliases.
         for (typed in listOf(
-            "/start", "/topic", "/redraw", "/history", "/save", "/prompt", "/compose",
+            "/start", "/topic",
             "/undo", "/handoff", "/worktree", "/compress", "/compact", "/rollback",
-            "/snapshot", "/snap", "/discard", "/pause", "/btw", "/agents", "/tasks",
+            "/snapshot", "/snap", "/pause", "/btw",
             "/journey", "/goal", "/heartbeat", "/hb", "/refine", "/review", "/loop",
             "/plan", "/moa", "/subgoal", "/egress", "/context", "/ctx", "/whoami",
-            "/profile", "/sethome", "/export", "/import", "/config", "/codex-runtime",
+            "/profile", "/sethome", "/export", "/import", "/codex-runtime",
             "/personality", "/statusbar", "/battery", "/timestamps", "/diff",
-            "/verbose", "/focus", "/footer", "/yolo", "/approvals", "/reasoning",
-            "/fast", "/skin", "/indicator", "/voice", "/wake", "/busy", "/autoprune",
-            "/tools", "/memory", "/bundles", "/pet", "/hatch", "/learn", "/init",
-            "/cron", "/suggestions", "/blueprint", "/curator", "/kanban", "/reload",
-            "/reload-mcp", "/reload_skills", "/reload-skills", "/browser", "/plugins",
-            "/palette", "/restart", "/subscription", "/login", "/topup", "/insights",
-            "/platforms", "/platform", "/copy", "/paste", "/image", "/update",
-            "/version", "/v", "/debug", "/quit", "/exit",
+            "/verbose", "/focus", "/footer", "/yolo", "/approvals",
+            "/skin", "/indicator", "/voice", "/wake", "/busy", "/autoprune",
+            "/memory", "/bundles", "/pet", "/hatch", "/learn", "/init",
+            "/suggestions", "/blueprint", "/curator", "/kanban", "/reload",
+            "/reload-mcp", "/browser", "/plugins",
+            "/restart", "/subscription", "/login", "/topup", "/insights",
+            "/platforms", "/platform", "/paste", "/image", "/update",
+            "/debug", "/quit", "/exit",
         )) {
             assertEquals("for $typed", SlashCommand.Unsupported(typed), parseSlashCommand(typed))
         }

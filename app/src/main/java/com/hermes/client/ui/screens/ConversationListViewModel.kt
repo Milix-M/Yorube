@@ -60,17 +60,14 @@ class ConversationListViewModel(
 
     fun togglePin(sessionId: String) {
         viewModelScope.launch {
-            setPinned(sessionId, !pinnedIds.contains(sessionId))
+            setPinned(sessionId, null)
         }
     }
 
     fun isPinned(sessionId: String): Boolean = pinnedIds.contains(sessionId)
 
-    private suspend fun setPinned(sessionId: String, pinned: Boolean) {
-        val current = container.settingsStore.current()
-        val next = if (pinned) current.pinnedSessionIds + sessionId
-        else current.pinnedSessionIds - sessionId
-        container.settingsStore.save(current.copy(pinnedSessionIds = next))
+    private suspend fun setPinned(sessionId: String, pinned: Boolean?) {
+        val next = container.settingsStore.setPinned(sessionId, pinned)
         pinnedIds = next
         sessions = sortPinnedFirst(sessions, next)
     }

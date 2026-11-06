@@ -86,10 +86,6 @@ dependencies {
     implementation(libs.datastore.preferences)
     implementation(libs.markdown.renderer)
     implementation(libs.markdown.renderer.m3)
-    // FCM only. No google-services plugin: FirebaseApp is initialized
-    // manually from Settings (FirebaseConfig), so the build works without
-    // google-services.json. See data/fcm/FirebaseInit.kt.
-    implementation(libs.firebase.messaging)
     testImplementation(libs.junit)
     testImplementation(libs.mockwebserver)
     testImplementation(libs.coroutines.test)
@@ -97,6 +93,9 @@ dependencies {
     testImplementation(libs.compose.ui.test)
     testImplementation(libs.compose.ui.test.junit4)
     testImplementation(libs.robolectric)
+    // Pin the native test libraries with Linux ARM64 support.
+    testImplementation(libs.robolectric.native)
+    testImplementation(libs.conscrypt)
     testImplementation(libs.test.core)
 }
 
@@ -113,6 +112,18 @@ jacoco {
 }
 
 tasks.withType<Test> {
+    // Robolectric 4.17 requires access to these JDK internals on Java 17+.
+    jvmArgs(
+        "--add-opens=java.base/java.lang=ALL-UNNAMED",
+        "--add-opens=java.base/java.util=ALL-UNNAMED",
+        "--add-opens=java.base/java.io=ALL-UNNAMED",
+        "--add-opens=java.base/java.net=ALL-UNNAMED",
+        "--add-opens=java.base/java.security=ALL-UNNAMED",
+        "--add-opens=java.base/java.text=ALL-UNNAMED",
+        "--add-opens=java.base/jdk.internal.access=ALL-UNNAMED",
+        "--add-opens=java.desktop/java.awt.font=ALL-UNNAMED",
+        "--add-opens=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED",
+    )
     configure<JacocoTaskExtension> {
         isIncludeNoLocationClasses = true
         excludes = listOf("jdk.internal.*")
@@ -136,11 +147,11 @@ val jacocoExcludes = listOf(
 fun jacocoClassDirs(): FileCollection {
     val buildDir = layout.buildDirectory.get().asFile
     return files(
-        fileTree("$buildDir/intermediates/javac/debug/classes") {
+        fileTree("$buildDir/intermediates/javac/debug/compileDebugJavaWithJavac/classes") {
             include("com/hermes/client/**/*")
             exclude(jacocoExcludes)
         },
-        fileTree("$buildDir/tmp/kotlin-classes/debug") {
+        fileTree("$buildDir/intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes") {
             include("com/hermes/client/**/*")
             exclude(jacocoExcludes)
         },
@@ -161,6 +172,7 @@ tasks.register<JacocoReport>("jacocoTestReport") {
         xml.required.set(true)
         html.required.set(true)
     }
+    doFirst { check(jacocoClassDirs().files.isNotEmpty()) { "No application classes found for coverage" } }
     classDirectories.setFrom(jacocoClassDirs())
     sourceDirectories.setFrom(files("src/main/java"))
     executionData.setFrom(jacocoExec())
@@ -177,6 +189,7 @@ tasks.register<JacocoCoverageVerification>("jacocoCoverageVerification") {
             }
         }
     }
+    doFirst { check(jacocoClassDirs().files.isNotEmpty()) { "No application classes found for coverage" } }
     classDirectories.setFrom(jacocoClassDirs())
     sourceDirectories.setFrom(files("src/main/java"))
     executionData.setFrom(jacocoExec())

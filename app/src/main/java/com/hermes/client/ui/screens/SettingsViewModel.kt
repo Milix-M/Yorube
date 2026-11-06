@@ -8,7 +8,6 @@ import androidx.lifecycle.viewModelScope
 import com.hermes.client.AppContainer
 import com.hermes.client.R
 import com.hermes.client.data.api.featureEnabled
-import com.hermes.client.data.fcm.FirebaseInit
 import com.hermes.client.data.store.ClientSettings
 import com.hermes.client.data.store.LANGUAGE_SYSTEM
 import com.hermes.client.data.store.SettingsStore
@@ -73,7 +72,7 @@ class SettingsViewModel(
             val stored = store.current()
             val keepForeign = stored.foreignSessionIds
             val keepAppOwned = stored.appOwnedSessionIds
-            val newSettings = ClientSettings(
+            val newSettings = stored.copy(
                 baseUrl = baseUrl,
                 apiKey = apiKey,
                 model = model,
@@ -93,11 +92,14 @@ class SettingsViewModel(
                 appOwnedSessionIds = keepAppOwned,
                 foreignSessionIds = keepForeign,
             )
-            store.save(newSettings)
-            // Start FCM as soon as Firebase settings land: the SDK then
-            // delivers a token via onNewToken instead of waiting for the
-            // connection test or the first run to initialize it.
-            FirebaseInit.ensureInitialized(container.appContext, newSettings)
+            if (container.runStreams.working.value &&
+                (stored.baseUrl != newSettings.baseUrl.trim().removeSuffix("/") || stored.apiKey != newSettings.apiKey.trim() ||
+                 stored.cfClientId != newSettings.cfClientId.trim() || stored.cfClientSecret != newSettings.cfClientSecret.trim())) {
+                testResult = container.appContext.getString(R.string.settings_connection_busy)
+                testOk = false
+                return@launch
+            }
+            store.save(newSettings, preserveSessionState = true)
             saved = true
         }
     }
@@ -117,7 +119,7 @@ class SettingsViewModel(
                     testOk = false
                     return@launch
                 }
-                val api = container.api()
+                val api = container.api(draft())
                 val healthy = api.checkHealth()
                 val caps = try {
                     api.getCapabilities()
@@ -130,12 +132,7 @@ class SettingsViewModel(
                 }
                 val flags = listOf("run_status", "run_events_sse", "run_stop", "run_steer", "run_approval_response")
                     .joinToString(", ") { "$it=${caps.featureEnabled(it)}" }
-                val fcm = if (draft().firebaseConfigured) {
-                    FirebaseInit.ensureInitialized(container.appContext, draft())
-                } else {
-                    false
-                }
-                testResult = "health=$healthy\n$flags\nfcm_ready=$fcm"
+                testResult = "health=$healthy\n$flags"
                 testOk = healthy
             } catch (e: Exception) {
                 testResult = (e.message ?: e.javaClass.simpleName).take(300)

@@ -19,20 +19,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.launchIn
 
-/**
- * Foreground service that exists only while a run is active: it keeps
- * the process in the foreground state so the [RunStreamEngine] SSE loop
- * survives the app being backgrounded (Doze, task switching) instead of
- * dying with the chat screen. It owns no stream itself — the engine in
- * the app container does — and stops itself as soon as the engine
- * reports no active run. Not sticky: a process restart loses the run
- * record anyway, and the chat re-derives state from history + status.
- */
+/** Keeps active run tracking in a foreground service; restores saved runs on restart. */
 class RunStreamService : Service() {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var watchJob: Job? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -43,29 +38,21 @@ class RunStreamService : Service() {
         // startForegroundService obliges a prompt startForeground, even
         // when this start turns out to carry nothing to keep alive.
         startForeground(NOTIFICATION_ID, buildNotification(sessionId))
-        if (runId == null) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
         val engine = (application as HermesApp).container.runStreams
-        if (engine.activeRun.value?.runId != runId) {
-            engine.start(runId, sessionId)
-        }
-        watchEngine(engine)
-        return START_NOT_STICKY
-    }
-
-    /** Stops the service the moment the engine's active run ends. */
-    private fun watchEngine(engine: RunStreamEngine) {
-        if (watchJob?.isActive == true) return
-        watchJob = scope.launch {
-            engine.activeRun.collect { active ->
-                if (active == null) {
+        watchJob?.cancel()
+        watchJob = combine(engine.working, engine.activeRuns) { working, runs -> working to runs }
+            .onStart {
+                if (runId != null) engine.start(runId, sessionId)
+                else if (intent == null) engine.restore()
+            }.onEach { (working, runs) ->
+                if (!working) {
                     stopForeground(STOP_FOREGROUND_REMOVE)
-                    stopSelf()
+                    stopSelf(startId)
+                } else {
+                    startForeground(NOTIFICATION_ID, buildNotification(runs.lastOrNull()?.sessionId.orEmpty()))
                 }
-            }
-        }
+            }.launchIn(scope)
+        return START_STICKY
     }
 
     private fun buildNotification(sessionId: String): Notification {
@@ -108,12 +95,19 @@ class RunStreamService : Service() {
         private const val EXTRA_SESSION_ID = "session_id"
 
         /** Asks the service to keep the process alive for [runId]. */
-        fun start(context: Context, runId: String, sessionId: String) {
+        fun start(context: Context, runId: String, sessionId: String): Boolean {
             val intent = Intent(context, RunStreamService::class.java).apply {
                 putExtra(EXTRA_RUN_ID, runId)
                 putExtra(EXTRA_SESSION_ID, sessionId)
             }
-            ContextCompat.startForegroundService(context, intent)
+            return try {
+                ContextCompat.startForegroundService(context, intent)
+                true
+            } catch (_: IllegalStateException) {
+                false // Android forbids some background starts; the visible UI can retry.
+            } catch (_: SecurityException) {
+                false
+            }
         }
     }
 }

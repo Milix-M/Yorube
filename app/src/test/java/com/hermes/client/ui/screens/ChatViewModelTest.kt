@@ -5,18 +5,17 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.lifecycle.viewModelScope
 import com.hermes.client.AppContainer
 import com.hermes.client.HermesApp
-import com.hermes.client.data.stream.reconnectDelayMs
-import com.hermes.client.data.stream.MAX_RECONNECT_ATTEMPTS
-import com.hermes.client.testutil.shutdownServer
 import com.hermes.client.data.store.ClientSettings
 import com.hermes.client.testutil.awaitCondition
 import com.hermes.client.testutil.runVmTest
+import com.hermes.client.testutil.shutdownServer
 import kotlinx.coroutines.cancel
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import com.hermes.client.data.api.HermesJson
+import com.hermes.client.data.stream.reconnectDelayMs
 import kotlinx.serialization.json.jsonObject
 import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
@@ -50,6 +49,9 @@ class ChatViewModelTest {
 
     @After
     fun tearDown() {
+        // The reattach test parks a foreign run's stream on a 10 s
+        // headers delay; a plain server.shutdown() gives up on it
+        // after 5 s (see shutdownServer).
         shutdownServer(server)
     }
 
@@ -584,7 +586,7 @@ class ChatViewModelTest {
         vm.input = "more"
         vm.onSend()
         awaitCondition { !vm.busy }
-        assertTrue(vm.messages.any { it.kind == MsgKind.ASSISTANT && it.text.contains("followed up") })
+        assertTrue(vm.messages.any { it.kind == MsgKind.ASSISTANT && it.text == "done" })
     }
 
     @Test
@@ -655,7 +657,7 @@ class ChatViewModelTest {
         vm.onSend()
         awaitCondition { !vm.busy }
         assertNull(vm.error)
-        assertEquals("", vm.sessionId)
+        assertEquals("r1", vm.sessionId)
         assertTrue(vm.messages.any { it.kind == MsgKind.ASSISTANT && it.text == "hi" })
     }
 
@@ -711,17 +713,19 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun reconnectFailure_reportsError() = runVmTest {
+    fun reconnectServerError_retriesAndRecovers() = runVmTest {
         server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
         server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
         server.enqueue(MockResponse().setBody(""))
         server.enqueue(MockResponse().setResponseCode(500).setBody("gone"))
+        server.enqueue(MockResponse().setBody("""{"status":"completed","output":"recovered"}"""))
         val c = containerWithSettings()
         val vm = ChatViewModel(c, null)
         vm.input = "hi"
         vm.onSend()
-        awaitCondition { vm.error != null }
-        assertTrue(vm.error!!.contains("500"))
+        awaitCondition { !vm.busy }
+        assertNull(vm.error)
+        assertTrue(vm.messages.any { it.text == "recovered" })
     }
 
     @Test
@@ -882,7 +886,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun retriesExhausted_reportsStreamEnd() = runVmTest {
+    fun extendedOutage_keepsTrackingUntilServerCompletes() = runVmTest {
         server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
         // One status read for the initial subscribe plus one per reconnect
         // poll, each followed by an empty stream: 16 rounds exhaust the
@@ -891,13 +895,14 @@ class ChatViewModelTest {
             server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
             server.enqueue(MockResponse().setBody(""))
         }
+        server.enqueue(MockResponse().setBody("""{"status":"completed","output":"recovered"}"""))
         val c = containerWithSettings()
         val vm = ChatViewModel(c, null)
         vm.input = "hi"
         vm.onSend()
-        awaitCondition(timeoutMs = 25_000) { vm.error != null }
-        assertTrue(vm.error!!.isNotBlank())
-        assertEquals(false, vm.busy)
+        awaitCondition(timeoutMs = 25_000) { !vm.busy }
+        assertNull(vm.error)
+        assertTrue(vm.messages.any { it.text == "recovered" })
     }
 
     @Test
@@ -929,7 +934,6 @@ class ChatViewModelTest {
         assertEquals(4000L, reconnectDelayMs(2))
         assertEquals(8000L, reconnectDelayMs(3))
         assertEquals(8000L, reconnectDelayMs(14))
-        assertEquals(15, MAX_RECONNECT_ATTEMPTS)
     }
 
     @Test
@@ -1640,7 +1644,7 @@ class ChatViewModelTest {
             assertTrue(vm.busy)
             vm.forkAndContinue()
             // Still on the running conversation: no fork happened.
-            assertEquals("", vm.sessionId)
+            assertEquals("r1", vm.sessionId)
             assertTrue(vm.busy)
             holdRun[0] = false
             awaitCondition { !vm.busy }
@@ -1807,7 +1811,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun reconnect_pollTransientExhausted_reportsNetwork() = runVmTest {
+    fun reconnect_pollOutageKeepsRunActive() = runVmTest {
         // Every status poll drops at the transport level: 15 fruitless
         // reconnect cycles exhaust the budget and report a network error.
         val polls = java.util.concurrent.atomic.AtomicInteger(0)
@@ -1833,9 +1837,11 @@ class ChatViewModelTest {
         val vm = ChatViewModel(c, null)
         vm.input = "hi"
         vm.onSend()
-        awaitCondition(timeoutMs = 60_000) { vm.error != null }
-        assertTrue("error=${vm.error}", vm.error!!.contains("Connection lost") || vm.error!!.contains("接続が切れ"))
-        assertEquals(false, vm.busy)
+        awaitCondition { polls.get() > 5 }
+        assertNull(vm.error)
+        assertTrue(vm.busy)
+        c.runStreams.close()
+        vm.viewModelScope.cancel()
     }
 
     @Test
@@ -1879,7 +1885,7 @@ class ChatViewModelTest {
         // output is intentionally not duplicated: the reply already arrived.
         val assistants = vm.messages.filter { it.kind == MsgKind.ASSISTANT }
         assertEquals(1, assistants.size)
-        assertEquals((0 until 16).joinToString("") { "p$it" }, assistants[0].text)
+        assertEquals("fin", assistants[0].text)
     }
 
     @Test
@@ -1971,7 +1977,7 @@ class ChatViewModelTest {
     fun slashModelWithArg_updatesSettingsForNextRun() = runVmTest {
         val c = containerWithSettings()
         val vm = ChatViewModel(c, null)
-        vm.input = "/model openai/gpt-5"
+        vm.input = "/model --provider openai gpt-5"
         vm.onSend()
         assertEquals("", vm.input)
         awaitCondition { c.settingsStore.current().model == "gpt-5" }
@@ -3254,9 +3260,8 @@ class ChatViewModelTest {
         assertNull(vm.error)
         assertEquals("s1", vm.sessionId)
     }
-
     @Test
-    fun runStart_registersWatchWhenNotificationsEnabled() = runVmTest {
+    fun runStart_neverContactsLegacyRelayWhenNotificationsEnabled() = runVmTest {
         val relay = MockWebServer()
         relay.start()
         try {
@@ -3281,11 +3286,8 @@ class ChatViewModelTest {
             vm.input = "hi"
             vm.onSend()
             awaitCondition { !vm.busy }
-            val watch = relay.takeRequest(5, TimeUnit.SECONDS)!!
-            assertEquals("/watch", watch.path)
-            val watchBody = watch.body.readUtf8()
-            assertTrue(watchBody.contains("\"run_id\":\"r1\""))
-            assertTrue(watchBody.contains("\"fcm_token\":\"tok\""))
+            assertEquals(0, relay.requestCount)
+            assertTrue(vm.messages.any { it.kind == MsgKind.ASSISTANT && it.text == "hi" })
         } finally {
             relay.shutdown()
         }

@@ -27,6 +27,8 @@ data class ClientSettings(
     val apiKey: String = "",
     val model: String = "",
     val provider: String = "",
+    val reasoningEffort: String = "",
+    val serviceTier: String = "",
     val relayUrl: String = "",
     val fcmToken: String = "",
     val firebaseProjectId: String = "",
@@ -55,16 +57,24 @@ data class ClientSettings(
     val foreignSessionIds: Set<String> = emptySet(),
 ) {
     val isConfigured: Boolean get() = baseUrl.isNotBlank() && apiKey.isNotBlank()
+    val modelOptions: Map<String, String>? get() = buildMap {
+        if (reasoningEffort.isNotBlank()) put("reasoning_effort", reasoningEffort)
+        if (serviceTier.isNotBlank()) put("service_tier", serviceTier)
+    }.takeIf { it.isNotEmpty() }
     val firebaseConfigured: Boolean get() =
         firebaseProjectId.isNotBlank() && firebaseAppId.isNotBlank() &&
             firebaseApiKey.isNotBlank() && firebaseSenderId.isNotBlank()
 }
 
 class SettingsStore(private val context: Context) {
+    @Volatile var snapshot = ClientSettings()
+        private set
     private object Keys {
         val BASE_URL = stringPreferencesKey("base_url")
         val API_KEY = stringPreferencesKey("api_key")
         val MODEL = stringPreferencesKey("model")
+        val REASONING = stringPreferencesKey("reasoning_effort")
+        val SERVICE_TIER = stringPreferencesKey("service_tier")
         val PROVIDER = stringPreferencesKey("provider")
         val RELAY_URL = stringPreferencesKey("relay_url")
         val FCM_TOKEN = stringPreferencesKey("fcm_token")
@@ -89,6 +99,8 @@ class SettingsStore(private val context: Context) {
             apiKey = p[Keys.API_KEY] ?: "",
             model = p[Keys.MODEL] ?: "",
             provider = p[Keys.PROVIDER] ?: "",
+            reasoningEffort = p[Keys.REASONING] ?: "",
+            serviceTier = p[Keys.SERVICE_TIER] ?: "",
             relayUrl = p[Keys.RELAY_URL] ?: "",
             fcmToken = p[Keys.FCM_TOKEN] ?: "",
             firebaseProjectId = p[Keys.FB_PROJECT] ?: "",
@@ -105,21 +117,28 @@ class SettingsStore(private val context: Context) {
             notificationsEnabled = p[Keys.NOTIF_ENABLED] ?: true,
             appOwnedSessionIds = p[Keys.APP_OWNED_IDS] ?: emptySet(),
             foreignSessionIds = p[Keys.FOREIGN_IDS] ?: emptySet(),
-        )
+        ).also { snapshot = it }
     }
 
     suspend fun current(): ClientSettings = try {
         settings.first()
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
     } catch (_: Exception) {
         ClientSettings()
     }
 
-    suspend fun save(value: ClientSettings) {
+    suspend fun save(value: ClientSettings, preserveSessionState: Boolean = false) {
         context.settingsDataStore.edit { p ->
+            val pins = p[Keys.PINNED].orEmpty()
+            val owned = p[Keys.APP_OWNED_IDS].orEmpty()
+            val foreign = p[Keys.FOREIGN_IDS].orEmpty()
             p[Keys.BASE_URL] = value.baseUrl.trim().removeSuffix("/")
             p[Keys.API_KEY] = value.apiKey.trim()
             p[Keys.MODEL] = value.model.trim()
             p[Keys.PROVIDER] = value.provider.trim()
+            p[Keys.REASONING] = value.reasoningEffort
+            p[Keys.SERVICE_TIER] = value.serviceTier
             p[Keys.RELAY_URL] = value.relayUrl.trim().removeSuffix("/")
             p[Keys.FCM_TOKEN] = value.fcmToken
             p[Keys.FB_PROJECT] = value.firebaseProjectId.trim()
@@ -134,7 +153,39 @@ class SettingsStore(private val context: Context) {
             p[Keys.ENTER_TO_SEND] = value.enterToSend
             p[Keys.NOTIF_ENABLED] = value.notificationsEnabled
             p[Keys.APP_OWNED_IDS] = value.appOwnedSessionIds
-            p[Keys.FOREIGN_IDS] = value.foreignSessionIds } }
+            p[Keys.FOREIGN_IDS] = value.foreignSessionIds
+            if (preserveSessionState) {
+                p[Keys.PINNED] = pins
+                p[Keys.APP_OWNED_IDS] = owned
+                p[Keys.FOREIGN_IDS] = foreign
+            }
+        }
+        current()
+    }
+    suspend fun setPinned(id: String, pinned: Boolean? = null): Set<String> {
+        val updated = context.settingsDataStore.edit { p ->
+            val current = p[Keys.PINNED].orEmpty()
+            val shouldPin = pinned ?: (id !in current)
+            p[Keys.PINNED] = if (shouldPin) current + id else current - id
+        }
+        return updated[Keys.PINNED].orEmpty()
+    }
+
+    suspend fun setRunOption(key: String, value: String) { context.settingsDataStore.edit { p ->
+        p[if (key == "reasoning_effort") Keys.REASONING else Keys.SERVICE_TIER] = value
+    } }
+    suspend fun setModel(model: String, provider: String?) { context.settingsDataStore.edit { p ->
+        p[Keys.MODEL] = model
+        if (provider != null) p[Keys.PROVIDER] = provider
+    } }
+
+
+    suspend fun markAppOwned(id: String) { context.settingsDataStore.edit { p ->
+        p[Keys.APP_OWNED_IDS] = p[Keys.APP_OWNED_IDS].orEmpty() + id
+    } }
+    suspend fun markForeign(id: String) { context.settingsDataStore.edit { p ->
+        p[Keys.FOREIGN_IDS] = p[Keys.FOREIGN_IDS].orEmpty() + id
+    } }
 
     suspend fun saveFcmToken(token: String) { context.settingsDataStore.edit { p -> p[Keys.FCM_TOKEN] = token } }
 }

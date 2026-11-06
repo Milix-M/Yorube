@@ -188,41 +188,6 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
                     testTag = "notificationsEnabled",
                     onChange = { vm.notificationsEnabled = it },
                 )
-                SettingField(stringResource(R.string.relay_optional), vm.relayUrl, "https://relay:port", tag = "relayUrl") { vm.relayUrl = it }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (vm.fcmToken.isBlank()) MaterialTheme.colorScheme.outlineVariant
-                                else Color(0xFF34A853)
-                            ),
-                    )
-                    Text(
-                        if (vm.fcmToken.isBlank()) stringResource(R.string.fcm_token_none)
-                        else stringResource(R.string.fcm_token, vm.fcmToken.take(12)),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 8.dp),
-                    )
-                }
-            }
-
-            SettingsCard(
-                title = stringResource(R.string.section_firebase),
-                icon = Icons.Filled.Cloud,
-            ) {
-                SectionHelp(stringResource(R.string.section_firebase_help))
-                SettingField(stringResource(R.string.fb_project), vm.firebaseProjectId, "", tag = "fbProject") { vm.firebaseProjectId = it }
-                SettingField(stringResource(R.string.fb_app), vm.firebaseAppId, "", tag = "fbApp") { vm.firebaseAppId = it }
-                SettingField(stringResource(R.string.fb_key), vm.firebaseApiKey, "", secret = true, tag = "fbKey") { vm.firebaseApiKey = it }
-                SettingField(stringResource(R.string.fb_sender), vm.firebaseSenderId, "", KeyboardType.Number, tag = "fbSender") {
-                    vm.firebaseSenderId = it
-                }
             }
 
             Button(
