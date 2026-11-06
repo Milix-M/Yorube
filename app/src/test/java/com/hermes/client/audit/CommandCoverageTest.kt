@@ -1,5 +1,6 @@
 package com.hermes.client.audit
 
+import com.hermes.client.testutil.takeRequestOrFail
 import android.app.Application
 import android.content.ClipboardManager
 import android.content.Intent
@@ -117,9 +118,9 @@ class CommandCoverageTest {
         server.enqueue(MockResponse().setBody("""{"messages":[]}"""))
         vm.input = "/resume target"; vm.onSend()
         awaitCondition { vm.sessionId == "target" && !vm.historyLoading }
-        assertTrue(server.takeRequest().path!!.contains("offset=0"))
-        assertTrue(server.takeRequest().path!!.contains("offset=50"))
-        assertEquals("/api/sessions/target/messages", server.takeRequest().path)
+        assertTrue(server.takeRequestOrFail().path!!.contains("offset=0"))
+        assertTrue(server.takeRequestOrFail().path!!.contains("offset=50"))
+        assertEquals("/api/sessions/target/messages", server.takeRequestOrFail().path)
     }
 
     @Test fun historyRequiresSessionAndReloadsCurrentConversation() = runVmTest {
@@ -132,8 +133,8 @@ class CommandCoverageTest {
         vm.input = "/redraw"; vm.onSend()
         awaitCondition { !vm.historyLoading && vm.messages.any { it.text == "restored" } }
         assertEquals(2, server.requestCount)
-        assertEquals("/api/sessions/s/messages", server.takeRequest().path)
-        assertEquals("/api/sessions/s/messages", server.takeRequest().path)
+        assertEquals("/api/sessions/s/messages", server.takeRequestOrFail().path)
+        assertEquals("/api/sessions/s/messages", server.takeRequestOrFail().path)
     }
 
     @Test fun runOptionsValidateValuesAndReportStoredState() = runVmTest {
@@ -155,10 +156,10 @@ class CommandCoverageTest {
         val c = container(); val vm = model(c)
         server.enqueue(MockResponse().setBody("""{"job":{"id":"j","name":"daily"}}"""))
         assertTrue(command(vm, "/cron show job/#x").text.contains("daily"))
-        assertEquals("/api/jobs/job%2F%23x", server.takeRequest().path)
+        assertEquals("/api/jobs/job%2F%23x", server.takeRequestOrFail().path)
         server.enqueue(MockResponse().setBody("{}"))
         command(vm, "/cron edit job/#x daily | 0 9 * * * | prompt")
-        val edit = server.takeRequest()
+        val edit = server.takeRequestOrFail()
         assertEquals("PATCH", edit.method)
         assertEquals("/api/jobs/job%2F%23x", edit.path)
         assertEquals("prompt", (HermesJson.parseToJsonElement(edit.body.readUtf8()) as kotlinx.serialization.json.JsonObject).str("prompt"))
@@ -179,7 +180,7 @@ class CommandCoverageTest {
         server.enqueue(MockResponse().setBody("""{"status":"completed"}"""))
         assertEquals(MsgKind.ERROR, command(vm, "/discard r").kind)
         assertEquals(1, server.requestCount)
-        assertEquals("GET", server.takeRequest().method)
+        assertEquals("GET", server.takeRequestOrFail().method)
     }
 
     @Test fun queueEditAndMoveValidateIndexesAndPersistOrder() = runVmTest {
