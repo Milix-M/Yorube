@@ -1637,7 +1637,7 @@
       "license_status": "verified_pom_and_published_sources",
       "inherited_license_from": {
         "coordinate": "com.google.guava:guava-parent:26.0-android",
-        "pom_path": "/home/ubuntu/.gradle/caches/modules-2/files-2.1/com.google.guava/guava-parent/26.0-android/a2c0df489614352b7e8e503e274bd1dee5c42a64/guava-parent-26.0-android.pom"
+        "pom_url": "https://repo.maven.apache.org/maven2/com/google/guava/guava-parent/26.0-android/guava-parent-26.0-android.pom"
       }
     },
     {
@@ -1926,7 +1926,7 @@
       "copyright_lines_observed": [],
       "embedded_legal_files": [],
       "license_status": "verified_pom_and_published_sources",
-      "upstream_notice_file": "/home/ubuntu/Documents/Codex/2026-11-10-https-github-com-milix-m-yorube/review-checks/license-evidence/coroutines-NOTICE.txt"
+      "upstream_notice_file": "third_party/notices/coroutines-NOTICE.txt"
     },
     {
       "coordinate": "org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.9.0",
@@ -1949,7 +1949,7 @@
       "copyright_lines_observed": [],
       "embedded_legal_files": [],
       "license_status": "verified_pom_and_published_sources",
-      "upstream_notice_file": "/home/ubuntu/Documents/Codex/2026-11-10-https-github-com-milix-m-yorube/review-checks/license-evidence/coroutines-NOTICE.txt"
+      "upstream_notice_file": "third_party/notices/coroutines-NOTICE.txt"
     },
     {
       "coordinate": "org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.7.3",
@@ -1978,7 +1978,7 @@
       ],
       "embedded_legal_files": [],
       "license_status": "verified_pom_and_published_sources",
-      "upstream_notice_file": "/home/ubuntu/Documents/Codex/2026-11-10-https-github-com-milix-m-yorube/review-checks/license-evidence/serialization-NOTICE.txt"
+      "upstream_notice_file": "third_party/notices/serialization-NOTICE.txt"
     },
     {
       "coordinate": "org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.7.3",
@@ -2008,7 +2008,7 @@
       ],
       "embedded_legal_files": [],
       "license_status": "verified_pom_and_published_sources",
-      "upstream_notice_file": "/home/ubuntu/Documents/Codex/2026-11-10-https-github-com-milix-m-yorube/review-checks/license-evidence/serialization-NOTICE.txt"
+      "upstream_notice_file": "third_party/notices/serialization-NOTICE.txt"
     },
     {
       "coordinate": "org.jetbrains:annotations:23.0.0",
