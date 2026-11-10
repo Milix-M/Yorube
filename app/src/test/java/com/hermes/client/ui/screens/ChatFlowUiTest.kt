@@ -75,6 +75,37 @@ class ChatFlowUiTest {
     }
 
     @Test
+    fun additionalInstructionsCanBeSentWithDefaultKeyboardSettings() {
+        val steered = java.util.concurrent.atomic.AtomicReference<String?>(null)
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when (request.path) {
+                "/v1/runs" -> MockResponse().setResponseCode(202).setBody("""{"run_id":"r"}""")
+                "/v1/runs/r" -> MockResponse().setBody("""{"status":"running","session_id":"s"}""")
+                "/v1/runs/r/events" -> MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.NO_RESPONSE)
+                "/v1/runs/r/steer" -> {
+                    steered.set(request.body.readUtf8())
+                    MockResponse().setBody("{}")
+                }
+                else -> MockResponse().setBody("{}")
+            }
+        }
+        kotlinx.coroutines.runBlocking { saveSettings() }
+        val app = ApplicationProvider.getApplicationContext<HermesApp>()
+        try {
+            compose.setContent { HermesAppTheme { ChatScreen(sessionId = null) } }
+            compose.onNodeWithTag("chatInput").performTextInput("start")
+            compose.onNodeWithTag("sendButton").performClick()
+            compose.waitUntil(timeoutMillis = 15_000) {
+                compose.onAllNodesWithTag("stopButton").fetchSemanticsNodes().isNotEmpty() && server.requestCount >= 3
+            }
+            compose.onNodeWithTag("chatInput").performTextInput("change direction")
+            compose.onNodeWithTag("steerButton").performClick()
+            compose.waitUntil(timeoutMillis = 10_000) { steered.get() != null }
+            org.junit.Assert.assertEquals("""{"text":"change direction"}""", steered.get())
+        } finally { compose.runOnUiThread { app.container.runStreams.close() } }
+    }
+
+    @Test
     fun copyAnswerShowsConfirmationAndWritesClipboard() {
         server.enqueue(MockResponse().setBody("""{"messages":[{"role":"assistant","content":"copy this answer"}]}"""))
         kotlinx.coroutines.runBlocking { saveSettings() }
@@ -223,7 +254,7 @@ class ChatFlowUiTest {
             compose.onAllNodesWithText("Approval needed").fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithText("rm").assertIsDisplayed()
-        compose.onNodeWithText("once").performClick()
+        compose.onNodeWithText("Allow once").performClick()
         compose.waitUntil(timeoutMillis = 15_000) {
             compose.onAllNodesWithText("Approval needed").fetchSemanticsNodes().isEmpty()
         }

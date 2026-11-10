@@ -25,14 +25,13 @@ android {
     }
 
     signingConfigs {
-        getByName("debug") {
-            // Fixed key for all CI builds so updates install over older ones.
-            // Debug-only key: never use for store releases.
-            storeFile = rootProject.file("keystore/debug.p12")
-            storePassword = "android"
-            storeType = "PKCS12"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
+        providers.environmentVariable("YORUBE_SIGNING_STORE_FILE").orNull?.let { signingFile ->
+            create("distribution") {
+                storeFile = file(signingFile)
+                storePassword = providers.environmentVariable("YORUBE_SIGNING_STORE_PASSWORD").get()
+                keyAlias = providers.environmentVariable("YORUBE_SIGNING_KEY_ALIAS").get()
+                keyPassword = providers.environmentVariable("YORUBE_SIGNING_KEY_PASSWORD").get()
+            }
         }
     }
 
@@ -41,6 +40,8 @@ android {
             enableUnitTestCoverage = true
         }
         release {
+            isDebuggable = false
+            signingConfig = signingConfigs.findByName("distribution")
             isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -48,6 +49,8 @@ android {
             )
         }
         debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-dev"
             // Debug keeps cleartext guards in code: http is allowed only for
             // 10.0.2.2 / localhost (emulator loopback). See HermesApi.
             manifestPlaceholders["cleartextPermitted"] = "true"

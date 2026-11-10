@@ -37,7 +37,7 @@ class AppContainer(val appContext: android.content.Context) {
     }
 }
 
-class HermesApp : Application() {
+open class HermesApp : Application() {
     lateinit var container: AppContainer
         private set
 

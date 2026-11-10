@@ -64,6 +64,37 @@ class ConversationListViewModelTest {
         assertEquals(false, vm.loading)
     }
 
+    @Test fun refreshLoadsBeyondFirstFiftyAndKeepsPinsFirst() = runVmTest {
+        val c = containerWithSettings()
+        c.settingsStore.setPinned("s100", true)
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                val offset = request.requestUrl!!.queryParameter("offset")!!.toInt()
+                val end = minOf(offset + 50, 101)
+                return MockResponse().setBody("""{"sessions":[${(offset until end).joinToString(",") { """{"id":"s$it","title":"title-$it"}""" }}]}""")
+            }
+        }
+        val vm = ConversationListViewModel(c)
+        vm.refresh()
+        awaitCondition { !vm.loading }
+        assertNull(vm.error)
+        assertEquals(101, vm.sessions.size)
+        assertEquals("s100", vm.sessions.first().key)
+        assertEquals(3, server.requestCount)
+    }
+
+    @Test fun paginationStopsWhenServerIgnoresOffset() = runVmTest {
+        val response = """{"sessions":[${(0 until 50).joinToString(",") { """{"id":"s$it"}""" }}]}"""
+        server.enqueue(MockResponse().setBody(response))
+        server.enqueue(MockResponse().setBody(response))
+        val vm = ConversationListViewModel(containerWithSettings())
+        vm.refresh()
+        awaitCondition { !vm.loading }
+        assertNull(vm.error)
+        assertEquals(50, vm.sessions.size)
+        assertEquals(2, server.requestCount)
+    }
+
     @Test
     fun refresh_errorWithoutSettings() = runVmTest {
         val app = ApplicationProvider.getApplicationContext<Application>()

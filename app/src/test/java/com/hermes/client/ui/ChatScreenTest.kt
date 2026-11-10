@@ -22,6 +22,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.hasTestTag
 import androidx.test.core.app.ApplicationProvider
 import com.hermes.client.HermesApp
@@ -139,7 +140,8 @@ class ChatScreenTest {
         clearSettings()
         compose.setContent { HermesAppTheme { ChatScreen(sessionId = null) } }
         compose.onNodeWithTag("chatInput").performTextInput("/")
-        compose.onNodeWithTag("slashHintsList").performScrollToNode(hasTestTag("slashHint-version"))
+        val versionIndex = com.hermes.client.ui.screens.HERMES_COMMANDS.indexOfFirst { it.name == "version" }
+        compose.onNodeWithTag("slashHintsList").performScrollToIndex(versionIndex)
         compose.onNodeWithTag("slashHint-version").assertIsDisplayed()
         compose.onNodeWithTag("chatInput").performTextReplacement("/que")
         compose.onNodeWithTag("slashHint-queue").assertIsDisplayed().performClick()

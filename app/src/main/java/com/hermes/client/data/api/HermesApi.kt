@@ -11,6 +11,10 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
@@ -182,8 +186,26 @@ class HermesApi(
     // -- M1: runs --
 
     suspend fun createRun(request: RunCreateRequest, idempotencyKey: String): RunAccepted {
+        val payload = HermesJson.encodeToJsonElement(request).jsonObject.toMutableMap()
+        payload.remove("images")
+        if (request.images.isNotEmpty()) {
+            payload["input"] = buildJsonArray {
+                add(buildJsonObject {
+                    put("role", "user")
+                    put("content", buildJsonArray {
+                        if (request.input.isNotBlank()) add(buildJsonObject {
+                            put("type", "text"); put("text", request.input)
+                        })
+                        request.images.forEach { image -> add(buildJsonObject {
+                            put("type", "image_url")
+                            put("image_url", buildJsonObject { put("url", image.dataUrl) })
+                        }) }
+                    })
+                })
+            }
+        }
         val body = execute(
-            post("/v1/runs", HermesJson.encodeToString(request), mapOf(IDEMPOTENCY_HEADER to idempotencyKey))
+            post("/v1/runs", JsonObject(payload).toString(), mapOf(IDEMPOTENCY_HEADER to idempotencyKey))
         )
         return HermesJson.decodeFromString(body)
     }
@@ -408,6 +430,10 @@ class HermesApi(
             // run status and resubscribe instead of hanging forever.
             .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
+            // Access service-token headers are custom headers: OkHttp only strips
+            // Authorization on cross-origin redirects. Never forward credentials.
+            .followRedirects(false)
+            .followSslRedirects(false)
             .retryOnConnectionFailure(true)
             .build()
 

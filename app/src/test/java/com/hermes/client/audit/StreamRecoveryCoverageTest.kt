@@ -210,6 +210,35 @@ class StreamRecoveryCoverageTest {
         assertNull(vm.error)
     }
 
+    @Test fun failedApprovalKeepsRequestAndAllowsRetryWithoutDuplicateSubmission() = runVmTest {
+        val c = container()
+        val vm = waitingQuestion(c, MockResponse().setResponseCode(503).setBody("unavailable"),
+            """{"request_id":"a","execution_generation":1,"command":"ls"}""")
+        val request = vm.approval
+        vm.answerApproval("once")
+        vm.answerApproval("deny")
+        awaitCondition { vm.error != null && !vm.controlSending }
+        assertEquals(request, vm.approval)
+        assertTrue(vm.busy)
+        val before = server.requestCount
+        vm.answerApproval("deny")
+        awaitCondition { server.requestCount > before && !vm.controlSending }
+        assertEquals(request, vm.approval)
+    }
+
+    @Test fun failedQuestionKeepsAnswerAndRequest() = runVmTest {
+        val c = container()
+        val vm = waitingQuestion(c, MockResponse().setResponseCode(500).setBody("unavailable"))
+        val request = vm.clarify
+        vm.clarifyAnswer = "keep this answer"
+        vm.answerClarify(vm.clarifyAnswer)
+        vm.answerClarify("duplicate")
+        awaitCondition { vm.error != null && !vm.controlSending }
+        assertEquals(request, vm.clarify)
+        assertEquals("keep this answer", vm.clarifyAnswer)
+        assertTrue(vm.busy)
+    }
+
     @Test fun failedControlRecoveryShowsOriginalConflict() = runVmTest {
         val c = container()
         val vm = waitingQuestion(c, MockResponse().setResponseCode(409).setBody("""{"error":{"code":"stale_generation","message":"stale"}}"""))

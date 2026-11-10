@@ -61,6 +61,9 @@ data class HistoryMessage(
 )
 
 @Serializable
+data class RunImage(val name: String, val dataUrl: String)
+
+@Serializable
 data class RunCreateRequest(
     val input: String,
     @SerialName("session_id") val sessionId: String? = null,
@@ -69,6 +72,8 @@ data class RunCreateRequest(
     val model: String? = null,
     val provider: String? = null,
     @SerialName("model_options") val modelOptions: Map<String, String>? = null,
+    /** Local durable representation; createRun translates this to multimodal input. */
+    val images: List<RunImage> = emptyList(),
 )
 
 @Serializable

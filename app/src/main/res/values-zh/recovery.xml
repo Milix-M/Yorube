@@ -1,0 +1,12 @@
+<resources>
+    <string name="approval_once">仅允许一次</string>
+    <string name="approval_session">在此对话中允许</string>
+    <string name="approval_always">始终允许</string>
+    <string name="approval_deny">拒绝</string>
+    <string name="image_limit">最多可附加3张图片。</string>
+    <string name="image_too_large">请选择不超过5 MB的图片。</string>
+    <string name="image_unreadable">无法读取图片。请选择JPEG、PNG、WebP或GIF图片。</string>
+    <string name="image_while_running">当前运行结束后即可发送图片。</string>
+    <string name="remove_attachment">移除图片</string>
+    <string name="send_outcome_unknown">上一条消息可能已被接收。再次发送前，请检查服务器历史记录。</string>
+</resources>

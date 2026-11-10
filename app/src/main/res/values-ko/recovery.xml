@@ -1,0 +1,12 @@
+<resources>
+    <string name="approval_once">한 번만 허용</string>
+    <string name="approval_session">이 대화에서 허용</string>
+    <string name="approval_always">항상 허용</string>
+    <string name="approval_deny">거부</string>
+    <string name="image_limit">이미지는 최대 3개까지 첨부할 수 있습니다.</string>
+    <string name="image_too_large">5 MB 이하의 이미지를 선택하세요.</string>
+    <string name="image_unreadable">이미지를 읽을 수 없습니다. JPEG, PNG, WebP 또는 GIF 이미지를 선택하세요.</string>
+    <string name="image_while_running">현재 실행이 끝난 후 이미지를 보낼 수 있습니다.</string>
+    <string name="remove_attachment">이미지 삭제</string>
+    <string name="send_outcome_unknown">이전 메시지가 접수되었을 수 있습니다. 다시 보내기 전에 서버 기록을 확인하세요.</string>
+</resources>

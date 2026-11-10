@@ -70,7 +70,9 @@ Androidアプリ ── HTTPS/SSE ── Hermes API Server (/v1/*, /api/*)
 }
 ```
 
-応答は `202` である。`{run_id, status}` が返る。`Idempotency-Key` は毎回別のUUIDにする。同じ鍵の使い回しはしない。
+応答は `202` である。`{run_id, status}` が返る。送信操作ごとに別のUUIDを `Idempotency-Key` に使い、通信前に本文と一緒に暗号化して保存する。受理応答を失った場合は新しい鍵を作らず、保存した本文と同じ鍵を使う。再送は `/v1/capabilities` の `features.runs_idempotency` が `supported: true`・`durable: true` を示し、`retention_seconds` 内の場合だけ行う。
+
+画像がある場合は、`input` に `[{"role":"user","content":[{"type":"text","text":"説明して"},{"type":"image_url","image_url":{"url":"data:image/png;base64,..."}}]}]` を送る。端末内のURIやファイル名だけで画像を送ったことにしない。読み込みは通信前に行い、1枚5 MB・最大3枚に制限する。
 
 ### 7.2 状態
 
