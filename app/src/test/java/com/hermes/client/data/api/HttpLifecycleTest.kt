@@ -61,6 +61,31 @@ class HttpLifecycleTest {
             health = false, waitForHeaders = true)
     }
 
+    @Test fun immediateCallbackCompletionReturnsBothMutationResultsNormally() = runBlocking {
+        // A callback may complete before suspendCancellableCoroutine returns.
+        // Use a direct executor to exercise that path without a scheduling race.
+        val executor = java.util.concurrent.Executors.newSingleThreadExecutor()
+        try {
+            val direct = object : java.util.concurrent.ExecutorService by executor {
+                override fun execute(command: Runnable) { command.run() }
+            }
+            val client = HermesApi.defaultClient().newBuilder().dispatcher(okhttp3.Dispatcher(direct)).build()
+            MockWebServer().use { server ->
+                val api = HermesApi(server.url("/").toString(), "k", client = client)
+                repeat(2) { server.enqueue(MockResponse().setBody("{}")) }
+                api.updateSessionTitle("s", "renamed")
+                api.resolveUnknownRun("r", "admission", 2)
+                val title = server.takeRequest()
+                assertEquals("PATCH", title.method)
+                assertEquals("/api/sessions/s", title.path)
+                assertEquals("""{"title":"renamed"}""", title.body.readUtf8())
+                val resolution = server.takeRequest()
+                assertEquals("/v1/runs/r/resolve-unknown", resolution.path)
+                assertEquals("""{"admission_id":"admission","execution_generation":2}""", resolution.body.readUtf8())
+            }
+        } finally { executor.shutdownNow() }
+    }
+
     private suspend fun cancellationClosesCall(response: MockResponse, health: Boolean, waitForHeaders: Boolean = false) = kotlinx.coroutines.coroutineScope {
         MockWebServer().use { server ->
             server.enqueue(response)
