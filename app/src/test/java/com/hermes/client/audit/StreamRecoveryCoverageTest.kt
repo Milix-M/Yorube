@@ -239,6 +239,29 @@ class StreamRecoveryCoverageTest {
         assertTrue(vm.busy)
     }
 
+    @Test fun approvalConnectionLossKeepsThePendingDecision() = runVmTest {
+        val c = container()
+        val vm = waitingQuestion(c, MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AFTER_REQUEST),
+            """{"request_id":"a","execution_generation":1,"command":"ls"}""")
+        val request = vm.approval
+        vm.answerApproval("once")
+        awaitCondition { vm.error != null && !vm.controlSending }
+        assertEquals(request, vm.approval)
+        assertTrue(vm.busy)
+    }
+
+    @Test fun questionConnectionLossKeepsTheAnswerForRetry() = runVmTest {
+        val c = container()
+        val vm = waitingQuestion(c, MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AFTER_REQUEST))
+        val request = vm.clarify
+        vm.clarifyAnswer = "keep after disconnect"
+        vm.answerClarify(vm.clarifyAnswer)
+        awaitCondition { vm.error != null && !vm.controlSending }
+        assertEquals(request, vm.clarify)
+        assertEquals("keep after disconnect", vm.clarifyAnswer)
+        assertTrue(vm.busy)
+    }
+
     @Test fun failedControlRecoveryShowsOriginalConflict() = runVmTest {
         val c = container()
         val vm = waitingQuestion(c, MockResponse().setResponseCode(409).setBody("""{"error":{"code":"stale_generation","message":"stale"}}"""))

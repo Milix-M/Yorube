@@ -56,6 +56,8 @@ class RunOutboxTest {
         assertFalse(first.replay)
         assertTrue(restored.replay)
         assertEquals(first.pending, restored.pending)
+        val rotatedAccess = settings.copy(cfClientId = "renewed-id", cfClientSecret = "renewed-secret")
+        assertEquals(first.pending, RunOutbox(context).prepare(first.pending.request, rotatedAccess, null).pending)
         val stored = context.getSharedPreferences("run_outbox", 0).all.toString()
         assertFalse(stored.contains("private prompt"))
         assertFalse(stored.contains("secret-key"))

@@ -25,7 +25,9 @@ internal class RunOutbox(context: Context) {
     private val preferences = context.getSharedPreferences("run_outbox", 0)
 
     private fun scope(settings: ClientSettings): String {
-        val identity = listOf(settings.baseUrl, settings.apiKey, settings.cfClientId, settings.cfClientSecret)
+        // Hermes scopes idempotency by profile/API key. Rotating an outer
+        // Cloudflare service token must not turn recovery into a new execution.
+        val identity = listOf(settings.baseUrl, settings.apiKey)
         return MessageDigest.getInstance("SHA-256").digest(HermesJson.encodeToString(identity).toByteArray())
             .joinToString("") { "%02x".format(it) }
     }
