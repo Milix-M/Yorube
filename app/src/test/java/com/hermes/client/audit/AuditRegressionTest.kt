@@ -1,5 +1,6 @@
 package com.hermes.client.audit
 
+import com.hermes.client.testutil.takeRequestOrFail
 import android.app.NotificationManager
 import androidx.test.core.app.ApplicationProvider
 import com.hermes.client.AppContainer
@@ -49,7 +50,7 @@ class AuditRegressionTest {
         assertEquals(602, frames.size)
         assertEquals(600, frames.filter { it.event == RunEvent.Delta("x") }.size)
         assertTrue(frames.last().event is RunEvent.Terminal)
-        assertEquals("0", server.takeRequest().getHeader("Last-Event-ID"))
+        assertEquals("0", server.takeRequestOrFail().getHeader("Last-Event-ID"))
     }
 
     @Test fun cancellingSilentSocketClosesReaderPromptly() = runVmTest {
@@ -106,7 +107,7 @@ class AuditRegressionTest {
         awaitCondition { c.runStreams.activeRuns.value.isEmpty() }
         assertEquals(2, polls.get())
         assertEquals(2, streams.get())
-        val requests = List(4) { server.takeRequest() }
+        val requests = List(4) { server.takeRequestOrFail() }
         assertEquals("1", requests.last().getHeader("Last-Event-ID"))
     }
 
@@ -149,7 +150,7 @@ class AuditRegressionTest {
         c.runStreams.restore()
         awaitCondition { !c.runStreams.working.value }
         assertEquals(1, server.requestCount)
-        assertEquals("/v1/runs/a", server.takeRequest().path)
+        assertEquals("/v1/runs/a", server.takeRequestOrFail().path)
     }
 
     @Test fun localNotificationsDeduplicateAndCancelResolvedApproval() = runVmTest {
@@ -204,15 +205,15 @@ class AuditRegressionTest {
         val api = c.api()
         server.enqueue(MockResponse().setBody("""{"jobs":[]}"""))
         api.cron("list")
-        assertEquals("/api/jobs?include_disabled=true", server.takeRequest().path)
+        assertEquals("/api/jobs?include_disabled=true", server.takeRequestOrFail().path)
         server.enqueue(MockResponse().setBody("{}"))
         api.cron("pause", "job/#x")
-        val pause = server.takeRequest()
+        val pause = server.takeRequestOrFail()
         assertEquals("POST", pause.method)
         assertEquals("/api/jobs/job%2F%23x/pause", pause.path)
         server.enqueue(MockResponse().setBody("{}"))
         api.cron("remove", "job")
-        assertEquals("DELETE", server.takeRequest().method)
+        assertEquals("DELETE", server.takeRequestOrFail().method)
     }
 
     @Test fun cronAddPreservesMultilinePromptAndNeverSubmitsAnAgentRun() = runVmTest {
@@ -222,7 +223,7 @@ class AuditRegressionTest {
         vm.input = "/cron add daily | 0 9 * * * | line one\nline two"
         vm.onSend()
         awaitCondition { vm.messages.isNotEmpty() }
-        val request = server.takeRequest()
+        val request = server.takeRequestOrFail()
         assertEquals("/api/jobs", request.path)
         val body = HermesJson.parseToJsonElement(request.body.readUtf8()) as kotlinx.serialization.json.JsonObject
         assertEquals("line one\nline two", body.str("prompt"))
@@ -237,8 +238,8 @@ class AuditRegressionTest {
         vm.input = "/discard run1"
         vm.onSend()
         awaitCondition { vm.messages.isNotEmpty() }
-        assertEquals("GET", server.takeRequest().method)
-        val resolve = server.takeRequest()
+        assertEquals("GET", server.takeRequestOrFail().method)
+        val resolve = server.takeRequestOrFail()
         assertEquals("/v1/runs/run1/resolve-unknown", resolve.path)
         assertEquals("""{"admission_id":"admission","execution_generation":7}""", resolve.body.readUtf8())
         assertEquals(2, server.requestCount)
@@ -283,7 +284,7 @@ class AuditRegressionTest {
         vm.test()
         awaitCondition { vm.testOk != null }
         assertEquals(true, vm.testOk)
-        assertEquals("Bearer draft", server.takeRequest().getHeader("Authorization"))
+        assertEquals("Bearer draft", server.takeRequestOrFail().getHeader("Authorization"))
         assertEquals("https://unused.invalid", c.settingsStore.current().baseUrl)
     }
 

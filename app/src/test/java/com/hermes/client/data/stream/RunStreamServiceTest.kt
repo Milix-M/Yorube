@@ -8,13 +8,14 @@ import com.hermes.client.HermesApp
 import com.hermes.client.data.store.ClientSettings
 import com.hermes.client.testutil.awaitCondition
 import com.hermes.client.testutil.runVmTest
-import com.hermes.client.testutil.shutdownServer
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.test.TestScope
 import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.SocketPolicy
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -40,10 +41,8 @@ class RunStreamServiceTest {
 
     @After
     fun tearDown() {
-        // One test parks a stream on a 30 s headers delay; a plain
-        // server.shutdown() gives up on it after 5 s (see
-        // shutdownServer).
-        shutdownServer(server)
+        app().container.runStreams.close()
+        server.shutdown()
     }
 
     private fun app(): HermesApp =
@@ -114,8 +113,8 @@ class RunStreamServiceTest {
     @Test
     fun startCommand_engineAlreadyActive_keepsWatching() = runVmTest {
         saveSettings()
-        // The run's stream hangs on its headers: the run stays active.
-        server.enqueue(MockResponse().setHeadersDelay(30, TimeUnit.SECONDS))
+        // NO_RESPONSE holds the connection without making teardown sleep.
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
         val engine = app().container.runStreams
         engine.start("r1", "s1")
         awaitCondition { server.requestCount >= 1 }
@@ -128,7 +127,8 @@ class RunStreamServiceTest {
         controller.startCommand(0, 2)
         testScheduler.advanceUntilIdle()
         assertFalse(Shadows.shadowOf(service).isStoppedBySelf)
-        assertNotNull(engine.activeRun.value)
+        assertEquals(ActiveRun("r1", "s1"), engine.activeRun.value)
+        assertEquals(1, server.requestCount)
         controller.destroy()
     }
 

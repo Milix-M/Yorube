@@ -1,5 +1,6 @@
 package com.hermes.client
 
+import com.hermes.client.testutil.takeRequestOrFail
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import com.hermes.client.data.store.ClientSettings
@@ -56,7 +57,7 @@ class AppContainerTest {
         awaitStored(c, url)
         server.enqueue(MockResponse().setBody("""{"status":"ok"}"""))
         c.api().checkHealth()
-        val req = server.takeRequest()
+        val req = server.takeRequestOrFail()
         assertEquals("id", req.getHeader("CF-Access-Client-Id"))
         assertEquals("s", req.getHeader("CF-Access-Client-Secret"))
         assertEquals("Bearer k", req.getHeader("Authorization"))
@@ -71,7 +72,7 @@ class AppContainerTest {
         awaitStored(c, url)
         server.enqueue(MockResponse().setBody("""{"status":"ok"}"""))
         c.api().checkHealth()
-        val req = server.takeRequest()
+        val req = server.takeRequestOrFail()
         assertNull(req.getHeader("CF-Access-Client-Id"))
         assertNull(req.getHeader("CF-Access-Client-Secret"))
     }

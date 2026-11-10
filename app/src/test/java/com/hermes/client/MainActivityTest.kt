@@ -4,7 +4,7 @@ import android.content.Intent
 import android.media.AudioManager
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNotSame
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -80,13 +80,12 @@ class MainActivityTest {
     }
 
     @Test
-    fun createAndNewIntent() {
+    fun newSessionIntentUpdatesIntentAndRecreatesActivity() {
         // Manage the controller directly: onNewIntent recreates the activity,
         // which can leave ActivityScenario's invoker holding the old instance.
         Robolectric.buildActivity(MainActivity::class.java).use { controller ->
             compose.runOnUiThread { controller.setup() }
             val activity = controller.get()
-            assertNotNull(activity)
             compose.runOnUiThread {
                 controller.newIntent(
                     Intent(activity, MainActivity::class.java)
@@ -94,7 +93,11 @@ class MainActivityTest {
                 )
                 assertEquals("s9", activity.intent.getStringExtra(MainActivity.EXTRA_SESSION_ID))
             }
-            compose.waitForIdle()
+            compose.waitUntil(timeoutMillis = 10_000) {
+                shadowOf(android.os.Looper.getMainLooper()).idle()
+                controller.get() !== activity
+            }
+            assertNotSame(activity, controller.get())
         }
     }
 }

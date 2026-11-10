@@ -8,7 +8,6 @@ import com.hermes.client.data.api.RunEvent
 import com.hermes.client.data.store.ClientSettings
 import com.hermes.client.testutil.awaitCondition
 import com.hermes.client.testutil.runVmTest
-import com.hermes.client.testutil.shutdownServer
 import java.util.Collections
 import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.milliseconds
@@ -18,6 +17,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.withContext
 import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.SocketPolicy
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
@@ -35,6 +35,7 @@ import org.robolectric.annotation.Config
 class RunStreamEngineTest {
 
     private lateinit var server: MockWebServer
+    private val containers = mutableListOf<AppContainer>()
 
     @Before
     fun setUp() {
@@ -44,16 +45,14 @@ class RunStreamEngineTest {
 
     @After
     fun tearDown() {
-        // Several tests park streams on 30 s headers delays; a plain
-        // server.shutdown() gives up on those after 5 s (see
-        // shutdownServer).
-        shutdownServer(server)
+        containers.forEach { it.runStreams.close() }
+        server.shutdown()
     }
 
     private suspend fun TestScope.containerWithSettings(): AppContainer {
         val url = server.url("").toString().removeSuffix("/")
         val app = ApplicationProvider.getApplicationContext<Application>()
-        val c = AppContainer(app)
+        val c = AppContainer(app).also { containers.add(it) }
         c.settingsStore.save(ClientSettings(baseUrl = url, apiKey = "k"))
         awaitCondition { c.settingsStore.current().baseUrl == url }
         return c
@@ -140,20 +139,22 @@ class RunStreamEngineTest {
     }
 
     @Test
-    fun start_supersededRun_keepsNewActiveRecord() = runVmTest {
-        // Both streams hang on their headers, so both loops stay parked
-        // in their first subscription while the records are checked.
-        server.enqueue(MockResponse().setHeadersDelay(30, TimeUnit.SECONDS))
-        server.enqueue(MockResponse().setHeadersDelay(30, TimeUnit.SECONDS))
+    fun start_otherConversation_keepsBothSubscriptionsActive() = runVmTest {
+        // Both subscriptions stay open without a wall-clock response delay.
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
         val c = containerWithSettings()
         c.runStreams.start("rA", "sA")
         awaitCondition { server.requestCount >= 1 }
         c.runStreams.start("rB", "sB")
         assertEquals(ActiveRun("rB", "sB"), c.runStreams.activeRun.value)
         awaitCondition { server.requestCount >= 2 }
-        // The superseded loop's cleanup must not clear the new record.
+        // Starting another conversation must preserve both independent runs.
         testScheduler.advanceUntilIdle()
         assertEquals(ActiveRun("rB", "sB"), c.runStreams.activeRun.value)
+        assertEquals(setOf(ActiveRun("rA", "sA"), ActiveRun("rB", "sB")), c.runStreams.activeRuns.value.toSet())
+        val requests = List(2) { server.takeRequest(5, TimeUnit.SECONDS)!!.path }.toSet()
+        assertEquals(setOf("/v1/runs/rA/events", "/v1/runs/rB/events"), requests)
     }
 
     @Test
@@ -163,22 +164,23 @@ class RunStreamEngineTest {
         )
         val c = containerWithSettings()
         val received = collectUpdates(c, "rX")
+        val actualRun = collectUpdates(c, "rY")
         c.runStreams.start("rY", "sY")
+        awaitCondition { actualRun.any { it is RunStreamUpdate.Event && it.event is RunEvent.Terminal } }
         awaitCondition { c.runStreams.activeRun.value == null }
+        assertEquals(1, server.requestCount)
         assertTrue(received.isEmpty())
     }
 
     @Test
-    fun start_supersededDuringPoll_cancelsCleanly() = runVmTest {
-        // r1's stream ends at once; its status poll then hangs on the
-        // response headers, parking the engine inside the poll (inside
-        // getRunWithRetry's try). Superseding it there must cancel the
-        // loop through both layers without disturbing r2.
+    fun start_otherRunDuringPoll_finishesWithoutDisturbingOriginal() = runVmTest {
+        // r1 is polling while a second conversation starts and completes.
+        // Completion of r2 must leave r1's subscription active.
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse = when {
                 request.path == "/v1/runs/r1/events" -> MockResponse().setBody("")
                 request.path == "/v1/runs/r1" ->
-                    MockResponse().setHeadersDelay(3, TimeUnit.SECONDS)
+                    MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE)
                         .setBody("""{"run_id":"r1","status":"running"}""")
                 request.path == "/v1/runs/r2/events" ->
                     events(frame("run.completed", """{"event":"run.completed","output":"b"}"""))
@@ -197,7 +199,9 @@ class RunStreamEngineTest {
             testScheduler.advanceTimeBy(100.milliseconds)
             withContext(Dispatchers.IO) { Thread.sleep(50) }
         }
+        val second = collectUpdates(c, "r2")
         c.runStreams.start("r2", "s2")
+        awaitCondition { second.any { it is RunStreamUpdate.Event && it.event is RunEvent.Terminal } }
         awaitCondition { c.runStreams.activeRuns.value.none { it.runId == "r2" } }
         assertTrue(c.runStreams.activeRuns.value.any { it.runId == "r1" })
         c.runStreams.close()
