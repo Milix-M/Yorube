@@ -9,6 +9,8 @@ import com.hermes.client.AppContainer
 import com.hermes.client.data.api.SessionInfo
 import com.hermes.client.data.api.isForeignSurface
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 
 class ConversationListViewModel(
     private val container: AppContainer,
@@ -25,17 +27,31 @@ class ConversationListViewModel(
 
     var showForeign by mutableStateOf(true)
         private set
+    private var refreshJob: Job? = null
 
     fun refresh() {
-        viewModelScope.launch {
+        // Initial composition and ON_RESUME can request the same refresh together.
+        if (refreshJob?.isActive == true) return
+        refreshJob = viewModelScope.launch {
             loading = true
             error = null
             try {
                 val settings = container.settingsStore.current()
                 pinnedIds = settings.pinnedSessionIds
                 showForeign = settings.showForeignSessions
-                val loaded = container.api().listSessions()
-                sessions = sortPinnedFirst(filterForeign(loaded, settings), settings.pinnedSessionIds)
+                val api = container.api(settings)
+                val loaded = linkedMapOf<String, SessionInfo>()
+                var offset = 0
+                do {
+                    val page = api.listSessions(limit = 50, offset = offset)
+                    val before = loaded.size
+                    page.forEach { if (it.key.isNotBlank()) loaded[it.key] = it }
+                    sessions = sortPinnedFirst(filterForeign(loaded.values.toList(), settings), settings.pinnedSessionIds)
+                    offset += page.size
+                    // Also stop when an older server ignores offset, avoiding an endless fetch.
+                } while (page.size == 50 && loaded.size > before)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 error = (e.message ?: e.javaClass.simpleName).take(200)
             } finally {

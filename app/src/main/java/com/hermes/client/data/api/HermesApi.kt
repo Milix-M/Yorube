@@ -9,13 +9,21 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.Response
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -39,18 +47,7 @@ class HermesApi(
     private val extraHeaders: Map<String, String> = emptyMap(),
     private val client: OkHttpClient = defaultClient(),
 ) {
-    private val base = baseUrl.trim().removeSuffix("/")
-
-    init {
-        val host = base.substringAfter("://").substringBefore("/").substringBefore(":")
-        val isHttps = base.startsWith("https://")
-        // Loopback never crosses a network, so plain http stays allowed there
-        // in every build type. Anything else must be https.
-        val local = host == "10.0.2.2" || host == "localhost" || host == "127.0.0.1"
-        if (!isHttps && !local) {
-            throw IllegalArgumentException("Base URL must be https (http is only for loopback)")
-        }
-    }
+    private val base = validatedBaseUrl(baseUrl)
 
     // -- low level --
 
@@ -103,12 +100,25 @@ class HermesApi(
         return HermesApiException(status, code, message)
     }
 
-    private suspend fun execute(request: Request): String = withContext(Dispatchers.IO) {
-        client.newCall(request).execute().use { response ->
-            val body = response.body?.string() ?: ""
-            if (!response.isSuccessful) throw parseError(response.code, body)
-            body
-        }
+    private suspend fun execute(request: Request): String = suspendCancellableCoroutine { continuation ->
+        val call = client.newCall(request)
+        continuation.invokeOnCancellation { call.cancel() }
+        call.enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                continuation.resumeWith(Result.failure(e))
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                // Read/close on OkHttp's worker; cancellation also interrupts a stalled body.
+                continuation.resumeWith(runCatching {
+                    response.use {
+                        val body = it.body?.string().orEmpty()
+                        if (!it.isSuccessful) throw parseError(it.code, body)
+                        body
+                    }
+                })
+            }
+        })
     }
 
     // -- M0: connection --
@@ -116,7 +126,9 @@ class HermesApi(
     suspend fun checkHealth(): Boolean {
         return try {
             val body = execute(get("/health"))
-            body.contains("\"ok\"")
+            HermesJson.parseToJsonElement(body).jsonObject.str("status") == "ok"
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             false
         }
@@ -182,9 +194,29 @@ class HermesApi(
     // -- M1: runs --
 
     suspend fun createRun(request: RunCreateRequest, idempotencyKey: String): RunAccepted {
-        val body = execute(
-            post("/v1/runs", HermesJson.encodeToString(request), mapOf(IDEMPOTENCY_HEADER to idempotencyKey))
-        )
+        val payload = HermesJson.encodeToJsonElement(request).jsonObject.toMutableMap()
+        payload.remove("images")
+        if (request.images.isNotEmpty()) {
+            payload["input"] = buildJsonArray {
+                add(buildJsonObject {
+                    put("role", "user")
+                    put("content", buildJsonArray {
+                        if (request.input.isNotBlank()) add(buildJsonObject {
+                            put("type", "text"); put("text", request.input)
+                        })
+                        request.images.forEach { image -> add(buildJsonObject {
+                            put("type", "image_url")
+                            put("image_url", buildJsonObject { put("url", image.dataUrl) })
+                        }) }
+                    })
+                })
+            }
+        }
+        val httpRequest = post("/v1/runs", JsonObject(payload).toString(), mapOf(IDEMPOTENCY_HEADER to idempotencyKey))
+        if (httpRequest.body!!.contentLength() > MAX_RUN_BYTES) {
+            throw HermesApiException(413, "request_too_large", "The message exceeds the 10 MB request limit")
+        }
+        val body = execute(httpRequest)
         return HermesJson.decodeFromString(body)
     }
 
@@ -400,6 +432,20 @@ class HermesApi(
     }
 
     companion object {
+        // Hermes API Server's default MAX_REQUEST_BYTES; includes JSON and Base64 overhead.
+        internal const val MAX_RUN_BYTES = 10_000_000L
+
+        internal fun validatedBaseUrl(value: String): String {
+            val url = value.trim().toHttpUrl()
+            require(url.username.isEmpty() && url.password.isEmpty() && url.query == null && url.fragment == null) {
+                "Base URL must not contain credentials, a query or a fragment"
+            }
+            require(url.isHttps || url.host in setOf("localhost", "127.0.0.1", "::1", "10.0.2.2")) {
+                "Base URL must be https (http is only for loopback)"
+            }
+            return url.toString().trimEnd('/')
+        }
+
         fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             // The server sends an SSE keepalive comment every ~10s (DESIGN §8),
@@ -408,6 +454,10 @@ class HermesApi(
             // run status and resubscribe instead of hanging forever.
             .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
+            // Access service-token headers are custom headers: OkHttp only strips
+            // Authorization on cross-origin redirects. Never forward credentials.
+            .followRedirects(false)
+            .followSslRedirects(false)
             .retryOnConnectionFailure(true)
             .build()
 

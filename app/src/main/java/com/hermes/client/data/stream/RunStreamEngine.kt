@@ -21,6 +21,8 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -50,6 +52,10 @@ internal fun isRunGoneFailure(e: Exception): Boolean {
 internal fun isUnrecoverableFailure(e: Exception): Boolean =
     e is HermesApiException && (e.status == 401 || e.status == 403 ||
         e.code == "permission_denied")
+
+private fun isDefiniteRunRejection(e: HermesApiException): Boolean =
+    e.status in listOf(400, 401, 403, 404, 405, 413, 415, 422) ||
+        (e.status == 409 && e.code != "idempotency_key_conflict")
 
 /** A server execution being tracked independently of its chat screen. */
 data class ActiveRun(val runId: String, val sessionId: String)
@@ -109,6 +115,9 @@ class RunStreamEngine(private val container: AppContainer) {
     private var starting = 0
     private val persistenceMutex = Mutex()
     private val saved = container.appContext.getSharedPreferences("active_runs", 0)
+    private val outbox = RunOutbox(container.appContext)
+    private val creations = mutableMapOf<Pair<List<String?>, com.hermes.client.data.api.RunCreateRequest>, Deferred<ActiveRun>>()
+    private val restoreMutex = Mutex()
 
     private class Record(val active: ActiveRun, var endpoint: String = "") {
         val journal = ArrayList<RunStreamUpdate>()
@@ -173,20 +182,47 @@ class RunStreamEngine(private val container: AppContainer) {
 
     /** Creation belongs to app scope too: leaving the screen must not orphan an accepted run. */
     suspend fun createTracked(request: com.hermes.client.data.api.RunCreateRequest,
-        settings: com.hermes.client.data.store.ClientSettings, key: String = java.util.UUID.randomUUID().toString(),
-        onAccepted: suspend () -> Unit = {}): ActiveRun {
-        return scope.async {
+        settings: com.hermes.client.data.store.ClientSettings, key: String? = null): ActiveRun = withContext(Dispatchers.Main.immediate) {
+        val identity = listOf(settings.baseUrl, settings.apiKey, settings.cfClientId, settings.cfClientSecret, key) to
+            request.copy(model = null, provider = null, modelOptions = null)
+        creations[identity]?.let { return@withContext it.await() }
+        val creation = scope.async(start = kotlinx.coroutines.CoroutineStart.LAZY) {
             starting++
             publishActive()
             // Start while the user action is still in the foreground, before waiting on the network.
             RunStreamService.start(container.appContext, "", request.sessionId.orEmpty())
             try {
+                val prepared = withContext(Dispatchers.IO) { outbox.prepare(request, settings, key) }
+                val pending = prepared.pending
                 val api = container.api(settings)
-                val accepted = api.createRun(request, key)
+                if (prepared.replay) {
+                    val policy = api.getCapabilities().features["runs_idempotency"] as? kotlinx.serialization.json.JsonObject
+                    val age = System.currentTimeMillis() - pending.createdAt
+                    check(policy?.get("supported").toString() == "true" && policy?.get("durable").toString() == "true" &&
+                        age >= 0 && age / 1000 < (policy?.long("retention_seconds") ?: 0)) {
+                        container.appContext.getString(com.hermes.client.R.string.send_outcome_unknown)
+                    }
+                }
+                val accepted = try { api.createRun(pending.request, pending.key) }
+                catch (e: HermesApiException) {
+                    // Definite refusals never executed; transport/5xx failures remain uncertain.
+                    if (isDefiniteRunRejection(e)) {
+                        withContext(Dispatchers.IO) {
+                            pending.request.sessionId?.let { session ->
+                                val keyName = "key:${queueKey(session, settings.baseUrl)}"
+                                if (queuePreferences.getString(keyName, null) == pending.key) {
+                                    check(queuePreferences.edit().remove(keyName).commit()) { "Could not unlock the rejected queue" }
+                                }
+                            }
+                            outbox.accepted(pending.key)
+                        }
+                    }
+                    throw e
+                }
                 // Persist the accepted ID before the optional session lookup.
                 // Hermes uses run_id for a fresh session when neither session nor response chain is supplied.
                 // Keep that ID even if the optional status lookup is temporarily unavailable.
-                val session = request.sessionId ?: if (request.previousResponseId == null) accepted.runId else ""
+                val session = pending.request.sessionId ?: if (pending.request.previousResponseId == null) accepted.runId else ""
                 val record = Record(ActiveRun(accepted.runId, session), settings.baseUrl)
                 records[accepted.runId] = record
                 persist()
@@ -195,14 +231,19 @@ class RunStreamEngine(private val container: AppContainer) {
                     status.sessionId?.takeIf { it.isNotBlank() }?.let { record.sessionId = it }
                 } catch (e: CancellationException) { throw e } catch (_: Exception) { }
                 if (record.sessionId.isNotBlank()) container.settingsStore.markAppOwned(record.sessionId)
-                onAccepted()
+                acknowledgeQueued(pending, settings.baseUrl)
+                withContext(Dispatchers.IO) { outbox.accepted(pending.key) }
                 launchRecord(record, pollFirst = false, settings = settings)
                 ActiveRun(accepted.runId, record.sessionId)
             } finally {
                 starting--
                 publishActive()
+                creations.remove(identity)
             }
-        }.await()
+        }
+        creations[identity] = creation
+        creation.start()
+        creation.await()
     }
 
     private fun launchRecord(record: Record, pollFirst: Boolean, settings: com.hermes.client.data.store.ClientSettings? = null) {
@@ -244,21 +285,39 @@ class RunStreamEngine(private val container: AppContainer) {
                 })
             }
         }.toString()
-        kotlinx.coroutines.withContext(Dispatchers.IO) { saved.edit().putString("runs", value).commit() }
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
+            check(saved.edit().putString("runs", value).commit()) { "Could not save tracked runs" }
+        }
     }
 
-    suspend fun restore() {
-        val endpoint = container.settingsStore.current().baseUrl
+    suspend fun restore() = restoreMutex.withLock {
+        val settings = container.settingsStore.current()
+        val endpoint = settings.baseUrl
         val list = runCatching {
             com.hermes.client.data.api.HermesJson.parseToJsonElement(saved.getString("runs", "[]")!!)
                 as kotlinx.serialization.json.JsonArray
-        }.getOrNull() ?: return
-        for (item in list) {
-            val obj = item as? kotlinx.serialization.json.JsonObject ?: continue
-            fun text(key: String) = (obj[key] as? kotlinx.serialization.json.JsonPrimitive)?.content.orEmpty()
-            if (text("endpoint") == endpoint && text("run").isNotBlank() && !records.containsKey(text("run"))) {
-                start(text("run"), text("session"), pollFirst = true)
-            }
+        }.getOrNull() ?: return@withLock
+        val restored = list.mapNotNull { item ->
+            val obj = item as? kotlinx.serialization.json.JsonObject ?: return@mapNotNull null
+            val id = obj.str("run").orEmpty()
+            if (obj.str("endpoint") != endpoint || id.isBlank()) return@mapNotNull null
+            records.getOrPut(id) { Record(ActiveRun(id, obj.str("session").orEmpty()), endpoint) }
+            id
+        }
+        // Only a server advertising durable, unexpired idempotency may replay an
+        // uncertain creation. createTracked checks this before sending the POST.
+        for (pending in withContext(Dispatchers.IO) { outbox.pending(settings) }) {
+            val connection = listOf(settings.baseUrl, settings.apiKey, settings.cfClientId, settings.cfClientSecret)
+            if (creations.keys.any { it.first.take(4) == connection &&
+                    it.second == pending.request.copy(model = null, provider = null, modelOptions = null) }) continue
+            try { createTracked(pending.request, settings, pending.key) }
+            catch (e: CancellationException) { throw e }
+            catch (_: Exception) { /* Keep the write-ahead record for an explicit retry. */ }
+        }
+        // Reconcile queue acknowledgements before a completed saved run can drain its queue.
+        for (id in restored) {
+            val record = records.getValue(id)
+            start(id, record.sessionId, pollFirst = true)
         }
     }
 
@@ -344,7 +403,8 @@ class RunStreamEngine(private val container: AppContainer) {
 
     private val queuePreferences = container.appContext.getSharedPreferences("run_queue", 0)
     private val sendingQueues = mutableSetOf<String>()
-    fun queueBusy(session: String) = session in sendingQueues
+    fun queueBusy(session: String) = session in sendingQueues ||
+        queuePreferences.contains("key:${queueKey(session, container.settingsStore.snapshot.baseUrl)}")
     private val queues = mutableMapOf<String, MutableList<String>>()
     private fun queueKey(session: String, endpoint: String) = "$endpoint|$session"
     fun queue(session: String, endpoint: String = container.settingsStore.snapshot.baseUrl): MutableList<String> {
@@ -361,9 +421,31 @@ class RunStreamEngine(private val container: AppContainer) {
         val array = kotlinx.serialization.json.JsonArray(queue(session).map { kotlinx.serialization.json.JsonPrimitive(it) })
         queuePreferences.edit().putString(queueKey(session, container.settingsStore.snapshot.baseUrl), array.toString()).apply()
     }
+
+    /** The same durable acknowledgement is used by live sends and outbox recovery. */
+    private suspend fun acknowledgeQueued(pending: PendingRun, endpoint: String) {
+        val session = pending.request.sessionId ?: return
+        val storageKey = queueKey(session, endpoint)
+        val keyName = "key:$storageKey"
+        if (queuePreferences.getString(keyName, null) != pending.key) return
+        val queue = queue(session, endpoint)
+        check(queue.firstOrNull() == pending.request.input) { "The queued message changed before acknowledgement" }
+        val remaining = queue.drop(1)
+        val array = kotlinx.serialization.json.JsonArray(remaining.map { kotlinx.serialization.json.JsonPrimitive(it) })
+        withContext(Dispatchers.IO) {
+            check(queuePreferences.edit().putString(storageKey, array.toString()).remove(keyName).commit()) {
+                "Could not save the acknowledged queue"
+            }
+        }
+        queue.clear()
+        queue.addAll(remaining)
+    }
+
     private suspend fun sendQueued(record: Record) {
         val session = record.sessionId
         if (session.isBlank() || activeRuns.value.any { it.sessionId == session && it.runId != record.active.runId }) return
+        val nextSettings = container.settingsStore.current()
+        if (nextSettings.baseUrl != record.endpoint) return
         val pending = queue(session, record.endpoint)
         val prompt = pending.firstOrNull() ?: return
         // A saved key makes a retry of this queued turn idempotent after process death.
@@ -372,18 +454,12 @@ class RunStreamEngine(private val container: AppContainer) {
         val key = queuePreferences.getString(keyName, null) ?: java.util.UUID.randomUUID().toString()
         sendingQueues.add(session)
         try {
-            kotlinx.coroutines.withContext(Dispatchers.IO) { queuePreferences.edit().putString(keyName, key).commit() }
-            publish(record, RunStreamUpdate.QueueStarting(record.active.runId))
-            val nextSettings = container.settingsStore.current()
-            if (nextSettings.baseUrl != record.endpoint) return
-            val next = createTracked(com.hermes.client.data.api.RunCreateRequest(input = prompt, sessionId = session,
-                model = nextSettings.model.ifBlank { null }, provider = nextSettings.provider.ifBlank { null }, modelOptions = nextSettings.modelOptions), nextSettings, key) {
-                if (pending.firstOrNull() == prompt) pending.removeAt(0)
-                val array = kotlinx.serialization.json.JsonArray(pending.map { kotlinx.serialization.json.JsonPrimitive(it) })
-                kotlinx.coroutines.withContext(Dispatchers.IO) {
-                    queuePreferences.edit().putString(storageKey, array.toString()).remove(keyName).commit()
-                }
+            withContext(Dispatchers.IO) {
+                check(queuePreferences.edit().putString(keyName, key).commit()) { "Could not save the queued message key" }
             }
+            publish(record, RunStreamUpdate.QueueStarting(record.active.runId))
+            val next = createTracked(com.hermes.client.data.api.RunCreateRequest(input = prompt, sessionId = session,
+                model = nextSettings.model.ifBlank { null }, provider = nextSettings.provider.ifBlank { null }, modelOptions = nextSettings.modelOptions), nextSettings, key)
             publish(record, RunStreamUpdate.NextRun(record.active.runId, next, prompt))
         } finally { sendingQueues.remove(session) }
     }

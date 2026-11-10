@@ -131,6 +131,42 @@ class HermesApiTest {
     }
 
     @Test
+    fun redirectsNeverForwardAccessCredentials() = runTest {
+        MockWebServer().use { destination ->
+            destination.start()
+            destination.enqueue(MockResponse().setBody("{}"))
+            server.enqueue(MockResponse().setResponseCode(302)
+                .setHeader("Location", destination.url("/steal").toString().replace("localhost", "127.0.0.1")))
+            val secured = HermesApi(server.url("").toString(), "dummy",
+                mapOf("CF-Access-Client-Id" to "dummy-id", "CF-Access-Client-Secret" to "dummy-secret"))
+            try { secured.getCapabilities(); fail("redirect must be rejected") }
+            catch (e: HermesApiException) { assertEquals(302, e.status) }
+            assertEquals(0, destination.requestCount)
+            assertEquals("dummy-secret", server.takeRequest(5, java.util.concurrent.TimeUnit.SECONDS)!!
+                .getHeader("CF-Access-Client-Secret"))
+        }
+    }
+
+    @Test
+    fun createRun_sendsActualImageBytesAsMultimodalInput() = runTest {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"image-run"}"""))
+        api.createRun(RunCreateRequest("describe", images = listOf(RunImage("photo.png", "data:image/png;base64,AQID"))), "image-key")
+        val body = HermesJson.parseToJsonElement(server.takeRequest(5, java.util.concurrent.TimeUnit.SECONDS)!!.body.readUtf8())
+            as kotlinx.serialization.json.JsonObject
+        assertNull(body["images"])
+        assertEquals(HermesJson.parseToJsonElement("""[{"role":"user","content":[{"type":"text","text":"describe"},{"type":"image_url","image_url":{"url":"data:image/png;base64,AQID"}}]}]"""), body["input"])
+    }
+
+    @Test
+    fun createRun_imageOnlyContainsNoEmptyTextPart() = runTest {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"image-run"}"""))
+        api.createRun(RunCreateRequest("", images = listOf(RunImage("photo.png", "data:image/png;base64,AQID"))), "image-key")
+        val body = server.takeRequest(5, java.util.concurrent.TimeUnit.SECONDS)!!.body.readUtf8()
+        assertTrue(body.contains("image_url"))
+        org.junit.Assert.assertFalse(body.contains("\"type\":\"text\""))
+    }
+
+    @Test
     fun plainHttp_outsideLoopback_isRejected() {
         try {
             HermesApi("http://example.com", "k")

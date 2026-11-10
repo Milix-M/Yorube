@@ -16,6 +16,9 @@ import com.hermes.client.data.api.HermesApiException
 import com.hermes.client.data.api.HermesJson
 import com.hermes.client.data.api.HistoryMessage
 import com.hermes.client.data.api.RunCreateRequest
+import com.hermes.client.data.api.RunImage
+import com.hermes.client.data.attachments.ImageAttachment
+import com.hermes.client.data.attachments.ImageAttachments
 import com.hermes.client.data.api.RunEvent
 import com.hermes.client.data.api.SessionMessage
 import com.hermes.client.data.api.extractModelIds
@@ -60,6 +63,9 @@ class ChatViewModel(
 
     val messages = mutableStateListOf<UiMessage>()
     var input by mutableStateOf("")
+    val attachments = mutableStateListOf<ImageAttachment>()
+    var attaching by mutableStateOf(false)
+        private set
     var busy by mutableStateOf(false)
         private set
     var statusLine by mutableStateOf("")
@@ -68,6 +74,9 @@ class ChatViewModel(
         private set
     var clarify by mutableStateOf<ClarifyPrompt?>(null)
         private set
+    var controlSending by mutableStateOf(false)
+        private set
+    var clarifyAnswer by mutableStateOf("")
     var error by mutableStateOf<String?>(null)
         private set
     /**
@@ -116,6 +125,8 @@ class ChatViewModel(
     private var assistantIndex: Int = -1
     /** Last prompt actually sent as a run; /retry resends it. */
     private var lastSentText: String? = null
+    private var lastSentImages: List<RunImage> = emptyList()
+    private var clarifyAnswerIdentity: Triple<String, String, Long>? = null
     /** Most recent run id, kept after it ends so /usage can read it back. */
     private var lastRunId: String? = null
     /** Prompts queued by /queue while a run is active (FIFO). */
@@ -226,17 +237,39 @@ class ChatViewModel(
         foldMarkupOutOfReplies()
     }
 
+    fun attachImage(uri: android.net.Uri) {
+        if (busy || attaching || historyLoading || foreignBlocked) return
+        if (attachments.size >= ImageAttachments.MAX_IMAGES) {
+            error = s(R.string.image_limit)
+            return
+        }
+        attaching = true
+        viewModelScope.launch {
+            try {
+                val image = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    ImageAttachments.read(container.appContext, uri)
+                }
+                attachments.add(image)
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) { error = e.message ?: s(R.string.image_unreadable) }
+            finally { attaching = false }
+        }
+    }
+
     fun onSend() {
         val text = input.trim()
-        if (text.isEmpty()) return
-        if (dispatchCommand(text)) return
-        if (busy || historyLoading || foreignBlocked || commandRunning) return
+        if (text.isEmpty() && attachments.isEmpty()) return
+        if (attachments.isEmpty() && dispatchCommand(text)) return
+        if (busy || attaching || historyLoading || foreignBlocked || commandRunning) return
         input = ""
-        messages.add(UiMessage(idSeq++, MsgKind.USER, text))
-        startRun(text, history = null)
+        val images = attachments.map { it.image }
+        messages.add(UiMessage(idSeq++, MsgKind.USER, listOf(text, images.joinToString("\n") { "[${it.name}]" })
+            .filter { it.isNotBlank() }.joinToString("\n")))
+        startRun(text, history = null, images = images)
     }
 
     fun onSteer() {
+        if (attachments.isNotEmpty()) { error = s(R.string.image_while_running); return }
         val text = input.trim()
         if (text.isEmpty()) return
         if (dispatchCommand(text)) return
@@ -565,7 +598,7 @@ class ChatViewModel(
             text == null -> postErrorMessage(s(R.string.cmd_retry_none))
             else -> {
                 messages.add(UiMessage(idSeq++, MsgKind.USER, text))
-                startRun(text, history = null)
+                startRun(text, history = null, images = lastSentImages)
             }
         }
     }
@@ -1071,26 +1104,30 @@ class ChatViewModel(
     }
 
     fun answerApproval(choice: String) {
+        if (controlSending) return
         val req = approval ?: return
         val id = runId ?: return
-        approval = null
+        controlSending = true
         viewModelScope.launch {
             refreshLanguage()
             try {
                 container.api().answerApproval(id, ApprovalAnswer(req.requestId, req.executionGeneration, choice))
+                if (approval == req) approval = null
                 container.runStreams.controlAnswered(id)
                 statusLine = s(R.string.st_approved, choice)
             } catch (e: HermesApiException) {
                 // Stale generations recover via DESIGN §9.4 first: a 409 here
                 // usually means the answer missed, not that the session died.
-                if (e.status == 409 && recoverPendingControl(id)) {
-                    return@launch
+                if (e.status == 409) {
+                    if (approval == req) approval = null
+                    if (recoverPendingControl(id)) return@launch
                 }
                 if (isRunGone(e)) {
                     // The run already ended: drop the dialog locally without
                     // blaming the conversation (the session is still usable).
                     busy = false
                     runId = null
+                    approval = null
                     clarify = null
                     statusLine = ""
                     error = runGoneError(e)
@@ -1100,13 +1137,16 @@ class ChatViewModel(
             } catch (e: Exception) {
                 // API status failures were handled by the HermesApiException catch above.
                 error = friendlyError(e)
+            } finally {
+                controlSending = false
             }
         }
     }
 
     fun answerClarify(answer: String) {
+        if (controlSending) return
         val prompt = clarify ?: return
-        clarify = null
+        controlSending = true
         viewModelScope.launch {
             refreshLanguage()
             try {
@@ -1114,18 +1154,21 @@ class ChatViewModel(
                     prompt.runId,
                     ClarifyRequest(prompt.requestId, prompt.executionGeneration, answer),
                 )
+                if (clarify == prompt) { clarify = null; clarifyAnswer = "" }
                 container.runStreams.controlAnswered(prompt.runId)
                 statusLine = s(R.string.st_answered)
             } catch (e: HermesApiException) {
                 // Same §9.4 recovery as approvals: the answer may have
                 // missed its generation while a control still waits.
-                if (e.status == 409 && recoverPendingControl(prompt.runId)) {
-                    return@launch
+                if (e.status == 409) {
+                    if (clarify == prompt) clarify = null
+                    if (recoverPendingControl(prompt.runId)) return@launch
                 }
                 if (isRunGone(e)) {
                     busy = false
                     runId = null
                     approval = null
+                    clarify = null
                     statusLine = ""
                     error = runGoneError(e)
                 } else if (isSessionGone(e)) abandonRun(friendlyError(e)) else error = friendlyError(e)
@@ -1133,6 +1176,8 @@ class ChatViewModel(
                 throw e
             } catch (e: Exception) {
                 error = friendlyError(e)
+            } finally {
+                controlSending = false
             }
         }
     }
@@ -1173,9 +1218,16 @@ class ChatViewModel(
         // PendingControl has only Approval and Clarify variants. A nonempty list
         // without approvals therefore always contains a question.
         val question = parsed.filterIsInstance<PendingControl.Clarify>().last()
-        clarify = ClarifyPrompt(id, question.requestId, question.executionGeneration, question.prompt)
+        showClarify(ClarifyPrompt(id, question.requestId, question.executionGeneration, question.prompt))
         statusLine = s(R.string.st_question)
         return true
+    }
+
+    private fun showClarify(prompt: ClarifyPrompt) {
+        val identity = Triple(prompt.runId, prompt.requestId, prompt.executionGeneration)
+        if (identity != clarifyAnswerIdentity) clarifyAnswer = ""
+        clarifyAnswerIdentity = identity
+        clarify = prompt
     }
 
     fun dismissError() {
@@ -1268,16 +1320,17 @@ class ChatViewModel(
         }
     }
 
-    private fun startRun(text: String, history: List<HistoryMessage>?) {
+    private fun startRun(text: String, history: List<HistoryMessage>?, images: List<RunImage> = emptyList()) {
         busy = true
         error = null
         statusLine = s(R.string.st_starting)
         assistantIndex = -1
         lastSentText = text
-        viewModelScope.launch { doStartRun(text, history) }
+        lastSentImages = images
+        viewModelScope.launch { doStartRun(text, history, images) }
     }
 
-    private suspend fun doStartRun(text: String, history: List<HistoryMessage>?) {
+    private suspend fun doStartRun(text: String, history: List<HistoryMessage>?, images: List<RunImage>) {
         val settings = container.settingsStore.current()
         uiLanguage = settings.language
         if (!settings.isConfigured) {
@@ -1289,15 +1342,18 @@ class ChatViewModel(
         try {
             val accepted = container.runStreams.createTracked(
                 RunCreateRequest(input = text, sessionId = sessionId.ifBlank { null }, conversationHistory = history,
-                    model = settings.model.ifBlank { null }, provider = settings.provider.ifBlank { null }, modelOptions = settings.modelOptions), settings)
+                    model = settings.model.ifBlank { null }, provider = settings.provider.ifBlank { null }, modelOptions = settings.modelOptions,
+                    images = images), settings)
             id = accepted.runId
             runId = id
             sessionId = accepted.sessionId
+            attachments.clear()
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
             busy = false
             statusLine = ""
+            if (input.isBlank()) input = text
             error = friendlyError(e)
             // Other-surface sessions (e.g. Discord) reject runs: lock the
             // input, remember the key for history filtering, and ask to
@@ -1429,7 +1485,7 @@ class ChatViewModel(
                 statusLine = s(R.string.st_waiting_approval)
             }
             is RunEvent.ClarifyRequested -> {
-                clarify = ClarifyPrompt(id, event.requestId, event.executionGeneration, event.prompt)
+                showClarify(ClarifyPrompt(id, event.requestId, event.executionGeneration, event.prompt))
                 statusLine = s(R.string.st_question)
             }
             is RunEvent.Reasoning -> {
@@ -1480,6 +1536,7 @@ class ChatViewModel(
     private fun friendlyError(e: Exception): String {
         if (e is HermesApiException) {
             return when (e.code) {
+                "request_too_large" -> s(R.string.message_too_large)
                 "admission_conflict", "idempotency_key_conflict" ->
                     s(R.string.err_conflict, e.status)
                 "unknown_execution" ->

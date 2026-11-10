@@ -12,17 +12,18 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
-import androidx.compose.ui.test.performScrollToNode
-import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.test.core.app.ApplicationProvider
 import com.hermes.client.HermesApp
 import com.hermes.client.R
@@ -97,6 +98,27 @@ class ChatScreenTest {
         compose.onNodeWithTag("attachButton").assertIsEnabled()
     }
 
+    @Test fun attachmentPreviewCanBeRemovedBeforeSending() {
+        val attachments = androidx.compose.runtime.mutableStateListOf(
+            com.hermes.client.data.attachments.ImageAttachment(
+                com.hermes.client.data.api.RunImage("photo.png", "data:image/png;base64,AQID"),
+                android.graphics.Bitmap.createBitmap(32, 32, android.graphics.Bitmap.Config.ARGB_8888)))
+        compose.setContent {
+            HermesAppTheme {
+                androidx.compose.foundation.layout.Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.BottomCenter) {
+                com.hermes.client.ui.screens.ChatInputBar(
+                    input = "", busy = false, enabled = true, enterToSend = false,
+                    onInputChange = {}, onSend = {}, onSteer = {}, onStop = {}, onFork = {},
+                    showForkBanner = false, attachments = attachments, attaching = false,
+                    onAttach = {}, onRemoveAttachment = { attachments.removeAt(it) })
+                }
+            }
+        }
+        compose.onNodeWithContentDescription("photo.png").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Remove image").performClick()
+        compose.onNodeWithContentDescription("photo.png").assertDoesNotExist()
+    }
+
     @Test
     fun slashHelpCompletesCommandWithoutSendingAndStaysVisibleForArguments() {
         clearSettings()
@@ -139,7 +161,8 @@ class ChatScreenTest {
         clearSettings()
         compose.setContent { HermesAppTheme { ChatScreen(sessionId = null) } }
         compose.onNodeWithTag("chatInput").performTextInput("/")
-        compose.onNodeWithTag("slashHintsList").performScrollToNode(hasTestTag("slashHint-version"))
+        val versionIndex = com.hermes.client.ui.screens.slashCommandSuggestions("/").indexOfFirst { it.name == "version" }
+        compose.onNodeWithTag("slashHintsList").performScrollToIndex(versionIndex)
         compose.onNodeWithTag("slashHint-version").assertIsDisplayed()
         compose.onNodeWithTag("chatInput").performTextReplacement("/que")
         compose.onNodeWithTag("slashHint-queue").assertIsDisplayed().performClick()

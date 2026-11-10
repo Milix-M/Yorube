@@ -20,6 +20,9 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -104,6 +107,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isShiftPressed
@@ -140,6 +145,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.hermes.client.HermesApp
 import com.hermes.client.R
 import com.hermes.client.data.api.SessionInfo
+import com.hermes.client.data.attachments.ImageAttachment
+import com.hermes.client.data.attachments.ImageAttachments
 import com.hermes.client.data.store.ClientSettings
 import com.hermes.client.ui.theme.GeminiSparkAvatar
 import com.hermes.client.ui.theme.geminiHeadlineStyle
@@ -177,7 +184,6 @@ fun ChatScreen(
     val forkLabel = stringResource(R.string.fork_and_continue)
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-    val clarifyAnswer = remember { mutableStateOf("") }
     // Input behavior follows Settings: Enter sends only when opted in.
     val displaySettings by app.container.settingsStore.settings.collectAsState(initial = ClientSettings())
     val messageSnapshot = vm.messages.toList()
@@ -281,6 +287,10 @@ fun ChatScreen(
                 onStop = vm::onStop,
                 onFork = vm::forkAndContinue,
                 showForkBanner = vm.foreignBlocked && !vm.forkDialogOpen,
+                attachments = vm.attachments,
+                attaching = vm.attaching,
+                onAttach = vm::attachImage,
+                onRemoveAttachment = { vm.attachments.removeAt(it) },
             )
         },
     ) { padding ->
@@ -400,7 +410,7 @@ fun ChatScreen(
             },
             title = { Text(stringResource(R.string.approval_title)) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
                         stringResource(R.string.approval_desc),
                         style = MaterialTheme.typography.bodySmall,
@@ -450,10 +460,18 @@ fun ChatScreen(
                         for (choice in req.choices) {
                             FilledTonalButton(
                                 onClick = { vm.answerApproval(choice) },
+                                enabled = !vm.controlSending,
                                 modifier = Modifier.fillMaxWidth(),
-                            ) { Text(choice) }
+                            ) { Text(when (choice) {
+                                "once" -> stringResource(R.string.approval_once)
+                                "session" -> stringResource(R.string.approval_session)
+                                "always" -> stringResource(R.string.approval_always)
+                                "deny" -> stringResource(R.string.approval_deny)
+                                else -> choice
+                            }) }
                         }
                     }
+                    vm.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
             },
         )
@@ -463,10 +481,8 @@ fun ChatScreen(
         AlertDialog(
             onDismissRequest = { /* must answer */ },
             confirmButton = {
-                TextButton(onClick = {
-                    vm.answerClarify(clarifyAnswer.value)
-                    clarifyAnswer.value = ""
-                }) { Text(stringResource(R.string.send)) }
+                TextButton(enabled = !vm.controlSending && vm.clarifyAnswer.isNotBlank(),
+                    onClick = { vm.answerClarify(vm.clarifyAnswer) }) { Text(stringResource(R.string.send)) }
             },
             icon = { GeminiSparkAvatar(size = 40.dp, iconSize = 22.dp) },
             title = { Text(stringResource(R.string.question_title)) },
@@ -474,13 +490,15 @@ fun ChatScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(prompt.prompt, style = MaterialTheme.typography.bodyMedium)
                     androidx.compose.material3.OutlinedTextField(
-                        value = clarifyAnswer.value,
-                        onValueChange = { clarifyAnswer.value = it },
+                        value = vm.clarifyAnswer,
+                        onValueChange = { vm.clarifyAnswer = it },
+                        enabled = !vm.controlSending,
                         placeholder = { Text(stringResource(R.string.clarify_hint)) },
                         modifier = Modifier.fillMaxWidth().testTag("clarifyInput"),
                         maxLines = 4,
                         shape = RoundedCornerShape(16.dp),
                     )
+                    vm.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
             },
         )
@@ -536,7 +554,7 @@ private fun GeminiChatTopBar(
 }
 
 @Composable
-private fun ChatInputBar(
+internal fun ChatInputBar(
     input: String,
     busy: Boolean,
     enabled: Boolean,
@@ -547,6 +565,10 @@ private fun ChatInputBar(
     onStop: () -> Unit,
     onFork: () -> Unit,
     showForkBanner: Boolean,
+    attachments: List<ImageAttachment>,
+    attaching: Boolean,
+    onAttach: (android.net.Uri) -> Unit,
+    onRemoveAttachment: (Int) -> Unit,
 ) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
@@ -568,11 +590,7 @@ private fun ChatInputBar(
         rememberLauncherForActivityResult(
             ActivityResultContracts.GetContent()
         ) { uri ->
-            if (uri != null) {
-                val name = queryDisplayName(context, uri) ?: "image"
-                val token = "[${context.getString(R.string.image_label)}: $name]"
-                onInputChange(if (input.isBlank()) token else "$input $token")
-            }
+            if (uri != null) onAttach(uri)
         }
     }
     // Sending clears focus so the keyboard closes.
@@ -589,6 +607,23 @@ private fun ChatInputBar(
             // keyboard-sized white gap.
             .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
+        if (attachments.isNotEmpty() || attaching) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
+                attachments.forEachIndexed { index, attachment ->
+                    Box {
+                        Image(attachment.thumbnail.asImageBitmap(), contentDescription = attachment.image.name,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.size(64.dp).clip(RoundedCornerShape(12.dp)))
+                        IconButton(onClick = { onRemoveAttachment(index) }, enabled = !busy,
+                            modifier = Modifier.align(Alignment.TopEnd).size(28.dp)
+                                .background(MaterialTheme.colorScheme.surface, CircleShape)) {
+                            Icon(Icons.Filled.Close, stringResource(R.string.remove_attachment), Modifier.size(16.dp))
+                        }
+                    }
+                }
+                if (attaching) CircularProgressIndicator(Modifier.size(32.dp))
+            }
+        }
         if (showForkBanner) {
             ForkBanner(
                 onFork = onFork,
@@ -618,7 +653,7 @@ private fun ChatInputBar(
             ) {
                 IconButton(
                     onClick = { attachLauncher?.launch("image/*") },
-                    enabled = enabled && attachLauncher != null,
+                    enabled = enabled && !busy && !attaching && attachments.size < ImageAttachments.MAX_IMAGES && attachLauncher != null,
                     modifier = Modifier.testTag("attachButton").size(44.dp),
                 ) {
                     Icon(
@@ -680,6 +715,11 @@ private fun ChatInputBar(
                     ),
                 )
                 if (busy) {
+                    GradientSendButton(
+                        enabled = enabled && input.isNotBlank() && attachments.isEmpty(),
+                        onClick = steerAndClose,
+                        modifier = Modifier.testTag("steerButton"),
+                    )
                     // While running, the send button itself becomes the stop button.
                     CircleStopButton(
                         onClick = onStop,
@@ -687,7 +727,7 @@ private fun ChatInputBar(
                     )
                 } else {
                     GradientSendButton(
-                        enabled = enabled && input.isNotBlank(),
+                        enabled = enabled && !attaching && (input.isNotBlank() || attachments.isNotEmpty()),
                         onClick = sendAndClose,
                         modifier = Modifier.testTag("sendButton"),
                     )
@@ -1342,18 +1382,6 @@ private fun ActivityLog(msgs: List<UiMessage>, modifier: Modifier = Modifier) {
                 }
             }
         }
-    }
-}
-
-/** Display name of a picked file for the attachment reference token. */
-private fun queryDisplayName(context: android.content.Context, uri: android.net.Uri): String? {
-    return try {
-        context.contentResolver.query(uri, null, null, null, null)?.use { c ->
-            val idx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-            if (c.moveToFirst() && idx >= 0) c.getString(idx) else null
-        }
-    } catch (_: Exception) {
-        null
     }
 }
 

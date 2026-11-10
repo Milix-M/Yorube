@@ -1,0 +1,13 @@
+<resources>
+    <string name="message_too_large">The message exceeds 10 MB including attachments. Remove an image or shorten the message.</string>
+    <string name="approval_once">Allow once</string>
+    <string name="approval_session">Allow for this session</string>
+    <string name="approval_always">Always allow</string>
+    <string name="approval_deny">Deny</string>
+    <string name="image_limit">You can attach up to 3 images.</string>
+    <string name="image_too_large">Choose an image smaller than 5 MB.</string>
+    <string name="image_unreadable">Could not read this image. Choose a JPEG, PNG, WebP or GIF image.</string>
+    <string name="image_while_running">Images can be sent after the current run ends.</string>
+    <string name="remove_attachment">Remove image</string>
+    <string name="send_outcome_unknown">The previous message may have been accepted. Check the server history before sending it again.</string>
+</resources>

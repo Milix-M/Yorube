@@ -10,6 +10,7 @@ import com.hermes.client.data.store.SettingsStore
 
 class AppContainer(val appContext: android.content.Context) {
     val settingsStore = SettingsStore(appContext)
+    private val httpClient = HermesApi.defaultClient()
     val runNotifications by lazy { RunNotifications(this) }
 
     /**
@@ -33,11 +34,12 @@ class AppContainer(val appContext: android.content.Context) {
             baseUrl = s.baseUrl,
             apiKey = s.apiKey,
             extraHeaders = extra,
+            client = httpClient,
         )
     }
 }
 
-class HermesApp : Application() {
+open class HermesApp : Application() {
     lateinit var container: AppContainer
         private set
 

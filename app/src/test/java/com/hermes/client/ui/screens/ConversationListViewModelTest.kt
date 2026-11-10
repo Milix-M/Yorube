@@ -2,10 +2,12 @@ package com.hermes.client.ui.screens
 
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
+import androidx.lifecycle.viewModelScope
 import com.hermes.client.AppContainer
 import com.hermes.client.data.api.SessionInfo
 import com.hermes.client.data.store.ClientSettings
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import com.hermes.client.testutil.awaitCondition
@@ -62,6 +64,65 @@ class ConversationListViewModelTest {
         assertEquals(listOf(SessionInfo(id = "s1", title = "t")), vm.sessions)
         assertNull(vm.error)
         assertEquals(false, vm.loading)
+    }
+
+    @Test fun refreshLoadsBeyondFirstFiftyAndKeepsPinsFirst() = runVmTest {
+        val c = containerWithSettings()
+        c.settingsStore.setPinned("s100", true)
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                val offset = request.requestUrl!!.queryParameter("offset")!!.toInt()
+                val end = minOf(offset + 50, 101)
+                return MockResponse().setBody("""{"sessions":[${(offset until end).joinToString(",") { """{"id":"s$it","title":"title-$it"}""" }}]}""")
+            }
+        }
+        val vm = ConversationListViewModel(c)
+        vm.refresh()
+        awaitCondition { !vm.loading }
+        assertNull(vm.error)
+        assertEquals(101, vm.sessions.size)
+        assertEquals("s100", vm.sessions.first().key)
+        assertEquals(3, server.requestCount)
+    }
+
+    @Test fun paginationStopsWhenServerIgnoresOffset() = runVmTest {
+        val response = """{"sessions":[${(0 until 50).joinToString(",") { """{"id":"s$it"}""" }}]}"""
+        server.enqueue(MockResponse().setBody(response))
+        server.enqueue(MockResponse().setBody(response))
+        val vm = ConversationListViewModel(containerWithSettings())
+        vm.refresh()
+        awaitCondition { !vm.loading }
+        assertNull(vm.error)
+        assertEquals(50, vm.sessions.size)
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test fun simultaneousRefreshesShareOneFetchAndLaterRefreshStillWorks() = runVmTest {
+        val vm = ConversationListViewModel(containerWithSettings())
+        server.enqueue(MockResponse().setBody("""{"sessions":[{"id":"first"}]}""")
+            .setBodyDelay(100, java.util.concurrent.TimeUnit.MILLISECONDS))
+        vm.refresh()
+        vm.refresh()
+        awaitCondition { !vm.loading }
+        assertEquals(1, server.requestCount)
+        assertEquals("first", vm.sessions.single().key)
+        server.enqueue(MockResponse().setBody("""{"sessions":[{"id":"updated"}]}"""))
+        vm.refresh()
+        awaitCondition { !vm.loading }
+        assertEquals("updated", vm.sessions.single().key)
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test fun leavingListDuringFetchDoesNotReportFailureOrPublishStaleRows() = runVmTest {
+        val vm = ConversationListViewModel(containerWithSettings())
+        server.enqueue(MockResponse().setBody("""{"sessions":[{"id":"stale"}]}""")
+            .setBodyDelay(200, java.util.concurrent.TimeUnit.MILLISECONDS))
+        vm.refresh()
+        awaitCondition { server.requestCount == 1 }
+        vm.viewModelScope.cancel()
+        awaitCondition { !vm.loading }
+        assertNull(vm.error)
+        assertTrue(vm.sessions.isEmpty())
     }
 
     @Test

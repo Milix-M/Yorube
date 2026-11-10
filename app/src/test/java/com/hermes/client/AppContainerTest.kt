@@ -43,6 +43,22 @@ class AppContainerTest {
     }
 
     @Test
+    fun successiveApiInstancesReuseConnectionsWithoutRetainingOldCredentials() = runVmTest {
+        val c = AppContainer(ApplicationProvider.getApplicationContext<Application>())
+        val settings = ClientSettings(baseUrl = server.url("/").toString(), apiKey = "first",
+            cfClientId = "id", cfClientSecret = "secret")
+        repeat(2) { server.enqueue(MockResponse().setBody("{}")) }
+        c.api(settings).getCapabilities()
+        c.api(settings.copy(apiKey = "second", cfClientId = "", cfClientSecret = "")).getCapabilities()
+        val first = server.takeRequest()
+        val second = server.takeRequest()
+        assertEquals(0, first.sequenceNumber)
+        assertEquals(1, second.sequenceNumber)
+        assertEquals("Bearer second", second.getHeader("Authorization"))
+        assertNull(second.getHeader("CF-Access-Client-Secret"))
+    }
+
+    @Test
     fun api_sendsCloudflareHeadersWhenConfigured() = runVmTest {        val url = server.url("").toString().removeSuffix("/")
         val app = ApplicationProvider.getApplicationContext<Application>()
         val c = AppContainer(app)
