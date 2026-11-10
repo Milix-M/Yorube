@@ -199,4 +199,6 @@
     <string name="cmd_cron_usage">/cron list、/cron add 名前 | スケジュール | プロンプト、/cron edit ID 名前 | スケジュール | プロンプト、/cron show|pause|resume|run|remove ID</string>
     <string name="cmd_cron_done">定期実行: %1$s が完了しました。</string>
     <string name="cmd_cron_empty">定期実行はありません。</string>
+    <string name="privacy_policy">プライバシー</string>
+    <string name="open_source_licenses">オープンソースライセンス</string>
 </resources>

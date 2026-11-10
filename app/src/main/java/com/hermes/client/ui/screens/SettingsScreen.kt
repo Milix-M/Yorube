@@ -227,6 +227,7 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
                     modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)),
                 )
             }
+            LegalDocumentLinks()
             Text(
                 "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
                 style = MaterialTheme.typography.labelSmall,

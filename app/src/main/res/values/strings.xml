@@ -198,4 +198,6 @@
     <string name="cmd_cron_usage">/cron list; /cron add name | schedule | prompt; /cron edit id name | schedule | prompt; /cron show|pause|resume|run|remove id</string>
     <string name="cmd_cron_done">Cron: %1$s completed.</string>
     <string name="cmd_cron_empty">No scheduled tasks.</string>
+    <string name="privacy_policy">Privacy policy</string>
+    <string name="open_source_licenses">Open-source licenses</string>
 </resources>

@@ -1,0 +1,9 @@
+
+# Generated APK notices and verbatim upstream data are kept reviewable as source files.
+app/src/main/assets/legal/* linguist-generated
+third_party/sources/* linguist-vendored
+third_party/licenses/* linguist-vendored
+third_party/notices/* linguist-vendored
+# Preserve the whitespace of the upstream MPL text and its generated copy.
+third_party/licenses/MPL-2.0.txt whitespace=-blank-at-eol
+app/src/main/assets/legal/THIRD_PARTY_NOTICES.txt whitespace=-blank-at-eol

@@ -1,3 +1,4 @@
+import groovy.json.JsonSlurper
 import org.gradle.api.file.FileCollection
 import org.gradle.api.tasks.testing.Test
 import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
@@ -194,3 +195,30 @@ tasks.register<JacocoCoverageVerification>("jacocoCoverageVerification") {
     sourceDirectories.setFrom(files("src/main/java"))
     executionData.setFrom(jacocoExec())
 }
+
+fun releaseDependencyCoordinates(): List<String> =
+    configurations.getByName("releaseRuntimeClasspath").resolvedConfiguration.resolvedArtifacts
+        .map { it.moduleVersion.id.toString() }.distinct().sorted()
+
+tasks.register("exportReleaseDependencies") {
+    doLast {
+        val report = layout.buildDirectory.file("reports/legal/release-dependencies.txt").get().asFile
+        report.parentFile.mkdirs()
+        report.writeText(releaseDependencyCoordinates().joinToString("\n", postfix = "\n"))
+    }
+}
+
+val verifyThirdPartyNotices = tasks.register("verifyThirdPartyNotices") {
+    group = "verification"
+    description = "Check that resolved release artifacts match the reviewed license inventory"
+    doLast {
+        val inventory = JsonSlurper().parse(rootProject.file("third_party/dependencies.json")) as Map<*, *>
+        val expected = (inventory["dependencies"] as List<*>).map { (it as Map<*, *>)["coordinate"] as String }.sorted()
+        val actual = releaseDependencyCoordinates()
+        check(actual == expected) {
+            "Third-party inventory is stale. Added/upgraded: " + (actual - expected.toSet()) +
+                "; removed: " + (expected - actual.toSet()) + ". See third_party/README.md"
+        }
+    }
+}
+tasks.named("preBuild") { dependsOn(verifyThirdPartyNotices) }

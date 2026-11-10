@@ -19,6 +19,10 @@ jobs:
           fetch-depth: 0
       - name: Verify release commit belongs to develop
         run: git merge-base --is-ancestor HEAD origin/develop
+      - name: Verify license and generated legal documents
+        run: |
+          test -s LICENSE || { echo "Select the app license before publishing; see docs/PUBLISHING.md"; exit 1; }
+          python3 scripts/generate_legal.py --check
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -45,16 +49,19 @@ jobs:
           YORUBE_SIGNING_KEY_ALIAS: ${{ secrets.YORUBE_SIGNING_KEY_ALIAS }}
           YORUBE_SIGNING_KEY_PASSWORD: ${{ secrets.YORUBE_SIGNING_KEY_PASSWORD }}
         run: ./gradlew :app:assembleRelease :app:lintRelease --no-daemon
+      - name: Package APK, notices, source and checksums
+        run: bash scripts/package-release.sh
       - uses: actions/upload-artifact@v4
         with:
           name: yorube-release
-          path: app/build/outputs/apk/release/app-release.apk
+          path: app/build/outputs/distribution/*
           if-no-files-found: error
       - name: Publish signed APK to Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: app/build/outputs/apk/release/app-release.apk
+          files: app/build/outputs/distribution/*
+          fail_on_unmatched_files: true
           generate_release_notes: true
       - name: Remove signing key
         if: always()
