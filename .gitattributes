@@ -7,3 +7,4 @@ third_party/notices/* linguist-vendored
 # Preserve the whitespace of the upstream MPL text and its generated copy.
 third_party/licenses/MPL-2.0.txt whitespace=-blank-at-eol
 app/src/main/assets/legal/THIRD_PARTY_NOTICES.txt whitespace=-blank-at-eol
+app/src/main/assets/legal/LICENSES.txt whitespace=-blank-at-eol
