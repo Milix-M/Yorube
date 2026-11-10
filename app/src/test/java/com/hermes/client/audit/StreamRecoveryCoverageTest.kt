@@ -1,5 +1,6 @@
 package com.hermes.client.audit
 
+import com.hermes.client.testutil.takeRequestOrFail
 import android.app.NotificationManager
 import androidx.lifecycle.viewModelScope
 import androidx.test.core.app.ApplicationProvider
@@ -123,10 +124,10 @@ class StreamRecoveryCoverageTest {
             c.api().updateSessionTitle("s", "renamed")
             c.api().resolveUnknownRun("r", "admission", 2)
         }
-        val title = server.takeRequest()
+        val title = server.takeRequestOrFail()
         assertEquals("PATCH", title.method)
         assertTrue(title.body.readUtf8().contains("renamed"))
-        assertEquals("/v1/runs/r/resolve-unknown", server.takeRequest().path)
+        assertEquals("/v1/runs/r/resolve-unknown", server.takeRequestOrFail().path)
     }
 
     @Test fun cancelledSettingsReadPropagatesCancellation() = runVmTest {

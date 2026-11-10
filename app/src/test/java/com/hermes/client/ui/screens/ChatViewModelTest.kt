@@ -1,5 +1,6 @@
 package com.hermes.client.ui.screens
 
+import com.hermes.client.testutil.takeRequestOrFail
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import androidx.lifecycle.viewModelScope
@@ -8,7 +9,6 @@ import com.hermes.client.HermesApp
 import com.hermes.client.data.store.ClientSettings
 import com.hermes.client.testutil.awaitCondition
 import com.hermes.client.testutil.runVmTest
-import com.hermes.client.testutil.shutdownServer
 import kotlinx.coroutines.cancel
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
@@ -40,6 +40,7 @@ import org.robolectric.annotation.Config
 class ChatViewModelTest {
 
     private lateinit var server: MockWebServer
+    private val containers = mutableListOf<AppContainer>()
 
     @Before
     fun setUp() {
@@ -49,16 +50,14 @@ class ChatViewModelTest {
 
     @After
     fun tearDown() {
-        // The reattach test parks a foreign run's stream on a 10 s
-        // headers delay; a plain server.shutdown() gives up on it
-        // after 5 s (see shutdownServer).
-        shutdownServer(server)
+        containers.forEach { it.runStreams.close() }
+        server.shutdown()
     }
 
     private suspend fun TestScope.containerWithSettings(): AppContainer {
         val url = server.url("").toString().removeSuffix("/")
         val app = ApplicationProvider.getApplicationContext<Application>()
-        val c = AppContainer(app)
+        val c = AppContainer(app).also { containers.add(it) }
         c.settingsStore.save(ClientSettings(baseUrl = url, apiKey = "k"))
         awaitCondition { c.settingsStore.current().baseUrl == url }
         return c
@@ -273,7 +272,7 @@ class ChatViewModelTest {
     @Test
     fun invalidBaseUrl_reportsSettingsError() = runVmTest {
         val app = ApplicationProvider.getApplicationContext<Application>()
-        val c = AppContainer(app)
+        val c = AppContainer(app).also { containers.add(it) }
         val vm = ChatViewModel(c, null)
         vm.input = "hi"
         vm.onSend()
@@ -289,9 +288,9 @@ class ChatViewModelTest {
     @Test
     fun stopAndSteer_postControls() = runVmTest {
         // Simpler deterministic flow: dedicated responses per path.
-        // Second and later status polls are delayed so the reconnect loop
+        // Second and later status polls remain unanswered so the reconnect loop
         // cannot exhaust (clearing runId) before steer/stop are posted.
-        // The delay blocks only IO threads; the test thread stays free.
+        // Closing the client or server releases the connection immediately.
         server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
             var creates = 0
             var getRuns = 0
@@ -307,7 +306,7 @@ class ChatViewModelTest {
                             MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
                         } else {
                             MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
-                                .setBodyDelay(5, TimeUnit.SECONDS)
+                                .setSocketPolicy(SocketPolicy.NO_RESPONSE)
                         }
                     }
                     request.path == "/v1/runs/r1/events" ->
@@ -367,7 +366,7 @@ class ChatViewModelTest {
                             MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
                         } else {
                             MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
-                                .setBodyDelay(5, TimeUnit.SECONDS)
+                                .setSocketPolicy(SocketPolicy.NO_RESPONSE)
                         }
                     }
                     request.path == "/v1/runs/r1/events" -> {
@@ -423,7 +422,7 @@ class ChatViewModelTest {
                             MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
                         } else {
                             MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
-                                .setBodyDelay(5, TimeUnit.SECONDS)
+                                .setSocketPolicy(SocketPolicy.NO_RESPONSE)
                         }
                     }
                     request.path == "/v1/runs/r1/events" -> {
@@ -488,9 +487,8 @@ class ChatViewModelTest {
                     request.path == "/v1/runs/r1/events" ->
                         // Hold the stream open briefly: no reconnect runs while
                         // the steer/stop errors are asserted, so nothing
-                        // overwrites them. Short delay (not 60s) to avoid
-                        // runTest timeout and MockWebServer shutdown timeout.
-                        MockResponse().setHeadersDelay(5, TimeUnit.SECONDS)
+                        // overwrites them. Teardown cancels the connection without sleeping.
+                        MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE)
                     request.path == "/v1/runs/r1/steer" ->
                         MockResponse().setResponseCode(500).setBody("nope")
                     request.path == "/v1/runs/r1/stop" ->
@@ -528,7 +526,7 @@ class ChatViewModelTest {
     @Test
     fun startRun_invalidBaseUrl_reportsError() = runVmTest {
         val app = ApplicationProvider.getApplicationContext<Application>()
-        val c = AppContainer(app)
+        val c = AppContainer(app).also { containers.add(it) }
         c.settingsStore.save(ClientSettings(baseUrl = "http://example.com", apiKey = "k"))
         awaitCondition { c.settingsStore.current().baseUrl == "http://example.com" }
         val vm = ChatViewModel(c, null)
@@ -642,7 +640,7 @@ class ChatViewModelTest {
     fun runContinuesDespiteHelperFailures() = runVmTest {
         val url = server.url("").toString().removeSuffix("/")
         val app = ApplicationProvider.getApplicationContext<Application>()
-        val c = AppContainer(app)
+        val c = AppContainer(app).also { containers.add(it) }
         c.settingsStore.save(
             ClientSettings(baseUrl = url, apiKey = "k", relayUrl = "http://[::1")
         )
@@ -807,7 +805,7 @@ class ChatViewModelTest {
                             MockResponse().setBody("""{"run_id":"r1","status":"running","session_id":"s1"}""")
                         } else {
                             MockResponse().setBody("""{"run_id":"r1","status":"running","session_id":"s1"}""")
-                                .setBodyDelay(5, TimeUnit.SECONDS)
+                                .setSocketPolicy(SocketPolicy.NO_RESPONSE)
                         }
                     }
                     request.path == "/v1/runs/r1/events" -> {
@@ -1501,7 +1499,7 @@ class ChatViewModelTest {
     @Test
     fun errorMessage_followsSavedLanguage() = runVmTest {
         val app = ApplicationProvider.getApplicationContext<Application>()
-        val c = AppContainer(app)
+        val c = AppContainer(app).also { containers.add(it) }
         c.settingsStore.save(ClientSettings(language = "ja"))
         awaitCondition { c.settingsStore.current().language == "ja" }
         val vm = ChatViewModel(c, null)
@@ -1918,7 +1916,7 @@ class ChatViewModelTest {
                 // Hold the stream open briefly: no reconnect runs while the
                 // steer error is asserted, so nothing overwrites it.
                 request.method == "GET" && request.path == "/v1/runs/r1/events" ->
-                    MockResponse().setHeadersDelay(5, java.util.concurrent.TimeUnit.SECONDS)
+                    MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE)
                 request.method == "POST" && request.path == "/v1/runs/r1/steer" ->
                     MockResponse().setBody("partial")
                         .setSocketPolicy(SocketPolicy.DISCONNECT_DURING_RESPONSE_BODY)
@@ -2016,7 +2014,7 @@ class ChatViewModelTest {
         val status = vm.messages.first { it.kind == MsgKind.STATUS }
         assertTrue(status.text.contains("openai"))
         assertTrue(status.text.contains("gpt-5"))
-        assertEquals("/api/model/options", server.takeRequest().path)
+        assertEquals("/api/model/options", server.takeRequestOrFail().path)
     }
 
     @Test
@@ -2034,7 +2032,7 @@ class ChatViewModelTest {
     @Test
     fun slashStopAndSteer_whileRunning() = runVmTest {
         // Same deterministic per-path flow as stopAndSteer_postControls:
-        // later status polls are delayed so the run stays active while
+        // later status polls remain unanswered so the run stays active while
         // the typed commands are dispatched.
         server.dispatcher = object : Dispatcher() {
             var getRuns = 0
@@ -2048,7 +2046,7 @@ class ChatViewModelTest {
                             MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
                         } else {
                             MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
-                                .setBodyDelay(5, TimeUnit.SECONDS)
+                                .setSocketPolicy(SocketPolicy.NO_RESPONSE)
                         }
                     }
                     request.path == "/v1/runs/r1/events" ->
@@ -2165,7 +2163,7 @@ class ChatViewModelTest {
         awaitCondition { vm.messages.any { it.kind == MsgKind.STATUS } }
         val status = vm.messages.first { it.kind == MsgKind.STATUS }
         assertTrue(status.text.contains("gpt-5, gpt-5-mini"))
-        assertEquals("/api/model/options", server.takeRequest().path)
+        assertEquals("/api/model/options", server.takeRequestOrFail().path)
     }
 
     @Test
@@ -2216,7 +2214,7 @@ class ChatViewModelTest {
 
     // -- Full Hermes command coverage (catalog expansion) --
 
-    /** A run that stays active: later status polls are delayed 5s. */
+    /** A run that stays active until the client or server closes its socket. */
     private fun busyDispatcher(): Dispatcher = object : Dispatcher() {
         var getRuns = 0
         override fun dispatch(request: RecordedRequest): MockResponse {
@@ -2229,7 +2227,7 @@ class ChatViewModelTest {
                         MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
                     } else {
                         MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
-                            .setBodyDelay(5, TimeUnit.SECONDS)
+                            .setSocketPolicy(SocketPolicy.NO_RESPONSE)
                     }
                 }
                 request.path == "/v1/runs/r1/events" ->
@@ -2253,7 +2251,7 @@ class ChatViewModelTest {
                         MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
                     } else {
                         MockResponse().setBody("""{"run_id":"r1","status":"running"}""")
-                            .setBodyDelay(5, TimeUnit.SECONDS)
+                            .setSocketPolicy(SocketPolicy.NO_RESPONSE)
                     }
                 }
                 request.path == "/v1/runs/r1/events" -> {
@@ -3026,7 +3024,7 @@ class ChatViewModelTest {
     @Test
     fun slashBg_notConfigured_postsError() = runVmTest {
         val app = ApplicationProvider.getApplicationContext<Application>()
-        val c = AppContainer(app)
+        val c = AppContainer(app).also { containers.add(it) }
         // The settings DataStore is shared by every test in this class and
         // earlier tests (containerWithSettings) leave a configured
         // baseUrl/apiKey in it: reset to defaults so this test really
@@ -3248,7 +3246,7 @@ class ChatViewModelTest {
                 request.path == "/api/sessions/s1/messages" ->
                     MockResponse().setBody("""{"messages":[]}""")
                 request.method == "GET" && request.path == "/v1/runs/r9/events" ->
-                    MockResponse().setHeadersDelay(10, TimeUnit.SECONDS)
+                    MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE)
                 else -> MockResponse().setBody("{}")
             }
         }
@@ -3269,7 +3267,7 @@ class ChatViewModelTest {
             val url = server.url("").toString().removeSuffix("/")
             val relayUrl = relay.url("").toString().removeSuffix("/")
             val app = ApplicationProvider.getApplicationContext<Application>()
-            val c = AppContainer(app)
+            val c = AppContainer(app).also { containers.add(it) }
             c.settingsStore.save(
                 ClientSettings(
                     baseUrl = url, apiKey = "k",
@@ -3301,7 +3299,7 @@ class ChatViewModelTest {
             val url = server.url("").toString().removeSuffix("/")
             val relayUrl = relay.url("").toString().removeSuffix("/")
             val app = ApplicationProvider.getApplicationContext<Application>()
-            val c = AppContainer(app)
+            val c = AppContainer(app).also { containers.add(it) }
             c.settingsStore.save(
                 ClientSettings(
                     baseUrl = url, apiKey = "k",

@@ -1,5 +1,6 @@
 package com.hermes.client.data.api
 
+import com.hermes.client.testutil.takeRequestOrFail
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import okhttp3.mockwebserver.MockResponse
@@ -42,7 +43,7 @@ class HermesApiTest {
         val accepted = api.createRun(RunCreateRequest(input = "hi"), "key-1")
         assertEquals("run_1", accepted.runId)
 
-        val recorded = server.takeRequest()
+        val recorded = server.takeRequestOrFail()
         assertEquals("/v1/runs", recorded.path)
         assertEquals("Bearer test-key", recorded.getHeader("Authorization"))
         assertEquals("key-1", recorded.getHeader("Idempotency-Key"))
@@ -124,7 +125,7 @@ class HermesApiTest {
             extraHeaders = mapOf("CF-Access-Client-Id" to "id", "CF-Access-Client-Secret" to "s"),
         )
         withCf.checkHealth()
-        val recorded = server.takeRequest()
+        val recorded = server.takeRequestOrFail()
         assertEquals("id", recorded.getHeader("CF-Access-Client-Id"))
         assertEquals("s", recorded.getHeader("CF-Access-Client-Secret"))
     }
@@ -191,18 +192,18 @@ class HermesApiTest {
         api.answerClarify("run_1", ClarifyRequest("c1", 2L, "yes"))
         api.resolveUnknown("run_1", ResolveUnknownRequest("adm_1", 7L))
 
-        assertEquals("/v1/runs/run_1/stop", server.takeRequest().path)
-        var req = server.takeRequest()
+        assertEquals("/v1/runs/run_1/stop", server.takeRequestOrFail().path)
+        var req = server.takeRequestOrFail()
         assertEquals("/v1/runs/run_1/steer", req.path)
         assertTrue(req.body.readUtf8().contains("go on"))
-        req = server.takeRequest()
+        req = server.takeRequestOrFail()
         assertEquals("/v1/runs/run_1/approval", req.path)
         val approval = req.body.readUtf8()
         assertTrue(approval.contains("\"request_id\":\"r1\"") && approval.contains("\"choice\":\"once\""))
-        req = server.takeRequest()
+        req = server.takeRequestOrFail()
         assertEquals("/v1/runs/run_1/clarify", req.path)
         assertTrue(req.body.readUtf8().contains("\"answer\":\"yes\""))
-        req = server.takeRequest()
+        req = server.takeRequestOrFail()
         assertEquals("/v1/runs/run_1/resolve-unknown", req.path)
         assertTrue(req.body.readUtf8().contains("\"admission_id\":\"adm_1\""))
     }
@@ -274,7 +275,7 @@ class HermesApiTest {
     fun deleteAndFork() = runTest {
         server.enqueue(MockResponse().setBody("{}"))
         api.deleteSession("s1")
-        assertEquals("/api/sessions/s1", server.takeRequest().path)
+        assertEquals("/api/sessions/s1", server.takeRequestOrFail().path)
 
         server.enqueue(MockResponse().setBody("""{"session_id":"s9"}"""))
         assertEquals("s9", api.forkSession("s1", "alt"))
@@ -490,20 +491,20 @@ class HermesApiTest {
     fun getCapabilities_and_options() = runTest {
         server.enqueue(MockResponse().setBody("""{"features":{},"endpoints":{}}"""))
         api.getCapabilities()
-        assertEquals("/v1/capabilities", server.takeRequest().path)
+        assertEquals("/v1/capabilities", server.takeRequestOrFail().path)
         server.enqueue(MockResponse().setBody("""{"providers":[]}"""))
         api.getModelOptions(refresh = true)
-        assertEquals("/api/model/options?refresh=1", server.takeRequest().path)
+        assertEquals("/api/model/options?refresh=1", server.takeRequestOrFail().path)
         server.enqueue(MockResponse().setBody("""{"providers":[]}"""))
         api.getModelOptions(refresh = false)
-        assertEquals("/api/model/options", server.takeRequest().path)
+        assertEquals("/api/model/options", server.takeRequestOrFail().path)
     }
 
     @Test
     fun deleteSession_sendsDelete() = runTest {
         server.enqueue(MockResponse().setBody("{}"))
         api.deleteSession("s1")
-        assertEquals("/api/sessions/s1", server.takeRequest().path)
+        assertEquals("/api/sessions/s1", server.takeRequestOrFail().path)
     }
 
     @Test
@@ -600,7 +601,7 @@ class HermesApiTest {
                 .setBody("""{"session":{"id":"s-new","title":"exp"}}""")
         )
         assertEquals("s-new", api.createSession("exp"))
-        val recorded = server.takeRequest()
+        val recorded = server.takeRequestOrFail()
         assertEquals("POST", recorded.method)
         assertEquals("/api/sessions", recorded.path)
         assertTrue(recorded.body.readUtf8().contains("\"title\":\"exp\""))
@@ -610,7 +611,7 @@ class HermesApiTest {
     fun createSession_flatShapeAndNoTitle() = runTest {
         server.enqueue(MockResponse().setBody("""{"session_id":"s-flat"}"""))
         assertEquals("s-flat", api.createSession())
-        val recorded = server.takeRequest()
+        val recorded = server.takeRequestOrFail()
         assertEquals("{}", recorded.body.readUtf8())
     }
 
@@ -635,7 +636,7 @@ class HermesApiTest {
         assertEquals("s1", info?.key)
         assertEquals("My Title", info?.title)
         assertEquals(123.0, info?.updatedAt)
-        val recorded = server.takeRequest()
+        val recorded = server.takeRequestOrFail()
         assertEquals("GET", recorded.method)
         assertEquals("/api/sessions/s1", recorded.path)
     }
@@ -673,7 +674,7 @@ class HermesApiTest {
     fun updateSessionTitle_sendsPatch() = runTest {
         server.enqueue(MockResponse().setBody("""{}"""))
         api.updateSessionTitle("s1", "New \"Name\"")
-        val recorded = server.takeRequest()
+        val recorded = server.takeRequestOrFail()
         assertEquals("PATCH", recorded.method)
         assertEquals("/api/sessions/s1", recorded.path)
         assertTrue(recorded.body.readUtf8().contains("\"title\":\"New \\\"Name\\\"\""))

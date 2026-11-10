@@ -42,14 +42,18 @@ class PlatformFailureCoverageTest {
 
     @Implements(NotificationManager::class)
     class PermissionRevokedNotifications : ShadowNotificationManager() {
+        var attempts = 0
         @Implementation protected override fun notify(tag: String?, id: Int, notification: Notification) {
+            attempts++
             throw SecurityException("permission revoked between check and notify")
         }
     }
 
     @Implements(NotificationManager::class)
     class UnavailableNotifications : ShadowNotificationManager() {
+        var attempts = 0
         @Implementation protected override fun notify(tag: String?, id: Int, notification: Notification) {
+            attempts++
             throw IllegalStateException("notification service unavailable")
         }
     }
@@ -69,6 +73,8 @@ class PlatformFailureCoverageTest {
                 val result = c.runStreams.updatesFor("r").first() as RunStreamUpdate.Event
                 assertEquals(RunEvent.Terminal("completed", "done", null, null), result.event)
                 assertTrue(c.appContext.getSystemService(NotificationManager::class.java).activeNotifications.isEmpty())
+                val manager = c.appContext.getSystemService(NotificationManager::class.java)
+                assertEquals(1, org.robolectric.shadow.api.Shadow.extract<UnavailableNotifications>(manager).attempts)
             } finally { c.runStreams.close() }
         }
     }
@@ -80,6 +86,8 @@ class PlatformFailureCoverageTest {
         c.settingsStore.save(ClientSettings(baseUrl = "https://example.com", apiKey = "k"))
         c.runNotifications.onUpdate(ActiveRun("r", "s"), RunStreamUpdate.Event("r", RunEvent.Terminal("completed", "done", null, null)))
         assertTrue(c.appContext.getSystemService(NotificationManager::class.java).activeNotifications.isEmpty())
+        val manager = c.appContext.getSystemService(NotificationManager::class.java)
+        assertEquals(1, org.robolectric.shadow.api.Shadow.extract<PermissionRevokedNotifications>(manager).attempts)
         assertTrue(c.appContext.getSharedPreferences("run_notifications", 0).getStringSet("seen", emptySet()).orEmpty().isEmpty())
     }
 
