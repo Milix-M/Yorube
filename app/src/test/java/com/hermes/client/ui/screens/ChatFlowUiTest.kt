@@ -2,6 +2,8 @@ package com.hermes.client.ui.screens
 
 import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertTextEquals
 import android.os.Looper
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -77,8 +79,12 @@ class ChatFlowUiTest {
     @Test
     fun additionalInstructionsCanBeSentWithDefaultKeyboardSettings() {
         val steered = java.util.concurrent.atomic.AtomicReference<String?>(null)
+        val accepted = java.util.concurrent.atomic.AtomicBoolean(false)
+        val requests = java.util.concurrent.ConcurrentLinkedQueue<String>()
         server.dispatcher = object : Dispatcher() {
-            override fun dispatch(request: RecordedRequest): MockResponse = when (request.path) {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                requests.add(request.path.orEmpty())
+                return when (request.path) {
                 "/v1/runs" -> MockResponse().setResponseCode(202).setBody("""{"run_id":"r"}""")
                 "/v1/runs/r" -> MockResponse().setBody("""{"status":"running","session_id":"s"}""")
                 "/v1/runs/r/events" -> MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.NO_RESPONSE)
@@ -87,20 +93,27 @@ class ChatFlowUiTest {
                     MockResponse().setBody("{}")
                 }
                 else -> MockResponse().setBody("{}")
+                }
             }
         }
         kotlinx.coroutines.runBlocking { saveSettings() }
         val app = ApplicationProvider.getApplicationContext<HermesApp>()
         try {
-            compose.setContent { HermesAppTheme { ChatScreen(sessionId = null) } }
+            compose.setContent { HermesAppTheme { ChatScreen(sessionId = null, onSessionCreated = { accepted.set(true) }) } }
             compose.onNodeWithTag("chatInput").performTextInput("start")
             compose.onNodeWithTag("sendButton").performClick()
             compose.waitUntil(timeoutMillis = 15_000) {
-                compose.onAllNodesWithTag("stopButton").fetchSemanticsNodes().isNotEmpty() && server.requestCount >= 3
+                Shadows.shadowOf(Looper.getMainLooper()).idle()
+                accepted.get()
             }
             compose.onNodeWithTag("chatInput").performTextInput("change direction")
-            compose.onNodeWithTag("steerButton").performClick()
-            compose.waitUntil(timeoutMillis = 10_000) { steered.get() != null }
+            compose.onNodeWithTag("chatInput").assertTextEquals("change direction")
+            compose.onNodeWithTag("steerButton").assertIsEnabled().performClick()
+            try { compose.waitUntil(timeoutMillis = 10_000) {
+                Shadows.shadowOf(Looper.getMainLooper()).idle()
+                steered.get() != null
+            } }
+            catch (e: androidx.compose.ui.test.ComposeTimeoutException) { throw AssertionError("Requests: $requests", e) }
             org.junit.Assert.assertEquals("""{"text":"change direction"}""", steered.get())
         } finally { compose.runOnUiThread { app.container.runStreams.close() } }
     }
