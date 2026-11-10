@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-test -s LICENSE || { echo "Choose and approve the Yorube license before publishing: docs/PUBLISHING.md" >&2; exit 1; }
+test -s LICENSE || { echo "Missing Yorube LICENSE; restore it before publishing." >&2; exit 1; }
 python3 scripts/generate_legal.py --check
 release_dir=app/build/outputs/distribution
 mkdir -p "$release_dir"

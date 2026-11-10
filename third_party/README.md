@@ -28,4 +28,4 @@ The Gradle check catches added, removed, and upgraded resolved artifacts. It doe
 
 `ic_hero_spark.xml` is derived from Material Symbols auto_awesome and is covered by the included Apache license and attribution. Confirm the origin and rights of the custom launcher star with its author before public release. No copied Hermes server code was found; using its HTTP API does not relicense Yorube.
 
-The app's own license remains a separate owner decision. This inventory does not grant rights in Yorube-original code or artwork.
+Yorube-original code is licensed under the MIT License in the repository's root LICENSE. Third-party components retain their respective terms; the project's MIT License does not override them.

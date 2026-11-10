@@ -220,12 +220,14 @@ class SettingsScreenTest {
         compose.onNodeWithText("Close").performClick()
         compose.onNodeWithTag("legalDocument").assertDoesNotExist()
 
-        compose.onNodeWithTag("THIRD_PARTY_NOTICES.txt").performScrollTo().performClick()
+        compose.onNodeWithTag("LICENSES.txt").performScrollTo().performClick()
         compose.waitUntil(timeoutMillis = 10_000) {
-            compose.onAllNodesWithText("Yorube — Third-party notices").fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodesWithText("Yorube — Licenses").fetchSemanticsNodes().isNotEmpty()
         }
-        compose.onNodeWithText("Yorube — Third-party notices").assertIsDisplayed()
-        scrollLegalDocumentTo("THIRD_PARTY_NOTICES.txt", "===== MPL-2.0.txt =====")
+        compose.onNodeWithText("Yorube — Licenses").assertIsDisplayed()
+        compose.onNodeWithText("MIT License").assertIsDisplayed()
+        compose.onNodeWithText("Copyright (c) 2026 Milix-M").assertIsDisplayed()
+        scrollLegalDocumentTo("LICENSES.txt", "===== MPL-2.0.txt =====")
         compose.onNodeWithText("===== MPL-2.0.txt =====").assertIsDisplayed()
         compose.onNodeWithText("Close").performClick()
         compose.onNodeWithTag("legalDocument").assertDoesNotExist()

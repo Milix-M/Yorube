@@ -21,7 +21,7 @@ jobs:
         run: git merge-base --is-ancestor HEAD origin/develop
       - name: Verify license and generated legal documents
         run: |
-          test -s LICENSE || { echo "Select the app license before publishing; see docs/PUBLISHING.md"; exit 1; }
+          test -s LICENSE || { echo "Missing Yorube LICENSE; restore it before publishing."; exit 1; }
           python3 scripts/generate_legal.py --check
       - uses: actions/setup-java@v4
         with:

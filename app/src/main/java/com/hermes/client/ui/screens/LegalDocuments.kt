@@ -32,7 +32,7 @@ import kotlinx.coroutines.withContext
 internal fun LegalDocumentLinks() {
     val documents = listOf(
         "PRIVACY.txt" to R.string.privacy_policy,
-        "THIRD_PARTY_NOTICES.txt" to R.string.open_source_licenses,
+        "LICENSES.txt" to R.string.open_source_licenses,
     )
     var selected by remember { mutableStateOf<Pair<String, Int>?>(null) }
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
