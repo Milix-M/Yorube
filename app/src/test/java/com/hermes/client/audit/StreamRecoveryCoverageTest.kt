@@ -286,7 +286,7 @@ class StreamRecoveryCoverageTest {
         val c = container()
         val vm = waitingQuestion(c, MockResponse().setResponseCode(409).setBody("""{"error":{"code":"stale_generation"}}"""))
         vm.answerClarify("answer")
-        awaitCondition { vm.clarify != null }
+        awaitCondition { vm.clarify != null && !vm.controlSending }
         assertEquals("q", vm.clarify!!.requestId)
         assertNull(vm.error)
         assertTrue(vm.busy)

@@ -1333,7 +1333,7 @@ class ChatViewModelTest {
                 assertEquals("rm", vm.approval!!.command)
                 vm.answerApproval("once")
                 // The 409 recovery re-reads state and re-shows the waiting control.
-                awaitCondition { vm.approval != null }
+                awaitCondition { vm.approval != null && !vm.controlSending }
                 assertNull(vm.error)
                 assertEquals("rm", vm.approval!!.command)
                 assertEquals("s1", vm.sessionId)

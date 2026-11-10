@@ -2,10 +2,12 @@ package com.hermes.client.ui.screens
 
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
+import androidx.lifecycle.viewModelScope
 import com.hermes.client.AppContainer
 import com.hermes.client.data.api.SessionInfo
 import com.hermes.client.data.store.ClientSettings
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import com.hermes.client.testutil.awaitCondition
@@ -93,6 +95,34 @@ class ConversationListViewModelTest {
         assertNull(vm.error)
         assertEquals(50, vm.sessions.size)
         assertEquals(2, server.requestCount)
+    }
+
+    @Test fun simultaneousRefreshesShareOneFetchAndLaterRefreshStillWorks() = runVmTest {
+        val vm = ConversationListViewModel(containerWithSettings())
+        server.enqueue(MockResponse().setBody("""{"sessions":[{"id":"first"}]}""")
+            .setBodyDelay(100, java.util.concurrent.TimeUnit.MILLISECONDS))
+        vm.refresh()
+        vm.refresh()
+        awaitCondition { !vm.loading }
+        assertEquals(1, server.requestCount)
+        assertEquals("first", vm.sessions.single().key)
+        server.enqueue(MockResponse().setBody("""{"sessions":[{"id":"updated"}]}"""))
+        vm.refresh()
+        awaitCondition { !vm.loading }
+        assertEquals("updated", vm.sessions.single().key)
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test fun leavingListDuringFetchDoesNotReportFailureOrPublishStaleRows() = runVmTest {
+        val vm = ConversationListViewModel(containerWithSettings())
+        server.enqueue(MockResponse().setBody("""{"sessions":[{"id":"stale"}]}""")
+            .setBodyDelay(200, java.util.concurrent.TimeUnit.MILLISECONDS))
+        vm.refresh()
+        awaitCondition { server.requestCount == 1 }
+        vm.viewModelScope.cancel()
+        awaitCondition { !vm.loading }
+        assertNull(vm.error)
+        assertTrue(vm.sessions.isEmpty())
     }
 
     @Test

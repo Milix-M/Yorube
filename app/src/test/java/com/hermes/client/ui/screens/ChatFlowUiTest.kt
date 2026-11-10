@@ -239,72 +239,71 @@ class ChatFlowUiTest {
         }
     }
 
-    @Test
-    fun approvalDialog_postsDecision() {
-        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
-        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
-        // No further responses: the reconnect stalls at getRun, so no terminal
-        // can clear runId before the click. Deterministic by construction.
-        server.enqueue(
-            events(
-                frame("message.delta", """{"event":"message.delta","delta":"part"}"""),
-                frame(
-                    "approval.request",
-                    """{"event":"approval.request","request_id":"r1","execution_generation":3,"command":"rm","description":"d"}""",
-                ),
-            )
-        )
-        kotlinx.coroutines.runBlocking { saveSettings() }
-
-        compose.setContent {
-            HermesAppTheme {
-                ChatScreen(sessionId = null, onNavigateBack = {})
+    private fun waitingControl(event: String, payload: String): java.util.concurrent.atomic.AtomicReference<String?> {
+        val posted = java.util.concurrent.atomic.AtomicReference<String?>(null)
+        val subscriptions = AtomicInteger()
+        val action = if (event == "approval.request") "approval" else "clarify"
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when (request.path) {
+                "/v1/runs" -> MockResponse().setResponseCode(202).setBody("""{"run_id":"r1"}""")
+                "/v1/runs/r1" -> MockResponse().setBody("""{"status":"running","session_id":"s1"}""")
+                "/v1/runs/r1/events" -> if (subscriptions.getAndIncrement() == 0) events(frame(event, payload))
+                    else MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.NO_RESPONSE)
+                "/v1/runs/r1/$action" -> {
+                    posted.set(request.body.readUtf8())
+                    MockResponse().setBody("{}")
+                }
+                else -> MockResponse().setBody("{}")
             }
         }
-        compose.onNodeWithTag("chatInput").performTextInput("hi")
-        compose.onNodeWithTag("sendButton").performClick()
-        compose.waitUntil(timeoutMillis = 15_000) {
-            compose.onAllNodesWithText("Approval needed").fetchSemanticsNodes().isNotEmpty()
-        }
-        compose.onNodeWithText("rm").assertIsDisplayed()
-        compose.onNodeWithText("Allow once").performClick()
-        compose.waitUntil(timeoutMillis = 15_000) {
-            compose.onAllNodesWithText("Approval needed").fetchSemanticsNodes().isEmpty()
-        }
+        return posted
+    }
+
+    @Test
+    fun approvalDialog_postsDecision() {
+        val posted = waitingControl("approval.request",
+            """{"request_id":"a1","execution_generation":3,"command":"rm","description":"d"}""")
+        kotlinx.coroutines.runBlocking { saveSettings() }
+        val app = ApplicationProvider.getApplicationContext<HermesApp>()
+        try {
+            compose.setContent { HermesAppTheme { ChatScreen(sessionId = null) } }
+            compose.onNodeWithTag("chatInput").performTextInput("hi")
+            compose.onNodeWithTag("sendButton").performClick()
+            compose.waitUntil(timeoutMillis = 15_000) {
+                compose.onAllNodesWithText("Approval needed").fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onNodeWithText("rm").assertIsDisplayed()
+            compose.onNodeWithText("Allow once").performClick()
+            compose.waitUntil(timeoutMillis = 15_000) {
+                compose.onAllNodesWithText("Approval needed").fetchSemanticsNodes().isEmpty()
+            }
+            org.junit.Assert.assertEquals(com.hermes.client.data.api.ApprovalAnswer("a1", 3, "once"),
+                com.hermes.client.data.api.HermesJson.decodeFromString<com.hermes.client.data.api.ApprovalAnswer>(posted.get()!!))
+        } finally { compose.runOnUiThread { app.container.runStreams.close() } }
     }
 
     @Test
     fun clarifyDialog_postsAnswer() {
-        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"run_id":"r1","status":"queued"}"""))
-        server.enqueue(MockResponse().setBody("""{"run_id":"r1","status":"running"}"""))
-        // No further responses: the reconnect stalls at getRun, so no terminal
-        // can clear runId before the Send click. Deterministic by construction.
-        server.enqueue(
-            events(
-                frame(
-                    "clarify.request",
-                    """{"event":"clarify.request","request_id":"c1","execution_generation":2,"prompt":"which?"}""",
-                ),
-            )
-        )
+        val posted = waitingControl("clarify.request",
+            """{"request_id":"c1","execution_generation":2,"prompt":"which?"}""")
         kotlinx.coroutines.runBlocking { saveSettings() }
-
-        compose.setContent {
-            HermesAppTheme {
-                ChatScreen(sessionId = null, onNavigateBack = {})
+        val app = ApplicationProvider.getApplicationContext<HermesApp>()
+        try {
+            compose.setContent { HermesAppTheme { ChatScreen(sessionId = null) } }
+            compose.onNodeWithTag("chatInput").performTextInput("hi")
+            compose.onNodeWithTag("sendButton").performClick()
+            compose.waitUntil(timeoutMillis = 15_000) {
+                compose.onAllNodesWithText("Question").fetchSemanticsNodes().isNotEmpty()
             }
-        }
-        compose.onNodeWithTag("chatInput").performTextInput("hi")
-        compose.onNodeWithTag("sendButton").performClick()
-        compose.waitUntil(timeoutMillis = 15_000) {
-            compose.onAllNodesWithText("Question").fetchSemanticsNodes().isNotEmpty()
-        }
-        compose.onNodeWithText("which?").assertIsDisplayed()
-        compose.onNodeWithTag("clarifyInput").performTextInput("this one")
-        compose.onNodeWithText("Send").performClick()
-        compose.waitUntil(timeoutMillis = 15_000) {
-            compose.onAllNodesWithText("Question").fetchSemanticsNodes().isEmpty()
-        }
+            compose.onNodeWithText("which?").assertIsDisplayed()
+            compose.onNodeWithTag("clarifyInput").performTextInput("this one")
+            compose.onNodeWithText("Send").performClick()
+            compose.waitUntil(timeoutMillis = 15_000) {
+                compose.onAllNodesWithText("Question").fetchSemanticsNodes().isEmpty()
+            }
+            org.junit.Assert.assertEquals(com.hermes.client.data.api.ClarifyRequest("c1", 2, "this one"),
+                com.hermes.client.data.api.HermesJson.decodeFromString<com.hermes.client.data.api.ClarifyRequest>(posted.get()!!))
+        } finally { compose.runOnUiThread { app.container.runStreams.close() } }
     }
 
     @Test

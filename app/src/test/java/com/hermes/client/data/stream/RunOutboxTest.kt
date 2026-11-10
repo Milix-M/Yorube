@@ -13,6 +13,7 @@ import com.hermes.client.testutil.runVmTest
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
@@ -115,6 +116,11 @@ class RunOutboxTest {
         assertEquals("/v1/capabilities", server.takeRequest(5, TimeUnit.SECONDS)!!.path)
         assertEquals(1, server.requestCount)
         assertEquals(1, RunOutbox(context).pending(settings).size)
+        c.settingsStore.save(settings)
+        server.enqueue(MockResponse().setBody("""{"features":{}}"""))
+        c.runStreams.restore()
+        assertEquals(2, server.requestCount)
+        assertEquals(1, RunOutbox(context).pending(settings).size)
     }
 
     @Test fun expiredRetryDoesNotStartAnotherExecution() = runVmTest {
@@ -144,7 +150,7 @@ class RunOutboxTest {
             override fun dispatch(request: RecordedRequest): MockResponse = when (request.path) {
                 "/v1/runs" -> {
                     posts.incrementAndGet()
-                    MockResponse().setResponseCode(202).setBody("""{"run_id":"r"}""").setBodyDelay(200, TimeUnit.MILLISECONDS)
+                    MockResponse().setResponseCode(202).setBody("""{"run_id":"r"}""").setBodyDelay(500, TimeUnit.MILLISECONDS)
                 }
                 "/v1/runs/r" -> MockResponse().setBody("""{"status":"running","session_id":"s"}""")
                 "/v1/runs/r/events" -> MockResponse().setBody("event: run.completed\ndata: {\"output\":\"done\"}\n\n")
@@ -152,10 +158,45 @@ class RunOutboxTest {
             }
         }
         val c = container()
+        c.settingsStore.save(settings)
         val first = async { c.runStreams.createTracked(RunCreateRequest("same"), settings) }
         val second = async { c.runStreams.createTracked(RunCreateRequest("same"), settings) }
+        awaitCondition { posts.get() == 1 }
+        c.runStreams.restore()
         awaitCondition { first.isCompleted && second.isCompleted }
         assertEquals(first.await(), second.await())
         assertEquals(1, posts.get())
+    }
+
+    @Test fun cancellingRestoreLeavesUncertainRecordIntact() = runVmTest {
+        val settings = settings()
+        val c = container()
+        c.settingsStore.save(settings)
+        RunOutbox(context).prepare(RunCreateRequest("uncertain"), settings, null)
+        server.enqueue(MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.NO_RESPONSE))
+        val restore = launch { c.runStreams.restore() }
+        awaitCondition { server.requestCount == 1 }
+        restore.cancel()
+        awaitCondition { restore.isCompleted }
+        assertTrue(restore.isCancelled)
+        assertEquals(1, RunOutbox(context).pending(settings).size)
+    }
+
+    @Test fun queueUnlocksAfterDefiniteRejectionAndStaysLockedForUncertainOutcome() = runVmTest {
+        for (status in listOf(400, 503)) {
+            val settings = settings()
+            val c = container()
+            c.settingsStore.save(settings)
+            c.runStreams.queue("s").add("queued-$status")
+            c.runStreams.saveQueue("s")
+            server.enqueue(MockResponse().setBody("""{"status":"completed","session_id":"s"}"""))
+            server.enqueue(MockResponse().setResponseCode(status).setBody("""{"error":"rejected"}"""))
+            c.runStreams.start("parent-$status", "s", pollFirst = true)
+            awaitCondition { !c.runStreams.working.value }
+            assertEquals(status == 503, c.runStreams.queueBusy("s"))
+            assertEquals(listOf("queued-$status"), c.runStreams.queue("s"))
+            c.runStreams.queue("s").clear()
+            c.runStreams.saveQueue("s")
+        }
     }
 }

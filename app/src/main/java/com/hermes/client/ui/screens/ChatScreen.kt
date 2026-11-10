@@ -554,7 +554,7 @@ private fun GeminiChatTopBar(
 }
 
 @Composable
-private fun ChatInputBar(
+internal fun ChatInputBar(
     input: String,
     busy: Boolean,
     enabled: Boolean,

@@ -30,7 +30,8 @@ class ConversationListViewModel(
     private var refreshJob: Job? = null
 
     fun refresh() {
-        refreshJob?.cancel()
+        // Initial composition and ON_RESUME can request the same refresh together.
+        if (refreshJob?.isActive == true) return
         refreshJob = viewModelScope.launch {
             loading = true
             error = null

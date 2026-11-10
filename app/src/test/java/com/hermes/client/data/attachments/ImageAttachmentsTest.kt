@@ -63,6 +63,73 @@ class ImageAttachmentsTest {
         }
     }
 
+    @Test fun providerDisplayNameIsPreservedAndCursorIsClosed() {
+        val uri = register(imageBytes(), "named")
+        var closed = false
+        shadowOf(context.contentResolver).setCursor(uri, object : org.robolectric.fakes.BaseCursor() {
+            override fun moveToFirst() = true
+            override fun getString(columnIndex: Int) = "named.png"
+            override fun close() { closed = true }
+        })
+        assertEquals("named.png", ImageAttachments.read(context, uri).image.name)
+        assertTrue(closed)
+    }
+
+    @org.robolectric.annotation.Implements(android.content.ContentResolver::class)
+    class UnavailableImageResolver {
+        @org.robolectric.annotation.Implementation
+        fun openInputStream(uri: Uri): java.io.InputStream? = null
+    }
+
+    @Test @Config(shadows = [UnavailableImageResolver::class])
+    fun unavailableStreamIsReportedAsUnreadable() {
+        val missing = Uri.parse("content://images/unavailable")
+        assertThrows(IllegalArgumentException::class.java) { ImageAttachments.read(context, missing) }
+    }
+
+    @Test fun corruptPixelDataIsRejected() {
+        val corrupt = imageBytes()
+        var offset = 8
+        while (offset + 12 <= corrupt.size) {
+            val size = java.nio.ByteBuffer.wrap(corrupt, offset, 4).int
+            if (String(corrupt, offset + 4, 4, Charsets.US_ASCII) == "IDAT") {
+                corrupt.fill(0, offset + 8, offset + 8 + size)
+                break
+            }
+            offset += size + 12
+        }
+        assertThrows(IllegalArgumentException::class.java) { ImageAttachments.read(context, register(corrupt, "corrupt")) }
+    }
+
+    @Test fun leavingScreenWhileReadingDoesNotAttachStaleImage() = runVmTest {
+        val c = AppContainer(context)
+        val vm = ChatViewModel(c, null)
+        val started = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val uri = Uri.parse("content://images/slow")
+        val bytes = imageBytes()
+        shadowOf(context.contentResolver).registerInputStreamSupplier(uri) {
+            object : java.io.InputStream() {
+                val delegate = ByteArrayInputStream(bytes)
+                override fun read() = delegate.read()
+                override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+                    started.countDown()
+                    check(release.await(5, TimeUnit.SECONDS))
+                    return delegate.read(buffer, offset, length)
+                }
+            }
+        }
+        try {
+            vm.attachImage(uri)
+            awaitCondition { started.count == 0L }
+            vm.viewModelScope.cancel()
+            release.countDown()
+            awaitCondition { !vm.attaching }
+            assertTrue(vm.attachments.isEmpty())
+            assertNull(vm.error)
+        } finally { release.countDown(); vm.viewModelScope.cancel(); c.runStreams.close() }
+    }
+
     @Test fun viewModelSendsImageDataAndKeepsAttachmentOnFailedSend() = runVmTest {
         MockWebServer().use { server ->
             server.start()
