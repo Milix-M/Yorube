@@ -1536,6 +1536,7 @@ class ChatViewModel(
     private fun friendlyError(e: Exception): String {
         if (e is HermesApiException) {
             return when (e.code) {
+                "request_too_large" -> s(R.string.message_too_large)
                 "admission_conflict", "idempotency_key_conflict" ->
                     s(R.string.err_conflict, e.status)
                 "unknown_execution" ->

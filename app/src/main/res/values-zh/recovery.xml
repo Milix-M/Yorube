@@ -1,4 +1,5 @@
 <resources>
+    <string name="message_too_large">包含附件的发送数据超过了 10 MB。请减少图片或缩短正文。</string>
     <string name="approval_once">仅允许一次</string>
     <string name="approval_session">在此对话中允许</string>
     <string name="approval_always">始终允许</string>

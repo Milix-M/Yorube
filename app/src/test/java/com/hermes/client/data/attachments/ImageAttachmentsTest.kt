@@ -133,7 +133,8 @@ class ImageAttachmentsTest {
     @Test fun viewModelSendsImageDataAndKeepsAttachmentOnFailedSend() = runVmTest {
         MockWebServer().use { server ->
             server.start()
-            server.enqueue(MockResponse().setResponseCode(400).setBody("""{"error":"unsupported image"}"""))
+            server.enqueue(MockResponse().setResponseCode(413)
+                .setBody("""{"error":{"code":"request_too_large","message":"too large"}}"""))
             val c = AppContainer(context)
             c.settingsStore.save(ClientSettings(server.url("/").toString(), "k"))
             val vm = ChatViewModel(c, null)
@@ -150,6 +151,7 @@ class ImageAttachmentsTest {
                 assertTrue(request.contains("describe this"))
                 assertEquals(1, vm.attachments.size)
                 assertEquals("describe this", vm.input)
+                assertEquals(context.getString(com.hermes.client.R.string.message_too_large), vm.error)
             } finally { vm.viewModelScope.cancel(); c.runStreams.close() }
         }
     }

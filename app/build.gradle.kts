@@ -51,9 +51,6 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-dev"
-            // Debug keeps cleartext guards in code: http is allowed only for
-            // 10.0.2.2 / localhost (emulator loopback). See HermesApi.
-            manifestPlaceholders["cleartextPermitted"] = "true"
         }
     }
     compileOptions {

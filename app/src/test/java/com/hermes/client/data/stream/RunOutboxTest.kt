@@ -37,6 +37,7 @@ class RunOutboxTest {
     @Before fun setup() {
         context.getSharedPreferences("run_outbox", 0).edit().clear().commit()
         context.getSharedPreferences("active_runs", 0).edit().clear().commit()
+        context.getSharedPreferences("run_queue", 0).edit().clear().commit()
         server = MockWebServer().apply { start() }
     }
     @After fun cleanup() {
@@ -200,5 +201,94 @@ class RunOutboxTest {
             c.runStreams.queue("s").clear()
             c.runStreams.saveQueue("s")
         }
+    }
+
+    @Test fun restoredQueueRemovesAcknowledgedHeadAndContinuesWithNextMessage() = runVmTest {
+        verifyQueueRecovery(savedAcceptance = false)
+    }
+
+    @Test fun crashAfterSavingAcceptanceDoesNotRaceQueueRecoveryWithSavedRun() = runVmTest {
+        verifyQueueRecovery(savedAcceptance = true)
+    }
+
+    private suspend fun kotlinx.coroutines.test.TestScope.verifyQueueRecovery(savedAcceptance: Boolean) {
+        val posts = java.util.Collections.synchronizedList(mutableListOf<Pair<String?, String>>())
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.path == "/v1/capabilities" -> MockResponse().setBody(capabilities)
+                request.path == "/v1/runs" -> {
+                    val body = request.body.readUtf8()
+                    posts.add(request.getHeader("Idempotency-Key") to body)
+                    when {
+                        posts.size == 1 -> MockResponse().setResponseCode(202).setBody("{\"run_id\":")
+                        body.contains("first") -> MockResponse().setResponseCode(202).setBody("""{"run_id":"q1","replayed":true}""")
+                        else -> MockResponse().setResponseCode(202).setBody("""{"run_id":"q2"}""")
+                    }
+                }
+                request.path!!.endsWith("/events") -> MockResponse().setBody("event: run.completed\ndata: {\"output\":\"done\"}\n\n")
+                else -> MockResponse().setBody("""{"status":"completed","session_id":"s","output":"done"}""")
+            }
+        }
+        val settings = settings()
+        val first = container()
+        first.settingsStore.save(settings)
+        first.runStreams.queue("s").addAll(listOf("first", "second"))
+        first.runStreams.saveQueue("s")
+        first.runStreams.start("parent", "s", pollFirst = true)
+        awaitCondition { !first.runStreams.working.value }
+        assertEquals(1, posts.size)
+        assertTrue(first.runStreams.queueBusy("s"))
+        first.runStreams.close()
+        if (savedAcceptance) {
+            // A process can die after saving the accepted ID but before acknowledging the queue.
+            context.getSharedPreferences("active_runs", 0).edit().putString("runs",
+                """[{"run":"q1","session":"s","endpoint":"${settings.baseUrl}"}]""").commit()
+        }
+        val restored = container()
+        restored.runStreams.restore()
+        awaitCondition { !restored.runStreams.working.value }
+        assertEquals(3, posts.size)
+        assertEquals(posts[0], posts[1])
+        assertTrue(posts[2].second.contains("second"))
+        assertNotEquals(posts[1].first, posts[2].first)
+        assertFalse(restored.runStreams.queueBusy("s"))
+        assertTrue(restored.runStreams.queue("s").isEmpty())
+        assertTrue(RunOutbox(context).pending(settings).isEmpty())
+        val recreated = container()
+        recreated.settingsStore.current()
+        assertTrue(recreated.runStreams.queue("s").isEmpty())
+        assertFalse(recreated.runStreams.queueBusy("s"))
+    }
+
+    @Test fun locallyRejectedOversizedMessageDoesNotLeaveAnUncertainSend() = runVmTest {
+        val settings = settings()
+        val c = container()
+        c.settingsStore.save(settings)
+        try {
+            c.runStreams.createTracked(RunCreateRequest("あ".repeat(3_400_000)), settings)
+            fail("UTF-8 payload must fit the request limit")
+        } catch (e: com.hermes.client.data.api.HermesApiException) {
+            assertEquals(413, e.status)
+        }
+        assertEquals(0, server.requestCount)
+        assertTrue(RunOutbox(context).pending(settings).isEmpty())
+        assertFalse(c.runStreams.working.value)
+    }
+
+    @Test fun definiteRejectionDuringRecoveryUnlocksQueueForEditing() = runVmTest {
+        val settings = settings()
+        val c = container()
+        c.settingsStore.save(settings)
+        c.runStreams.queue("s").add("fix this")
+        c.runStreams.saveQueue("s")
+        context.getSharedPreferences("run_queue", 0).edit()
+            .putString("key:${settings.baseUrl}|s", "saved-key").commit()
+        RunOutbox(context).prepare(RunCreateRequest("fix this", sessionId = "s"), settings, "saved-key")
+        server.enqueue(MockResponse().setBody(capabilities))
+        server.enqueue(MockResponse().setResponseCode(400).setBody("""{"error":"invalid"}"""))
+        c.runStreams.restore()
+        assertFalse(c.runStreams.queueBusy("s"))
+        assertEquals(listOf("fix this"), c.runStreams.queue("s"))
+        assertTrue(RunOutbox(context).pending(settings).isEmpty())
     }
 }

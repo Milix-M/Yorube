@@ -1,4 +1,5 @@
 <resources>
+    <string name="message_too_large">The message exceeds 10 MB including attachments. Remove an image or shorten the message.</string>
     <string name="approval_once">Allow once</string>
     <string name="approval_session">Allow for this session</string>
     <string name="approval_always">Always allow</string>

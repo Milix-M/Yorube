@@ -1,4 +1,5 @@
 <resources>
+    <string name="message_too_large">첨부 파일을 포함한 메시지가 10 MB를 초과합니다. 이미지를 줄이거나 내용을 짧게 해 주세요.</string>
     <string name="approval_once">한 번만 허용</string>
     <string name="approval_session">이 대화에서 허용</string>
     <string name="approval_always">항상 허용</string>
