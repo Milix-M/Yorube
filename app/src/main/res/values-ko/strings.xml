@@ -25,7 +25,7 @@
     <string name="api_key">API 키</string>
     <string name="model">모델</string>
     <string name="provider_optional">프로바이더 (선택)</string>
-    <string name="section_notifications">알림 (M3)</string>
+    <string name="section_notifications">알림</string>
     <string name="relay_optional">릴레이 URL (선택)</string>
     <string name="fcm_token">FCM 토큰: %1$s…</string>
     <string name="fcm_token_none">FCM 토큰: (아직 없음)</string>
@@ -199,4 +199,6 @@
     <string name="cmd_cron_usage">/cron list; /cron add 이름 | 일정 | 프롬프트; /cron edit ID 이름 | 일정 | 프롬프트; /cron show|pause|resume|run|remove ID</string>
     <string name="cmd_cron_done">예약 작업: %1$s 완료.</string>
     <string name="cmd_cron_empty">예약된 작업이 없습니다.</string>
+    <string name="privacy_policy">개인정보 처리방침</string>
+    <string name="open_source_licenses">오픈소스 라이선스</string>
 </resources>

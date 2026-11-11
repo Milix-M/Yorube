@@ -1,0 +1,126 @@
+{
+  "additional_components": [
+    {
+      "authority_urls": [
+        "https://www.mozilla.org/en-US/MPL/2.0/",
+        "https://www.mozilla.org/en-US/MPL/2.0/FAQ/"
+      ],
+      "id": "public-suffix-list",
+      "included_via": "com.squareup.okhttp3:okhttp:4.12.0",
+      "license_spdx": "MPL-2.0",
+      "payload_sha256": "5beda335cfa1a9a9f84c4d17f2267ad7304c3c23d14d41256032d78db274431f",
+      "required_action": "Preserve notice, include MPL-2.0 text, make the matching Source Code Form available and tell recipients its location. The saved upstream source has the original MPL header and matches the binary payload.",
+      "source_sha256": "e8b273972eb5a70e888bd3e7d7c5b9b04e600a59d69def9136a74d70ae6fcdd3",
+      "source_url": "https://raw.githubusercontent.com/square/okhttp/4984568367caaf359b82c452bd28b5e192824d1c/okhttp/src/test/resources/okhttp3/internal/publicsuffix/public_suffix_list.dat",
+      "status": "verified_in_jar_and_release_apk"
+    },
+    {
+      "copyright": "Copyright (c) 2007-present, Stephen Colebourne & Michael Nascimento Santos",
+      "id": "threetenbp",
+      "included_via": "org.jetbrains.kotlin:kotlin-stdlib:2.2.21",
+      "license_spdx": "BSD-3-Clause",
+      "required_action": "Retain copyright, conditions and disclaimer in documentation/materials accompanying binary distribution. Class retention after R8 not analyzed; including notice conservatively covers resolved dependency.",
+      "source_path": "commonMain/kotlin/time/Instant.kt",
+      "source_url": "https://raw.githubusercontent.com/JetBrains/kotlin/v2.2.21/license/third_party/threetenbp_license.txt",
+      "status": "verified_in_published_stdlib_source_and_upstream_license_mapping"
+    },
+    {
+      "copyright": "Copyright Eric Ford & Hubert Holin 2001.",
+      "id": "boost-math",
+      "included_via": "org.jetbrains.kotlin:kotlin-stdlib:2.2.21",
+      "license_spdx": "BSL-1.0",
+      "required_action": "Keep a copy with third-party notices; Boost has an exception for solely machine-executable object code, so do not claim binary attribution is always mandatory.",
+      "source_path": "jvmMain/kotlin/util/MathJVM.kt",
+      "source_url": "https://raw.githubusercontent.com/JetBrains/kotlin/v2.2.21/license/third_party/boost_LICENSE.txt",
+      "status": "verified_in_published_stdlib_source_and_upstream_license_mapping"
+    },
+    {
+      "copyright": "Copyright 2007 Google Inc. (source); upstream license mapping also identifies 2007-08 Google Inc.",
+      "id": "gwt-collections",
+      "included_via": "org.jetbrains.kotlin:kotlin-stdlib:2.2.21",
+      "license_spdx": "Apache-2.0",
+      "source_url": "https://raw.githubusercontent.com/JetBrains/kotlin/v2.2.21/license/README.md"
+    },
+    {
+      "copyright": "Copyright 2011 The Guava Authors",
+      "id": "guava-unsigned",
+      "included_via": "org.jetbrains.kotlin:kotlin-stdlib:2.2.21",
+      "license_spdx": "Apache-2.0",
+      "source_url": "https://raw.githubusercontent.com/JetBrains/kotlin/v2.2.21/license/README.md"
+    },
+    {
+      "copyright": "Copyright 2013 Twitter, Inc.",
+      "id": "twitter-hpack",
+      "included_via": "com.squareup.okhttp3:okhttp:4.12.0",
+      "license_spdx": "Apache-2.0",
+      "source_path": "okhttp3/internal/http2/Huffman.kt",
+      "source_url": "https://raw.githubusercontent.com/square/okhttp/4984568367caaf359b82c452bd28b5e192824d1c/okhttp/src/main/kotlin/okhttp3/internal/http2/Huffman.kt"
+    },
+    {
+      "copyright": "Copyright 2023, Saket Narayan",
+      "evidence": "Published 0.28.0 sources.jar has explicit SPDX-License-Identifier: Apache-2.0 and original author/source URL in copied files.",
+      "id": "extended-spans",
+      "included_via": "com.mikepenz:multiplatform-markdown-renderer-android:0.28.0",
+      "license_spdx": "Apache-2.0",
+      "source_path": "commonMain/com/mikepenz/markdown/compose/extendedspans/",
+      "source_url": "https://github.com/saket/extended-spans"
+    }
+  ],
+  "artifact_pins": [
+    {
+      "coordinate": "com.mikepenz:multiplatform-markdown-renderer-android:0.28.0",
+      "sha256": "282f0167f9ec05d733f2117c131ea9bc1b73dbf51bc7c6766e701426123505a5"
+    },
+    {
+      "coordinate": "com.squareup.okhttp3:okhttp:4.12.0",
+      "sha256": "b1050081b14bb7a3a7e55a4d3ef01b5dcfabc453b4573a4fc019767191d5f4e0"
+    },
+    {
+      "coordinate": "org.jetbrains.kotlin:kotlin-stdlib:2.2.21",
+      "sha256": "6558a3d233da56a20934b32159f9db5f86ed5816ef098f78a2c223dc6abb79dd"
+    },
+    {
+      "coordinate": "org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.9.0",
+      "sha256": "ad89c2892235e670f222d819cb3d81188143cb19a05b59df9889ae4269f5c70a"
+    },
+    {
+      "coordinate": "org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.7.3",
+      "sha256": "f0adde45864144475385cf4aa7e0b7feb27f61fcf9472665ed98cc971b06b1eb"
+    }
+  ],
+  "description": "Version-pinned evidence for bundled components not declared separately by Maven POMs. Not the primary dependency inventory.",
+  "files": [
+    {
+      "path": "third_party/licenses/BSD-3-Clause-ThreeTenBP.txt",
+      "sha256": "d1bc53b493a3ab387b42717ed5c4b1976a5048996f81154278100bff86d39331"
+    },
+    {
+      "path": "third_party/licenses/BSL-1.0.txt",
+      "sha256": "8d8291caf1cee26d23acf3eb67c9f9a2d58f1c681b16a4fbe8cbfb9e3c0b5a9b"
+    },
+    {
+      "path": "third_party/licenses/MPL-2.0.txt",
+      "sha256": "fab3dd6bdab226f1c08630b1dd917e11fcb4ec5e1e020e2c16f83a0a13863e85"
+    },
+    {
+      "path": "third_party/notices/coroutines-NOTICE.txt",
+      "sha256": "421d45acbd92670b4131621a28fcbb41ba0b747d3a336cb13fca38c0685426c4"
+    },
+    {
+      "path": "third_party/notices/kotlin-COPYRIGHT.txt",
+      "sha256": "8f1a1700adb5490604c6094fb137bf73f6c28d3ee554b58f3ff8ef975a79672d"
+    },
+    {
+      "path": "third_party/notices/okhttp-publicsuffix-NOTICE.txt",
+      "sha256": "8a9c58fbded5ea3474315e4a9824ca8b1486098a1a03e897e0b19419d5e1876a"
+    },
+    {
+      "path": "third_party/notices/serialization-NOTICE.txt",
+      "sha256": "ec77bba5c852830abfdefcdefbf4a22577ff4df79ec323a898d5100ca1d6f8d6"
+    },
+    {
+      "path": "third_party/sources/public_suffix_list.dat",
+      "sha256": "e8b273972eb5a70e888bd3e7d7c5b9b04e600a59d69def9136a74d70ae6fcdd3"
+    }
+  ]
+}

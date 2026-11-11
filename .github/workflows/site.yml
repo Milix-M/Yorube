@@ -1,0 +1,73 @@
+name: Website
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - "site/**"
+      - "third_party/**"
+      - "app/src/main/assets/legal/**"
+      - "LICENSE"
+      - ".github/workflows/site.yml"
+  pull_request:
+    branches: [develop]
+    paths:
+      - "site/**"
+      - "third_party/**"
+      - "app/src/main/assets/legal/**"
+      - "LICENSE"
+      - ".github/workflows/site.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: website-${{ github.event_name == 'pull_request' && github.ref || 'production' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: site
+    env:
+      NEXT_PUBLIC_BASE_PATH: /Yorube
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - run: npm ci
+      - name: Sync generated app licenses
+        run: node scripts/sync-app-legal.mjs ..
+      - name: Check for stale license copies
+        run: git diff --exit-code -- data public/legal LICENSE
+      - run: npm run build
+      - run: npm run check
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site/out
+
+  deploy:
+    if: github.ref == 'refs/heads/develop' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,6 +1,7 @@
 package com.hermes.client.ui
 
 import android.app.Application
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -206,4 +207,40 @@ class SettingsScreenTest {
             compose.onAllNodesWithText("health=true", substring = true).fetchSemanticsNodes().isEmpty()
         }
     }
+    @Test
+    fun legalDocuments_areReadableOfflineAndDismissible() {
+        compose.setContent { HermesAppTheme { SettingsScreen(onNavigateBack = {}) } }
+        compose.onNodeWithTag("PRIVACY.txt").performScrollTo().performClick()
+        compose.waitUntil(timeoutMillis = 10_000) {
+            compose.onAllNodesWithText("プライバシーポリシー").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithText("プライバシーポリシー").assertIsDisplayed()
+        scrollLegalDocumentTo("PRIVACY.txt", "お問い合わせと変更")
+        compose.onNodeWithText("お問い合わせと変更").assertIsDisplayed()
+        compose.onNodeWithText("Close").performClick()
+        compose.onNodeWithTag("legalDocument").assertDoesNotExist()
+
+        compose.onNodeWithTag("LICENSES.txt").performScrollTo().performClick()
+        compose.waitUntil(timeoutMillis = 10_000) {
+            compose.onAllNodesWithText("Yorube — Licenses").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithText("Yorube — Licenses").assertIsDisplayed()
+        compose.onNodeWithText("MIT License").assertIsDisplayed()
+        compose.onNodeWithText("Copyright (c) 2026 Milix-M").assertIsDisplayed()
+        scrollLegalDocumentTo("LICENSES.txt", "===== MPL-2.0.txt =====")
+        compose.onNodeWithText("===== MPL-2.0.txt =====").assertIsDisplayed()
+        compose.onNodeWithText("Close").performClick()
+        compose.onNodeWithTag("legalDocument").assertDoesNotExist()
+    }
+
+    private fun scrollLegalDocumentTo(asset: String, heading: String) {
+        val context = ApplicationProvider.getApplicationContext<Application>()
+        val paragraphs = context.assets.open("legal/$asset").bufferedReader().use { it.readText() }.split("\n\n")
+        val index = paragraphs.indexOf(heading)
+        assertTrue("Missing document section: $heading", index >= 0)
+        // Jump directly: Robolectric's frame clock cannot idle the lazy-list prefetch loop
+        // triggered by repeated pixel scrolling. The same document and scroll semantics are used.
+        compose.onNodeWithTag("legalDocument").performScrollToIndex(index)
+    }
+
 }

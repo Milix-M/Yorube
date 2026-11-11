@@ -25,7 +25,7 @@
     <string name="api_key">API 密钥</string>
     <string name="model">模型</string>
     <string name="provider_optional">服务商 (可选)</string>
-    <string name="section_notifications">通知 (M3)</string>
+    <string name="section_notifications">通知</string>
     <string name="relay_optional">中转 URL (可选)</string>
     <string name="fcm_token">FCM 令牌: %1$s…</string>
     <string name="fcm_token_none">FCM 令牌: (暂无)</string>
@@ -199,4 +199,6 @@
     <string name="cmd_cron_usage">/cron list；/cron add 名称 | 计划 | 提示；/cron edit ID 名称 | 计划 | 提示；/cron show|pause|resume|run|remove ID</string>
     <string name="cmd_cron_done">定时任务：%1$s 已完成。</string>
     <string name="cmd_cron_empty">没有定时任务。</string>
+    <string name="privacy_policy">隐私政策</string>
+    <string name="open_source_licenses">开源许可</string>
 </resources>

@@ -30,6 +30,10 @@ jobs:
           export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
           yes | sdkmanager --licenses > /dev/null
           sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+      - name: Test license collection failure cases
+        run: python3 -m unittest discover -s scripts/tests
+      - name: Verify generated legal documents
+        run: python3 scripts/generate_legal.py --check
       - name: Test, verify 100% line coverage, and build APK
         run: ./gradlew :app:jacocoTestReport :app:jacocoCoverageVerification :app:assembleDebug --build-cache --no-daemon --stacktrace
       - name: Summarize test outcomes and slow tests

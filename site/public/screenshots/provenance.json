@@ -1,0 +1,13 @@
+{
+  "repository": "https://github.com/Milix-M/Yorube",
+  "commit": "b29179e8812889a33b5a5f8d805f2df17203a3e7",
+  "method": "Production Compose screens rendered with Robolectric native graphics, Android API 30. Sample server data; dark theme; 412 × 892 dp at xhdpi. PNGs are direct Android View.draw output, without visual editing.",
+  "images": {
+    "ja-chat.png": "3d6f6c1aa17fa1dfea9fb9302ac49c321c23a0722739faef33eaca23edb2954c",
+    "ja-drawer.png": "557057a6142a1e1f1da7b39d2ef8594ff459b7ffc4118808fb0d1564d6dc8448",
+    "ja-settings.png": "4901008b6a3c92f9df2b1abbec5a1fc94fa394b5af3725271b2d39f72fe33ccc",
+    "en-chat.png": "3643ffe7b5560f25a1193adaed6149d712b2ac46c2718f9119968eb29d962f26",
+    "en-drawer.png": "eeb1e44c0b54f7663477d269de20e78eb5618c563f3e8732ee0c2a76f8d38d04",
+    "en-settings.png": "6657688c20367f1006a3df4dbedacba978ed878b67bab5f083ce0cc3c31be578"
+  }
+}
