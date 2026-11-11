@@ -25,7 +25,7 @@
     <string name="api_key">API 키</string>
     <string name="model">모델</string>
     <string name="provider_optional">프로바이더 (선택)</string>
-    <string name="section_notifications">알림 (M3)</string>
+    <string name="section_notifications">알림</string>
     <string name="relay_optional">릴레이 URL (선택)</string>
     <string name="fcm_token">FCM 토큰: %1$s…</string>
     <string name="fcm_token_none">FCM 토큰: (아직 없음)</string>

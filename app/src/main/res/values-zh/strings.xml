@@ -25,7 +25,7 @@
     <string name="api_key">API 密钥</string>
     <string name="model">模型</string>
     <string name="provider_optional">服务商 (可选)</string>
-    <string name="section_notifications">通知 (M3)</string>
+    <string name="section_notifications">通知</string>
     <string name="relay_optional">中转 URL (可选)</string>
     <string name="fcm_token">FCM 令牌: %1$s…</string>
     <string name="fcm_token_none">FCM 令牌: (暂无)</string>

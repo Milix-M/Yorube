@@ -25,7 +25,7 @@
     <string name="api_key">API key</string>
     <string name="model">Model</string>
     <string name="provider_optional">Provider (optional)</string>
-    <string name="section_notifications">Notifications (M3)</string>
+    <string name="section_notifications">Notifications</string>
     <string name="relay_optional">Relay URL (optional)</string>    <string name="fcm_token">FCM token: %1$s…</string>
     <string name="fcm_token_none">FCM token: (none yet)</string>
     <string name="notifications_enabled">Enable notifications</string>
