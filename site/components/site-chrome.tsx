@@ -105,7 +105,7 @@ export function Footer({ locale = "ja" }: { locale?: Locale }) {
       <p className="unaffiliated">
         {en
           ? "Yorube is an unofficial client and is not affiliated with Nous Research. Third-party names belong to their respective owners."
-          : "YorubeはNous Researchの公式製品ではありません。Hermes Agentおよび第三者の名称は、それぞれの権利者に帰属します。"}
+          : "YorubeはNous Researchの公式製品ではありません。Hermes Agentおよび第三者の名称はそれぞれの権利者に帰属します。"}
       </p>
     </footer>
   );

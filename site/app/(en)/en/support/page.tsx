@@ -1,9 +1,6 @@
-import { languages } from "@/lib/paths";
+import { pageMetadata } from "@/lib/metadata";
 import { LegalShell, Arrow } from "@/components/site-chrome";
-export const metadata = {
-  title: "Support",
-  alternates: { languages: languages("support") },
-};
+export const metadata = pageMetadata("en", "support");
 export default function Page() {
   return (
     <LegalShell locale="en" page="support" title="Support">

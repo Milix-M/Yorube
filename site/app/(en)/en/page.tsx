@@ -1,6 +1,6 @@
-import { languages } from "@/lib/paths";
+import { pageMetadata } from "@/lib/metadata";
 import { HomePage } from "@/components/home-page";
-export const metadata = { alternates: { languages: languages() } };
+export const metadata = pageMetadata("en");
 export default function Page() {
   return <HomePage locale="en" />;
 }

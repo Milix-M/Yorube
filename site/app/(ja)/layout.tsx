@@ -1,22 +1,6 @@
-import type { Metadata } from "next";
-import { assetPath } from "@/lib/paths";
+import { pageMetadata } from "@/lib/metadata";
 import "../globals.css";
-export const metadata: Metadata = {
-  metadataBase: new URL("https://milix-m.github.io"),
-  title: {
-    default: "Yorube — Hermes AgentのAndroidクライアント",
-    template: "%s | Yorube",
-  },
-  description:
-    "Hermes Agentの非公式Androidクライアント。チャット、画像送信、追加指示、承認、通知に対応。",
-  icons: { icon: assetPath("/favicon.svg") },
-  openGraph: {
-    title: "Yorube — Hermes AgentのAndroidクライアント",
-    description: "Hermes Agentの非公式Androidクライアント。",
-    locale: "ja_JP",
-    type: "website",
-  },
-};
+export const metadata = pageMetadata("ja");
 export default function RootLayout({
   children,
 }: {

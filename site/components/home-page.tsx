@@ -2,23 +2,23 @@ import { Arrow, Header, Footer, type Locale } from "./site-chrome";
 import { ScreenshotGallery } from "./screenshot-gallery";
 const content = {
   ja: {
-    lead: "Hermes Agentの非公式Androidクライアント。",
+    lead: "Hermes Agentの非公式Androidクライアントです。",
     description:
-      "自分のHermes APIサーバーに接続して、チャットや画像送信、実行中の追加指示、承認への回答ができます。",
+      "自分のHermes APIサーバーに接続してチャットや画像送信、実行中の追加指示、承認への回答ができます。",
     requires: "Android 8.0以降 · Hermes APIサーバーとAPIキーが必要です",
     features: "機能",
     cards: [
       [
         "チャット・画像添付",
-        "Markdown表示と会話履歴に対応。画像は1枚5 MB、最大3枚まで添付できます。",
+        "Markdown形式の回答を表示し、会話履歴を確認できます。画像は1枚あたり5 MBまで、最大3枚添付できます。",
       ],
       [
         "追加指示・送信予約",
-        "実行中に追加の指示を送ったり、次のメッセージをキューに登録したりできます。",
+        "実行中に指示を追加したり、次のメッセージを送信待ちにしたりできます。",
       ],
       [
         "承認・通知",
-        "承認依頼や追加の質問にアプリから回答。実行完了や確認待ちを通知で受け取れます。",
+        "アプリから承認依頼や追加の質問に回答できます。実行が完了したときや確認が必要なときに通知を受け取れます。",
       ],
     ],
     setup: "使いはじめ方",
