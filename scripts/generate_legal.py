@@ -14,13 +14,16 @@ parts = [
     "These notices apply to third-party components, independently of the license chosen for Yorube itself. Runtime artifacts are listed conservatively before R8 shrinking.",
 ]
 for dep in inventory["dependencies"]:
+    authors = [d.get("name", "") for d in dep.get("developers", [])]
     parts.append("\n".join([
         dep["coordinate"],
         "License: " + ", ".join(dep["declared_license_spdx"]),
-        "Project: " + (dep.get("project_url") or dep["pom_url"]),
-        "Source: " + dep["sources_url"],
-        *dep["copyright_lines_observed"],
+        "Project: " + dep["project_url"],
+        "Developers: " + ", ".join(filter(None, authors)),
+        "Binary SHA-256: " + dep["binary_sha256"],
     ]))
+    for notice in dep["embedded_legal_files"]:
+        parts.append(dep["coordinate"] + " — " + notice["path"] + "\n\n" + notice["text"])
 parts.append("Additional bundled components")
 for component in inventory["additional_components"]:
     parts.append("\n".join([
@@ -42,7 +45,8 @@ license_text = (ROOT / "LICENSE").read_text()
 notices = "\n\n".join(parts) + "\n"
 outputs = {
     ROOT / "app/src/main/assets/legal/LICENSES.txt": "Yorube — Licenses\n\n" + license_text.rstrip() + "\n\n" + notices,
-    ROOT / "app/src/main/assets/legal/THIRD_PARTY_NOTICES.txt": "\n\n".join(parts) + "\n",
+    ROOT / "app/src/main/assets/legal/THIRD_PARTY_NOTICES.txt": notices,
+    ROOT / "third_party/THIRD_PARTY_NOTICES.txt": notices,
     ROOT / "app/src/main/assets/legal/PRIVACY.txt": "\n\n".join(privacy_parts) + "\n",
     ROOT / "PRIVACY.md": "# " + privacy["title"] + "\n\n最終更新日: " + privacy["updated"] + "\n\n" + "\n\n".join("## " + s["title"] + "\n\n" + "\n\n".join(s["paragraphs"]) for s in privacy["sections"]) + "\n",
     ROOT / "app/src/main/assets/legal/public_suffix_list.dat": (ROOT / "third_party/sources/public_suffix_list.dat").read_text(),

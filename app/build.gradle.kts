@@ -1,4 +1,4 @@
-import groovy.json.JsonSlurper
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.file.FileCollection
 import org.gradle.api.tasks.testing.Test
 import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
@@ -10,6 +10,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
     jacoco
+    id("com.mikepenz.aboutlibraries.plugin") version "15.3.0"
 }
 
 android {
@@ -208,17 +209,45 @@ tasks.register("exportReleaseDependencies") {
     }
 }
 
-val verifyThirdPartyNotices = tasks.register("verifyThirdPartyNotices") {
-    group = "verification"
-    description = "Check that resolved release artifacts match the reviewed license inventory"
+val exportReleaseArtifacts = tasks.register("exportReleaseArtifacts") {
     doLast {
-        val inventory = JsonSlurper().parse(rootProject.file("third_party/dependencies.json")) as Map<*, *>
-        val expected = (inventory["dependencies"] as List<*>).map { (it as Map<*, *>)["coordinate"] as String }.sorted()
-        val actual = releaseDependencyCoordinates()
-        check(actual == expected) {
-            "Third-party inventory is stale. Added/upgraded: " + (actual - expected.toSet()) +
-                "; removed: " + (expected - actual.toSet()) + ". See third_party/README.md"
-        }
+        val artifacts = configurations.getByName("releaseRuntimeClasspath").incoming.artifacts.artifacts.map {
+            val component = it.id.componentIdentifier
+            check(component is ModuleComponentIdentifier) {
+                "Cannot collect licenses for local/project artifact: " + component + ". Add a reviewed collection rule first."
+            }
+            mapOf("coordinate" to "${component.group}:${component.module}:${component.version}", "file" to it.file.absolutePath)
+        }.distinctBy { it["coordinate"] to it["file"] }.sortedBy { it["coordinate"] }
+        val output = layout.buildDirectory.file("reports/legal/release-artifacts.json").get().asFile
+        output.parentFile.mkdirs()
+        output.writeText(groovy.json.JsonOutput.toJson(artifacts))
     }
 }
+
+val collectThirdPartyLicenses = tasks.register<Exec>("collectThirdPartyLicenses") {
+    dependsOn("exportLibraryDefinitions", exportReleaseArtifacts)
+    workingDir(rootProject.projectDir)
+    commandLine("python3", "scripts/collect_licenses.py")
+}
+tasks.register<Exec>("generateThirdPartyNotices") {
+    group = "documentation"
+    description = "Automatically collect licenses and generate repository/APK notices"
+    dependsOn(collectThirdPartyLicenses)
+    workingDir(rootProject.projectDir)
+    commandLine("python3", "scripts/generate_legal.py")
+}
+val verifyCollectedLicenses = tasks.register<Exec>("verifyCollectedLicenses") {
+    dependsOn("exportLibraryDefinitions", exportReleaseArtifacts)
+    workingDir(rootProject.projectDir)
+    commandLine("python3", "scripts/collect_licenses.py", "--check")
+}
+val verifyThirdPartyNotices = tasks.register<Exec>("verifyThirdPartyNotices") {
+    group = "verification"
+    description = "Reject missing licenses and stale repository/APK notices"
+    dependsOn(verifyCollectedLicenses)
+    workingDir(rootProject.projectDir)
+    commandLine("python3", "scripts/generate_legal.py", "--check")
+}
 tasks.named("preBuild") { dependsOn(verifyThirdPartyNotices) }
+
+apply(from = "licenses.gradle")

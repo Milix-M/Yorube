@@ -67,3 +67,5 @@ GitHubのReleaseワークフローでは、キーストアをBase64にした `YO
 - [公開手順・署名・旧版からの移行](docs/PUBLISHING.md)
 
 設定画面からプライバシーとオープンソースライセンスをオフラインで閲覧できます。本体は[MIT License](LICENSE)で公開しています。第三者ライブラリの利用条件はそれぞれの表示に従います。
+
+依存ライセンスはAboutLibrariesでreleaseの実依存から自動収集します。`./gradlew :app:generateThirdPartyNotices` で、リポジトリとアプリ内表示に使う文書を同時生成します。通常のビルドでも再収集と一致検証を行います。内包コードの補足情報と自動検出の範囲は[更新手順](third_party/README.md)を参照してください。

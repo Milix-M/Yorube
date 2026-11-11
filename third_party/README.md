@@ -1,31 +1,38 @@
-# Third-party materials
+# Third-party licenses
 
-`dependencies.json` records the 77 resolved Android release runtime artifacts reviewed on 2026-11-10, their matching published sources, observed copyright headers, and additional embedded components. The inventory is conservative before R8 shrinking; it is not a claim that every class remains in the final APK.
+## Automatic collection
 
-Full license texts and upstream NOTICE files are retained in `licenses/` and `notices/`. In particular, the Kotlin standard library contains ThreeTenBP (BSD-3-Clause), Boost math (BSL-1.0), and Apache-licensed GWT/Guava code; OkHttp contains the MPL-2.0 Public Suffix List and Apache-licensed Twitter HPACK code. Boost is included conservatively; its license has an executable-object-code exception.
+Run `./gradlew :app:generateThirdPartyNotices`. AboutLibraries 15.3.0 reads resolved Gradle/POM metadata and downloads full SPDX license texts. The collector filters the result against the actual `releaseRuntimeClasspath` binary artifacts, scans JAR/AAR archives (including nested JARs) for embedded LICENSE/NOTICE/COPYING/COPYRIGHT text, and records SHA-256 hashes. No runtime UI dependency is added.
+
+Generated outputs:
+
+- `aboutlibraries.json`: automatically collected metadata and full license texts for the actual runtime artifacts.
+- `dependencies.json`: normalized inventory, binary hashes and embedded notices.
+- `THIRD_PARTY_NOTICES.txt`: repository-readable full notices, identical to the APK asset of that name.
+- `app/src/main/assets/legal/LICENSES.txt`: the app's MIT license followed by the same third-party notices, shown offline in Settings.
+
+Every Android pre-build runs `:app:verifyThirdPartyNotices`. It recollects actual dependency metadata and checks the committed outputs. Missing dependencies, missing/unapproved licenses, missing full texts, stale outputs, and unsupported local/project artifacts fail instead of being silently omitted. CI also tests these failure cases. New license types require updating `license-policy.json` after review.
+
+## Bundled components and scope
+
+Published Maven metadata does not describe every copied source file, native component or artwork license. Automatic collection does not establish exhaustive legal clearance. `supplemental.json` separately records known bundled components (including Kotlin's ThreeTenBP/Boost/GWT/Guava code, OkHttp's Public Suffix List/HPACK and the Markdown renderer's extended spans), source evidence and upstream notice files. These are additions to the automatic collector, not its input dependency list. Version and binary hashes are checked on every run; dependency changes invalidate the corresponding evidence and stop verification until reviewed. No new library can be assumed free of embedded components solely because its POM has a license.
+
+Material Symbols auto_awesome (`ic_hero_spark.xml`) is attributed under Apache-2.0. Confirm the origin/rights of the custom launcher artwork before public release. Build-time/test tools and Android platform implementations are outside the APK inventory. The inventory is conservative before R8 shrinking.
 
 ## Public Suffix List source
 
-`sources/public_suffix_list.dat` is the unmodified editable source from OkHttp commit `4984568367caaf359b82c452bd28b5e192824d1c` (parent-4.12.0). The original MPL header is preserved. Re-serializing its 9,499 rules and 8 exceptions reproduces the packaged uncompressed OkHttp resource exactly. Run:
+`sources/public_suffix_list.dat` is the unmodified editable source from OkHttp commit `4984568367caaf359b82c452bd28b5e192824d1c` (parent-4.12.0), retaining its MPL notice. Its source hash and the packaged payload hash are checked. To verify the source serialization:
 
 ```sh
 python3 scripts/verify_publicsuffix.py third_party/sources/public_suffix_list.dat /path/to/okhttp-4.12.0.jar
 ```
 
-The matching source is included in the APK and as a release attachment. This makes it available alongside the binary even if a remote repository changes.
+The source is also included in the APK and release attachments. Yorube-original code is MIT licensed; third-party terms remain independent.
 
-## Updating dependencies
+## Updating
 
-1. Run `./gradlew :app:exportReleaseDependencies` and compare `app/build/reports/legal/release-dependencies.txt`.
-2. Review the exact published POM, matching sources, embedded NOTICE/license files, and native components. Do not infer that transitive content shares a library's top-level license.
-3. Update the inventory and source/license materials.
-4. Run `python3 scripts/generate_legal.py`.
-5. Run `./gradlew :app:verifyThirdPartyNotices` and `python3 scripts/generate_legal.py --check`.
-
-The Gradle check catches added, removed, and upgraded resolved artifacts. It does not replace a review of newly copied source, icons, fonts, or native toolchain code. Build/test tools and Android system libraries are outside this APK inventory.
-
-## Artwork and scope
-
-`ic_hero_spark.xml` is derived from Material Symbols auto_awesome and is covered by the included Apache license and attribution. Confirm the origin and rights of the custom launcher star with its author before public release. No copied Hermes server code was found; using its HTTP API does not relicense Yorube.
-
-Yorube-original code is licensed under the MIT License in the repository's root LICENSE. Third-party components retain their respective terms; the project's MIT License does not override them.
+1. Change the dependency versions and run `:app:generateThirdPartyNotices`.
+2. Resolve missing/unapproved metadata and re-review invalidated bundled-component evidence. Do not bypass errors with blanket exclusions.
+3. Review and commit all generated output changes together.
+4. Run `:app:verifyThirdPartyNotices` and `python3 -m unittest discover -s scripts/tests`.
+5. Sync the site using its `scripts/sync-app-legal.mjs` helper.

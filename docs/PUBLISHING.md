@@ -11,7 +11,7 @@
 ## リリース前の確認
 
 1. 認証・通信・送信復旧の修正（PR #31）と公開準備の変更をdevelopに取り込みます。
-2. `legal/privacy.json` と第三者の表示を確認し、`python3 scripts/generate_legal.py` を実行します。
+2. `legal/privacy.json` を確認し、`./gradlew :app:generateThirdPartyNotices` で実依存からライセンスを自動収集・生成します。未検出や、内包コードの補足情報が更新されていない場合は検証で停止します。生成したリポジトリ文書とアプリ内表示を確認してください。
 3. `./gradlew :app:verifyThirdPartyNotices :app:jacocoTestReport :app:jacocoCoverageVerification :app:assembleRelease :app:lintRelease` を実行します。
 4. 実機で新規インストール、設定、接続テスト、画像添付、承認、通知、バックグラウンド復帰、オフラインの法的文書表示を確認します。
 5. バージョン名・コードを更新します。タグだけを変更して既存のバージョン番号を再配布しないでください。

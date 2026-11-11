@@ -8,3 +8,7 @@ third_party/notices/* linguist-vendored
 third_party/licenses/MPL-2.0.txt whitespace=-blank-at-eol
 app/src/main/assets/legal/THIRD_PARTY_NOTICES.txt whitespace=-blank-at-eol
 app/src/main/assets/legal/LICENSES.txt whitespace=-blank-at-eol
+
+third_party/aboutlibraries.json linguist-generated
+third_party/dependencies.json linguist-generated
+third_party/THIRD_PARTY_NOTICES.txt linguist-generated whitespace=-blank-at-eol

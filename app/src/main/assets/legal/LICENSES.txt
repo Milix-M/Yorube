@@ -29,658 +29,472 @@ These notices apply to third-party components, independently of the license chos
 androidx.activity:activity-compose:1.9.2
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/activity#1.9.2
-Source: https://dl.google.com/dl/android/maven2/androidx/activity/activity-compose/1.9.2/activity-compose-1.9.2-sources.jar
-Copyright 2021 The Android Open Source Project
-Copyright 2022 The Android Open Source Project
-Copyright 2023 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: adf2d7965116ea0d57b48e07c1e6e379739d0131084ec06c42bf9eabb963fbe6
 
 androidx.activity:activity-ktx:1.9.2
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/activity#1.9.2
-Source: https://dl.google.com/dl/android/maven2/androidx/activity/activity-ktx/1.9.2/activity-ktx-1.9.2-sources.jar
+Developers: The Android Open Source Project
+Binary SHA-256: 046c0d51a1d0a0dfd56f9af1f418f9cc3d08839a8c404302b60547aaf224dcb6
 
 androidx.activity:activity:1.9.2
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/activity#1.9.2
-Source: https://dl.google.com/dl/android/maven2/androidx/activity/activity/1.9.2/activity-1.9.2-sources.jar
-Copyright (C) 2020 The Android Open Source Project
-Copyright 2018 The Android Open Source Project
-Copyright 2019 The Android Open Source Project
-Copyright 2020 The Android Open Source Project
-Copyright 2021 The Android Open Source Project
-Copyright 2022 The Android Open Source Project
-Copyright 2023 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 72751e5895b6fd600faf3ebdfd3c9b2faf70e8d17b413c0b66dad98ca64b2a77
 
 androidx.annotation:annotation-experimental:1.4.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/annotation#1.4.0
-Source: https://dl.google.com/dl/android/maven2/androidx/annotation/annotation-experimental/1.4.0/annotation-experimental-1.4.0-sources.jar
-Copyright 2019 The Android Open Source Project
-Copyright 2020 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: c6eb7e676011ec65b32428373d450debdfc45179c4f8b3a752174fb87c17b08a
 
 androidx.annotation:annotation-jvm:1.8.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/annotation#1.8.0
-Source: https://dl.google.com/dl/android/maven2/androidx/annotation/annotation-jvm/1.8.0/annotation-jvm-1.8.0-sources.jar
-Copyright (C) 2013 The Android Open Source Project
-Copyright (C) 2014 The Android Open Source Project
-Copyright (C) 2015 The Android Open Source Project
-Copyright (C) 2016 The Android Open Source Project
-Copyright (C) 2017 The Android Open Source Project
-Copyright (C) 2020 The Android Open Source Project
-Copyright (C) 2021 The Android Open Source Project
-Copyright (C) 2022 The Android Open Source Project
-Copyright 2018 The Android Open Source Project
-Copyright 2019 The Android Open Source Project
-Copyright 2021 The Android Open Source Project
-Copyright 2023 The Android Open Source Project
-Copyright 2024 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 9aab326d9492800991854360ac248f493ce7f7c3183519309b78ace9e240f6f6
 
 androidx.arch.core:core-common:2.2.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/arch-core#2.2.0
-Source: https://dl.google.com/dl/android/maven2/androidx/arch/core/core-common/2.2.0/core-common-2.2.0-sources.jar
-Copyright 2018 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 65308a06b1c00ee186cb9e19321383f043b993813f1522c47f4a3e3303bdba41
 
 androidx.arch.core:core-runtime:2.2.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/arch-core#2.2.0
-Source: https://dl.google.com/dl/android/maven2/androidx/arch/core/core-runtime/2.2.0/core-runtime-2.2.0-sources.jar
-Copyright (C) 2017 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: a1be5e0caa2b07623862af6ae21b3ab0718123245184d0e30dea81b53f990a47
 
 androidx.autofill:autofill:1.0.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx
-Source: https://dl.google.com/dl/android/maven2/androidx/autofill/autofill/1.0.0/autofill-1.0.0-sources.jar
-Copyright 2019 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: c9468f56e05006ea151a426c54957cd0799b8b83a579d2846dd22061f33e5ecd
 
 androidx.collection:collection-jvm:1.4.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/collection#1.4.0
-Source: https://dl.google.com/dl/android/maven2/androidx/collection/collection-jvm/1.4.0/collection-jvm-1.4.0-sources.jar
-Copyright (C) 2017 The Android Open Source Project
-Copyright (C) 2019 The Android Open Source Project
-Copyright 2018 The Android Open Source Project
-Copyright 2020 The Android Open Source Project
-Copyright 2022 The Android Open Source Project
-Copyright 2023 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: d5cf7b72647c7995071588fe870450ff9c8f127f253d2d4851e161b800f67ae0
 
 androidx.collection:collection-ktx:1.4.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/collection#1.4.0
-Source: https://dl.google.com/dl/android/maven2/androidx/collection/collection-ktx/1.4.0/collection-ktx-1.4.0-sources.jar
+Developers: The Android Open Source Project
+Binary SHA-256: c6deada2fac53b8ea6523dbda77597b128006674616f140f04df23264c6d1aa3
 
 androidx.compose.animation:animation-android:1.7.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/compose-animation#1.7.0
-Source: https://dl.google.com/dl/android/maven2/androidx/compose/animation/animation-android/1.7.0/animation-android-1.7.0-sources.jar
-Copyright 2019 The Android Open Source Project
-Copyright 2020 The Android Open Source Project
-Copyright 2021 The Android Open Source Project
-Copyright 2022 The Android Open Source Project
-Copyright 2024 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 439c9bc8dd9542ea7c208519077b8d47c4c68d3e699f8e961fb80bc2955bbbc4
 
 androidx.compose.animation:animation-core-android:1.7.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/compose-animation#1.7.0
-Source: https://dl.google.com/dl/android/maven2/androidx/compose/animation/animation-core-android/1.7.0/animation-core-android-1.7.0-sources.jar
-Copyright 2019 The Android Open Source Project
-Copyright 2020 The Android Open Source Project
-Copyright 2021 The Android Open Source Project
-Copyright 2022 The Android Open Source Project
-Copyright 2023 The Android Open Source Project
-Copyright 2024 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 2dc22359de83ed0259a8b7834f16d987d82a90c7197eabb44d72cbdac67bf82c
 
 androidx.compose.foundation:foundation-android:1.7.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/compose-foundation#1.7.0
-Source: https://dl.google.com/dl/android/maven2/androidx/compose/foundation/foundation-android/1.7.0/foundation-android-1.7.0-sources.jar
-Copyright 2018 The Android Open Source Project
-Copyright 2019 The Android Open Source Project
-Copyright 2020 The Android Open Source Project
-Copyright 2021 The Android Open Source Project
-Copyright 2022 The Android Open Source Project
-Copyright 2023 The Android Open Source Project
-Copyright 2024 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 631276d808c33e35abf2f917c072fa1cd17a95929b883c74c942a8d287329b0b
 
 androidx.compose.foundation:foundation-layout-android:1.7.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/compose-foundation#1.7.0
-Source: https://dl.google.com/dl/android/maven2/androidx/compose/foundation/foundation-layout-android/1.7.0/foundation-layout-android-1.7.0-sources.jar
-Copyright 2019 The Android Open Source Project
-Copyright 2020 The Android Open Source Project
-Copyright 2021 The Android Open Source Project
-Copyright 2022 The Android Open Source Project
-Copyright 2023 The Android Open Source Project
-Copyright 2024 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: d3e0f980fe998eccdbf0e978ece6d429e5e6ad89957a32c3f0723829eeed8624
 
 androidx.compose.material3:material3-android:1.3.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/compose-material3#1.3.0
-Source: https://dl.google.com/dl/android/maven2/androidx/compose/material3/material3-android/1.3.0/material3-android-1.3.0-sources.jar
-Copyright 2021 The Android Open Source Project
-Copyright 2022 The Android Open Source Project
-Copyright 2023 The Android Open Source Project
-Copyright 2024 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: f31bdb820587c099b94662e6eacd428f42c9211ed60c45b11775630ec9eea791
 
 androidx.compose.material:material-icons-core-android:1.7.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/compose-material#1.7.0
-Source: https://dl.google.com/dl/android/maven2/androidx/compose/material/material-icons-core-android/1.7.0/material-icons-core-android-1.7.0-sources.jar
-Copyright 2020 The Android Open Source Project
-Copyright 2024 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 925d2463c80b47b3f04cab6f4938153e0f5d958f10adf94228d71ee06e1fc40f
 
 androidx.compose.material:material-icons-extended-android:1.7.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/compose-material#1.7.0
-Source: https://dl.google.com/dl/android/maven2/androidx/compose/material/material-icons-extended-android/1.7.0/material-icons-extended-android-1.7.0-sources.jar
-Copyright 2024 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: f1d65c63eb202563f89e5c5ca1794d057e1f423740d850f25e5904102ed2c1e4
 
 androidx.compose.material:material-ripple-android:1.7.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/compose-material#1.7.0
-Source: https://dl.google.com/dl/android/maven2/androidx/compose/material/material-ripple-android/1.7.0/material-ripple-android-1.7.0-sources.jar
-Copyright 2019 The Android Open Source Project
-Copyright 2020 The Android Open Source Project
-Copyright 2021 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: a75738b8df3984e3fe1e8e49c4b5fb3a0227fa0620d3540edd8f6a5a7799c7c0
 
 androidx.compose.runtime:runtime-android:1.7.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/compose-runtime#1.7.0
-Source: https://dl.google.com/dl/android/maven2/androidx/compose/runtime/runtime-android/1.7.0/runtime-android-1.7.0-sources.jar
-Copyright 2016-2019 JetBrains s.r.o.
-Copyright 2016-2020 JetBrains s.r.o.
-Copyright 2019 The Android Open Source Project
-Copyright 2020 The Android Open Source Project
-Copyright 2021 The Android Open Source Project
-Copyright 2022 The Android Open Source Project
-Copyright 2023 The Android Open Source Project
-Copyright 2024 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 45dc63524c705ab61ab567939eb50b9b84059c505d076b2bdf2dca26684a0002
 
 androidx.compose.runtime:runtime-saveable-android:1.7.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/compose-runtime#1.7.0
-Source: https://dl.google.com/dl/android/maven2/androidx/compose/runtime/runtime-saveable-android/1.7.0/runtime-saveable-android-1.7.0-sources.jar
-Copyright 2020 The Android Open Source Project
-Copyright 2021 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 2d676750fa36f9f02437051d3d5ee5e160b671c29aa96c310a6a4b8dc7a9d696
 
 androidx.compose.ui:ui-android:1.7.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/compose-ui#1.7.0
-Source: https://dl.google.com/dl/android/maven2/androidx/compose/ui/ui-android/1.7.0/ui-android-1.7.0-sources.jar
-Copyright 2019 The Android Open Source Project
-Copyright 2020 The Android Open Source Project
-Copyright 2021 The Android Open Source Project
-Copyright 2022 The Android Open Source Project
-Copyright 2023 The Android Open Source Project
-Copyright 2024 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: e1ffc65f8253ad324573f77e3a54d1275a46e97f19fa2a07708a6cb4b5cc4ec1
 
 androidx.compose.ui:ui-geometry-android:1.7.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/compose-ui#1.7.0
-Source: https://dl.google.com/dl/android/maven2/androidx/compose/ui/ui-geometry-android/1.7.0/ui-geometry-android-1.7.0-sources.jar
-Copyright 2019 The Android Open Source Project
-Copyright 2020 The Android Open Source Project
-Copyright 2023 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: e9b55663338c41a750038dcccf47291d9617a97d2da083ff804031d9ae47d949
 
 androidx.compose.ui:ui-graphics-android:1.7.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/compose-ui#1.7.0
-Source: https://dl.google.com/dl/android/maven2/androidx/compose/ui/ui-graphics-android/1.7.0/ui-graphics-android-1.7.0-sources.jar
-Copyright 2018 The Android Open Source Project
-Copyright 2019 The Android Open Source Project
-Copyright 2020 The Android Open Source Project
-Copyright 2021 The Android Open Source Project
-Copyright 2022 The Android Open Source Project
-Copyright 2023 The Android Open Source Project
-Copyright 2024 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 1321a507c8605f82050de5ebae8e0d072ab9b7c27a9d355e0e3e3e9232718354
 
 androidx.compose.ui:ui-text-android:1.7.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/compose-ui#1.7.0
-Source: https://dl.google.com/dl/android/maven2/androidx/compose/ui/ui-text-android/1.7.0/ui-text-android-1.7.0-sources.jar
-Copyright 2018 The Android Open Source Project
-Copyright 2019 The Android Open Source Project
-Copyright 2020 The Android Open Source Project
-Copyright 2020 The Android Source Project
-Copyright 2021 The Android Open Source Project
-Copyright 2022 The Android Open Source Project
-Copyright 2023 The Android Open Source Project
-Copyright 2024 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 0fec347a116f030e7aba8b1d410838533213409c92b92024abf35f8556804df9
 
 androidx.compose.ui:ui-tooling-preview-android:1.7.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/compose-ui#1.7.0
-Source: https://dl.google.com/dl/android/maven2/androidx/compose/ui/ui-tooling-preview-android/1.7.0/ui-tooling-preview-android-1.7.0-sources.jar
-Copyright 2019 The Android Open Source Project
-Copyright 2020 The Android Open Source Project
-Copyright 2021 The Android Open Source Project
-Copyright 2022 The Android Open Source Project
-Copyright 2023 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: f0a47630b4e00c1b997b3fe76fd96e20abec89fad546d19163da18d4a088a153
 
 androidx.compose.ui:ui-unit-android:1.7.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/compose-ui#1.7.0
-Source: https://dl.google.com/dl/android/maven2/androidx/compose/ui/ui-unit-android/1.7.0/ui-unit-android-1.7.0-sources.jar
-Copyright 2018 The Android Open Source Project
-Copyright 2019 The Android Open Source Project
-Copyright 2020 The Android Open Source Project
-Copyright 2022 The Android Open Source Project
-Copyright 2023 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 8b21517b3112b5b78f38d21c581c981b552a0821865fed9caf73360d6f8f7108
 
 androidx.compose.ui:ui-util-android:1.7.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/compose-ui#1.7.0
-Source: https://dl.google.com/dl/android/maven2/androidx/compose/ui/ui-util-android/1.7.0/ui-util-android-1.7.0-sources.jar
-Copyright 2019 The Android Open Source Project
-Copyright 2020 The Android Open Source Project
-Copyright 2023 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 2377a5afb2e59f864974ed94def9c5aa8412e8084269bc5ba717f4b262a949dc
 
 androidx.concurrent:concurrent-futures:1.1.0
 License: Apache-2.0
 Project: https://developer.android.com/topic/libraries/architecture/index.html
-Source: https://dl.google.com/dl/android/maven2/androidx/concurrent/concurrent-futures/1.1.0/concurrent-futures-1.1.0-sources.jar
-Copyright 2018 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 0ce067c514a0d1049d1bebdf709e344ed3266fe9744275682937cdcb13334e9e
 
 androidx.core:core-ktx:1.13.1
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/core#1.13.1
-Source: https://dl.google.com/dl/android/maven2/androidx/core/core-ktx/1.13.1/core-ktx-1.13.1-sources.jar
-Copyright (C) 2017 The Android Open Source Project
-Copyright (C) 2018 The Android Open Source Project
-Copyright (C) 20188 The Android Open Source Project
-Copyright (C) 2019 The Android Open Source Project
-Copyright 2018 The Android Open Source Project
-Copyright 2022 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 19ba50d094c7368ede1b4ccf1195ceb83e35970736593f823e5af716f8d05d70
 
 androidx.core:core:1.13.1
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/core#1.13.1
-Source: https://dl.google.com/dl/android/maven2/androidx/core/core/1.13.1/core-1.13.1-sources.jar
-Copyright (C) 2009 The Android Open Source Project
-Copyright (C) 2011 The Android Open Source Project
-Copyright (C) 2012 The Android Open Source Project
-Copyright (C) 2013 The Android Open Source Project
-Copyright (C) 2014 The Android Open Source Project
-Copyright (C) 2015 The Android Open Source Project
-Copyright (C) 2016 The Android Open Source Project
-Copyright (C) 2017 The Android Open Source Project
-Copyright (C) 2018 The Android Open Source Project
-Copyright (C) 2019 The Android Open Source Project
-Copyright (C) 2021 The Android Open Source Project
-Copyright (C) 2022 The Android Open Source Project
-Copyright (C) 2023 The Android Open Source Project
-Copyright 2015 The Android Open Source Project
-Copyright 2017 The Android Open Source Project
-Copyright 2018 The Android Open Source Project
-Copyright 2019 The Android Open Source Project
-Copyright 2020 The Android Open Source Project
-Copyright 2021 The Android Open Source Project
-Copyright 2022 The Android Open Source Project
-Copyright 2023 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 2c27de199535675005553066597a4b20fa1eea7c228ab4ef6b32b5fe39ca1f59
 
 androidx.customview:customview-poolingcontainer:1.0.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/customview#1.0.0
-Source: https://dl.google.com/dl/android/maven2/androidx/customview/customview-poolingcontainer/1.0.0/customview-poolingcontainer-1.0.0-sources.jar
-Copyright 2021 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 3584102fc49bf399c56e3b7be4bfe12000c46112320cd8cf85cc0a8f93f3e752
 
 androidx.datastore:datastore-android:1.1.1
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/datastore#1.1.1
-Source: https://dl.google.com/dl/android/maven2/androidx/datastore/datastore-android/1.1.1/datastore-android-1.1.1-sources.jar
-Copyright 2020 The Android Open Source Project
-Copyright 2021 The Android Open Source Project
-Copyright 2022 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: fce724038fea3bdef7b0d1aaf10cda6614b61bec66571750cc9be7048b950119
 
 androidx.datastore:datastore-core-android:1.1.1
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/datastore#1.1.1
-Source: https://dl.google.com/dl/android/maven2/androidx/datastore/datastore-core-android/1.1.1/datastore-core-android-1.1.1-sources.jar
-Copyright 2020 The Android Open Source Project
-Copyright 2022 The Android Open Source Project
-Copyright 2023 The Android Open Source Project
-Copyright 2024 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 883abc911e4b14119959e44e20a520523f59c303e834d6b325007b3ee5e9cb6c
 
 androidx.datastore:datastore-core-okio-jvm:1.1.1
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/datastore#1.1.1
-Source: https://dl.google.com/dl/android/maven2/androidx/datastore/datastore-core-okio-jvm/1.1.1/datastore-core-okio-jvm-1.1.1-sources.jar
-Copyright 2022 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 5071d03c7be9555fd81e5bd522b490a06a89694e4b937f307da72bc74e33c34a
 
 androidx.datastore:datastore-preferences-android:1.1.1
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/datastore#1.1.1
-Source: https://dl.google.com/dl/android/maven2/androidx/datastore/datastore-preferences-android/1.1.1/datastore-preferences-android-1.1.1-sources.jar
-Copyright 2020 The Android Open Source Project
-Copyright 2021 The Android Open Source Project
-Copyright 2022 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 0f15760838ff0413521ab1596e8ac5c999c3822d1fcc3f38ce6d6f562aeebbac
 
 androidx.datastore:datastore-preferences-core-jvm:1.1.1
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/datastore#1.1.1
-Source: https://dl.google.com/dl/android/maven2/androidx/datastore/datastore-preferences-core-jvm/1.1.1/datastore-preferences-core-jvm-1.1.1-sources.jar
-Copyright 2020 The Android Open Source Project
-Copyright 2022 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: bd2c7f41cb7d6e857903a03aa4da4dddc831445bd4148f1ac8d0a81f509d0628
 
 androidx.emoji2:emoji2:1.3.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/emoji2#1.3.0
-Source: https://dl.google.com/dl/android/maven2/androidx/emoji2/emoji2/1.3.0/emoji2-1.3.0-sources.jar
-Copyright 2021 The Android Open Source Project
-Copyright 2022 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 2bf23818b23a996ddaa1b5fd5bb32129daff6bbb2dce15166e2fccdd2010b1a5
 
 androidx.graphics:graphics-path:1.0.1
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/graphics#1.0.1
-Source: https://dl.google.com/dl/android/maven2/androidx/graphics/graphics-path/1.0.1/graphics-path-1.0.1-sources.jar
-Copyright 2022 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 8ca4032b6d79b351f0b59ad4b580eddbb9423e1652f7c958830687f1eee2ec03
 
 androidx.interpolator:interpolator:1.0.0
 License: Apache-2.0
 Project: http://developer.android.com/tools/extras/support-library.html
-Source: https://dl.google.com/dl/android/maven2/androidx/interpolator/interpolator/1.0.0/interpolator-1.0.0-sources.jar
-Copyright 2018 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 33193135a64fe21fa2c35eec6688f1a76e512606c0fc83dc1b689e37add7732a
 
 androidx.lifecycle:lifecycle-common-java8:2.8.5
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/lifecycle#2.8.5
-Source: https://dl.google.com/dl/android/maven2/androidx/lifecycle/lifecycle-common-java8/2.8.5/lifecycle-common-java8-2.8.5-sources.jar
+Developers: The Android Open Source Project
+Binary SHA-256: c6deada2fac53b8ea6523dbda77597b128006674616f140f04df23264c6d1aa3
 
 androidx.lifecycle:lifecycle-common-jvm:2.8.5
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/lifecycle#2.8.5
-Source: https://dl.google.com/dl/android/maven2/androidx/lifecycle/lifecycle-common-jvm/2.8.5/lifecycle-common-jvm-2.8.5-sources.jar
-Copyright (C) 2017 The Android Open Source Project
-Copyright 2018 The Android Open Source Project
-Copyright 2019 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 61c873a7327c946ec033c310bb98f3f92eeabcede0e1a5200ab8a1896483c7bf
 
 androidx.lifecycle:lifecycle-livedata-core:2.8.5
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/lifecycle#2.8.5
-Source: https://dl.google.com/dl/android/maven2/androidx/lifecycle/lifecycle-livedata-core/2.8.5/lifecycle-livedata-core-2.8.5-sources.jar
-Copyright (C) 2017 The Android Open Source Project
-Copyright 2018 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 9f09593796940800ee9aa2c9c09c703bbde3583ce36253119dc08a1c1e9d79d1
 
 androidx.lifecycle:lifecycle-process:2.8.5
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/lifecycle#2.8.5
-Source: https://dl.google.com/dl/android/maven2/androidx/lifecycle/lifecycle-process/2.8.5/lifecycle-process-2.8.5-sources.jar
-Copyright (C) 2017 The Android Open Source Project
-Copyright 2021 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: a049060b3b645b6cdadf79b1c13218a2b743d1e1b08173623879810485ed6a87
 
 androidx.lifecycle:lifecycle-runtime-android:2.8.5
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/lifecycle#2.8.5
-Source: https://dl.google.com/dl/android/maven2/androidx/lifecycle/lifecycle-runtime-android/2.8.5/lifecycle-runtime-android-2.8.5-sources.jar
-Copyright (C) 2017 The Android Open Source Project
-Copyright (C) 2024 The Android Open Source Project
-Copyright 2019 The Android Open Source Project
-Copyright 2020 The Android Open Source Project
-Copyright 2021 The Android Open Source Project
-Copyright 2024 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: f0650a4c3bd2d8b28a16e6cea455ee2ec6d0e28b7102b05491ee3b291dbe7147
 
 androidx.lifecycle:lifecycle-runtime-compose-android:2.8.5
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/lifecycle#2.8.5
-Source: https://dl.google.com/dl/android/maven2/androidx/lifecycle/lifecycle-runtime-compose-android/2.8.5/lifecycle-runtime-compose-android-2.8.5-sources.jar
-Copyright 2022 The Android Open Source Project
-Copyright 2023 The Android Open Source Project
-Copyright 2024 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 32df82981cec5165b6068aab54b1bc9d600aa5c5d41fb1a273fcd48c5adaf28d
 
 androidx.lifecycle:lifecycle-runtime-ktx-android:2.8.5
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/lifecycle#2.8.5
-Source: https://dl.google.com/dl/android/maven2/androidx/lifecycle/lifecycle-runtime-ktx-android/2.8.5/lifecycle-runtime-ktx-android-2.8.5-sources.jar
+Developers: The Android Open Source Project
+Binary SHA-256: e5df297f908d8bf6874c34333c07cd99702f82e138285dc1bff3a3a413b3a0f7
 
 androidx.lifecycle:lifecycle-viewmodel-android:2.8.5
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/lifecycle#2.8.5
-Source: https://dl.google.com/dl/android/maven2/androidx/lifecycle/lifecycle-viewmodel-android/2.8.5/lifecycle-viewmodel-android-2.8.5-sources.jar
-Copyright (C) 2017 The Android Open Source Project
-Copyright (C) 2024 The Android Open Source Project
-Copyright 2017 The Android Open Source Project
-Copyright 2019 The Android Open Source Project
-Copyright 2020 The Android Open Source Project
-Copyright 2021 The Android Open Source Project
-Copyright 2023 The Android Open Source Project
-Copyright 2024 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: d761efb7065206e251f094d3e733af27ba901d2d1b180354c106d01bf63dae66
 
 androidx.lifecycle:lifecycle-viewmodel-compose-android:2.8.5
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/lifecycle#2.8.5
-Source: https://dl.google.com/dl/android/maven2/androidx/lifecycle/lifecycle-viewmodel-compose-android/2.8.5/lifecycle-viewmodel-compose-android-2.8.5-sources.jar
-Copyright 2021 The Android Open Source Project
-Copyright 2022 The Android Open Source Project
-Copyright 2024 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 14143341c4d77ecf1485b0c94b8193c98a6e9f11abc4d369dafc16809152c17a
 
 androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.5
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/lifecycle#2.8.5
-Source: https://dl.google.com/dl/android/maven2/androidx/lifecycle/lifecycle-viewmodel-ktx/2.8.5/lifecycle-viewmodel-ktx-2.8.5-sources.jar
+Developers: The Android Open Source Project
+Binary SHA-256: 7dd0d5f21a1833248d0525878baacc28258ee84f5377b43f895feeeeabcad5c3
 
 androidx.lifecycle:lifecycle-viewmodel-savedstate:2.8.5
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/lifecycle#2.8.5
-Source: https://dl.google.com/dl/android/maven2/androidx/lifecycle/lifecycle-viewmodel-savedstate/2.8.5/lifecycle-viewmodel-savedstate-2.8.5-sources.jar
-Copyright 2018 The Android Open Source Project
-Copyright 2019 The Android Open Source Project
-Copyright 2021 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 6f72f2e4fd1e78b255ca908444f39c71e978dc3b05f4bd7198b24c659deab0ec
 
 androidx.navigation:navigation-common-ktx:2.7.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/navigation#2.7.0
-Source: https://dl.google.com/dl/android/maven2/androidx/navigation/navigation-common-ktx/2.7.0/navigation-common-ktx-2.7.0-sources.jar
+Developers: The Android Open Source Project
+Binary SHA-256: f5af067c5fcd8539791f3d3368e157ec6f803c4608ce7aa859755a14f538dd6a
 
 androidx.navigation:navigation-common:2.7.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/navigation#2.7.0
-Source: https://dl.google.com/dl/android/maven2/androidx/navigation/navigation-common/2.7.0/navigation-common-2.7.0-sources.jar
-Copyright (C) 2017 The Android Open Source Project
-Copyright 2017 The Android Open Source Project
-Copyright 2018 The Android Open Source Project
-Copyright 2019 The Android Open Source Project
-Copyright 2020 The Android Open Source Project
-Copyright 2021 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 3236826d97ddbcf4ecbbe111517199653bd7bc4c5c743534c599f6360df586a2
 
 androidx.navigation:navigation-compose:2.7.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/navigation#2.7.0
-Source: https://dl.google.com/dl/android/maven2/androidx/navigation/navigation-compose/2.7.0/navigation-compose-2.7.0-sources.jar
-Copyright 2020 The Android Open Source Project
-Copyright 2021 The Android Open Source Project
-Copyright 2023 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 5c6108fcfe5e639a2211a588b9813cdd2bdd07550ad77f737aa49fc6a34963fa
 
 androidx.navigation:navigation-runtime-ktx:2.7.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/navigation#2.7.0
-Source: https://dl.google.com/dl/android/maven2/androidx/navigation/navigation-runtime-ktx/2.7.0/navigation-runtime-ktx-2.7.0-sources.jar
+Developers: The Android Open Source Project
+Binary SHA-256: db0c62151a51ddd57145bddf3764bc3d02925d3d95b00a8ae8fddd93e1becfb2
 
 androidx.navigation:navigation-runtime:2.7.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/navigation#2.7.0
-Source: https://dl.google.com/dl/android/maven2/androidx/navigation/navigation-runtime/2.7.0/navigation-runtime-2.7.0-sources.jar
-Copyright (C) 2017 The Android Open Source Project
-Copyright 2018 The Android Open Source Project
-Copyright 2019 The Android Open Source Project
-Copyright 2021 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: ad8819330f36aa1c3a5a127703d4b5c2671d5fd8550bf37b825d5fb678bafb81
 
 androidx.profileinstaller:profileinstaller:1.3.1
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/profileinstaller#1.3.1
-Source: https://dl.google.com/dl/android/maven2/androidx/profileinstaller/profileinstaller/1.3.1/profileinstaller-1.3.1-sources.jar
-Copyright (C) 2021 The Android Open Source Project
-Copyright 2021 The Android Open Source Project
-Copyright 2022 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: d0e402ec31f24028a1dc7eb6a0a3f9d9635c1459392cd734396343b73d673948
 
 androidx.savedstate:savedstate-ktx:1.2.1
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/savedstate#1.2.1
-Source: https://dl.google.com/dl/android/maven2/androidx/savedstate/savedstate-ktx/1.2.1/savedstate-ktx-1.2.1-sources.jar
-Copyright 2020 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 8553f87e7136c24ec5243560f48f1c32cba56daa77722f89589a5cafcb8f7894
 
 androidx.savedstate:savedstate:1.2.1
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/savedstate#1.2.1
-Source: https://dl.google.com/dl/android/maven2/androidx/savedstate/savedstate/1.2.1/savedstate-1.2.1-sources.jar
-Copyright 2018 The Android Open Source Project
-Copyright 2019 The Android Open Source Project
-Copyright 2020 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 21a7d4bcf6bdb94ad7b9283801529300b4fbb8808ca4f191e0cdce6fd8e4705a
 
 androidx.startup:startup-runtime:1.1.1
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/startup#1.1.1
-Source: https://dl.google.com/dl/android/maven2/androidx/startup/startup-runtime/1.1.1/startup-runtime-1.1.1-sources.jar
-Copyright 2020 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: e0a6329a371262fe4c450372b70fdaf33b769ef6917094723787cfce896b1dd3
 
 androidx.tracing:tracing:1.0.0
 License: Apache-2.0
 Project: https://developer.android.com/jetpack/androidx/releases/tracing#1.0.0
-Source: https://dl.google.com/dl/android/maven2/androidx/tracing/tracing/1.0.0/tracing-1.0.0-sources.jar
-Copyright 2020 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 07b8b6139665b884a162eccf97891ca50f7f56831233bf25168ae04f7b568612
 
 androidx.versionedparcelable:versionedparcelable:1.1.1
 License: Apache-2.0
 Project: http://developer.android.com/tools/extras/support-library.html
-Source: https://dl.google.com/dl/android/maven2/androidx/versionedparcelable/versionedparcelable/1.1.1/versionedparcelable-1.1.1-sources.jar
-Copyright 2018 The Android Open Source Project
+Developers: The Android Open Source Project
+Binary SHA-256: 57e8d93260d18d5b9007c9eed3c64ad159de90c8609ebfc74a347cbd514535a4
 
 com.google.guava:listenablefuture:1.0
 License: Apache-2.0
-Project: https://repo.maven.apache.org/maven2/com/google/guava/listenablefuture/1.0/listenablefuture-1.0.pom
-Source: https://repo.maven.apache.org/maven2/com/google/guava/listenablefuture/1.0/listenablefuture-1.0-sources.jar
-Copyright (C) 2007 The Guava Authors
+Project: https://github.com/google/guava/listenablefuture
+Developers: Kevin Bourrillion
+Binary SHA-256: e4ad7607e5c0477c6f890ef26a49cb8d1bb4dffb650bab4502afee64644e3069
 
 com.mikepenz:multiplatform-markdown-renderer-android:0.28.0
 License: Apache-2.0
 Project: https://github.com/mikepenz/multiplatform-markdown-renderer
-Source: https://repo.maven.apache.org/maven2/com/mikepenz/multiplatform-markdown-renderer-android/0.28.0/multiplatform-markdown-renderer-android-0.28.0-sources.jar
-Copyright 2023, Saket Narayan
+Developers: Mike Penz
+Binary SHA-256: 282f0167f9ec05d733f2117c131ea9bc1b73dbf51bc7c6766e701426123505a5
 
 com.mikepenz:multiplatform-markdown-renderer-m3-android:0.28.0
 License: Apache-2.0
 Project: https://github.com/mikepenz/multiplatform-markdown-renderer
-Source: https://repo.maven.apache.org/maven2/com/mikepenz/multiplatform-markdown-renderer-m3-android/0.28.0/multiplatform-markdown-renderer-m3-android-0.28.0-sources.jar
+Developers: Mike Penz
+Binary SHA-256: a753f062ff259852af7af1fb754664706d41b728708bb4c4d16068b5eba0905c
 
 com.squareup.okhttp3:okhttp:4.12.0
 License: Apache-2.0
 Project: https://square.github.io/okhttp/
-Source: https://repo.maven.apache.org/maven2/com/squareup/okhttp3/okhttp/4.12.0/okhttp-4.12.0-sources.jar
-Copyright (C) 2010 The Android Open Source Project
-Copyright (C) 2011 The Android Open Source Project
-Copyright (C) 2012 Square, Inc.
-Copyright (C) 2012 The Android Open Source Project
-Copyright (C) 2013 Square, Inc.
-Copyright (C) 2014 Square, Inc.
-Copyright (C) 2015 Square, Inc.
-Copyright (C) 2016 Square, Inc.
-Copyright (C) 2017 Square, Inc.
-Copyright (C) 2018 Square, Inc.
-Copyright (C) 2019 Square, Inc.
-Copyright (C) 2020 Square, Inc.
-Copyright 2013 Twitter, Inc.
+Developers: Square, Inc.
+Binary SHA-256: b1050081b14bb7a3a7e55a4d3ef01b5dcfabc453b4573a4fc019767191d5f4e0
+
+com.squareup.okhttp3:okhttp:4.12.0 — okhttp3/internal/publicsuffix/NOTICE
+
+Note that publicsuffixes.gz is compiled from The Public Suffix List:
+https://publicsuffix.org/list/public_suffix_list.dat
+
+It is subject to the terms of the Mozilla Public License, v. 2.0:
+https://mozilla.org/MPL/2.0/
 
 com.squareup.okio:okio-jvm:3.6.0
 License: Apache-2.0
 Project: https://github.com/square/okio/
-Source: https://repo.maven.apache.org/maven2/com/squareup/okio/okio-jvm/3.6.0/okio-jvm-3.6.0-sources.jar
-Copyright (C) 2014 Square, Inc.
-Copyright (C) 2015 Square, Inc.
-Copyright (C) 2016 Square, Inc.
-Copyright (C) 2017 Square, Inc.
-Copyright (C) 2018 Square, Inc.
-Copyright (C) 2019 Square, Inc.
-Copyright (C) 2020 Square, Inc.
-Copyright (C) 2020 Square, Inc. and others.
-Copyright (C) 2021 Square, Inc.
-Copyright (C) 2023 Square, Inc.
-Copyright 2014 Square Inc.
+Developers: Square, Inc.
+Binary SHA-256: 67543f0736fc422ae927ed0e504b98bc5e269fda0d3500579337cb713da28412
 
 org.jetbrains.kotlin:kotlin-android-extensions-runtime:1.9.22
 License: Apache-2.0
 Project: https://kotlinlang.org/
-Source: https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-android-extensions-runtime/1.9.22/kotlin-android-extensions-runtime-1.9.22-sources.jar
-Copyright 2010-2017 JetBrains s.r.o.
+Developers: Kotlin Team
+Binary SHA-256: f00537c7023e604933f6a9563b1bb3b83e61fbfd2cc3d0e9900d616bab6862a4
 
 org.jetbrains.kotlin:kotlin-parcelize-runtime:1.9.22
 License: Apache-2.0
 Project: https://kotlinlang.org/
-Source: https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-parcelize-runtime/1.9.22/kotlin-parcelize-runtime-1.9.22-sources.jar
-Copyright 2010-2017 JetBrains s.r.o.
-Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
+Developers: Kotlin Team
+Binary SHA-256: f0077f35ec828e148ac92d0c6aa141a732b5eb7a4a391679aeefa59fa9a1a5cc
 
 org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.10
 License: Apache-2.0
 Project: https://kotlinlang.org/
-Source: https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib-jdk7/1.9.10/kotlin-stdlib-jdk7-1.9.10-sources.jar
+Developers: Kotlin Team
+Binary SHA-256: ac6361bf9ad1ed382c2103d9712c47cdec166232b4903ed596e8876b0681c9b7
 
 org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.10
 License: Apache-2.0
 Project: https://kotlinlang.org/
-Source: https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib-jdk8/1.9.10/kotlin-stdlib-jdk8-1.9.10-sources.jar
+Developers: Kotlin Team
+Binary SHA-256: a4c74d94d64ce1abe53760fe0389dd941f6fc558d0dab35e47c085a11ec80f28
 
 org.jetbrains.kotlin:kotlin-stdlib:2.2.21
 License: Apache-2.0
 Project: https://kotlinlang.org/
-Source: https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/2.2.21/kotlin-stdlib-2.2.21-sources.jar
-Copyright 2011 The Guava Authors
-Copyright (c) 2007-present, Stephen Colebourne & Michael Nascimento Santos
-Copyright 2007 Google Inc.
-Copyright 2010-2015 JetBrains s.r.o.
-Copyright 2010-2016 JetBrains s.r.o.
-Copyright 2010-2017 JetBrains s.r.o.
-Copyright 2010-2018 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license
-Copyright 2010-2018 JetBrains s.r.o. and Kotlin Programming Language contributors.
-Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
-Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
-Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
-Copyright 2010-2022 JetBrains s.r.o. and Kotlin Programming Language contributors.
-Copyright 2010-2023 JetBrains s.r.o. and Kotlin Programming Language contributors.
-Copyright 2010-2024 JetBrains s.r.o. and Kotlin Programming Language contributors.
-Copyright 2010-2025 JetBrains s.r.o. and Kotlin Programming Language contributors.
+Developers: Kotlin Team
+Binary SHA-256: 6558a3d233da56a20934b32159f9db5f86ed5816ef098f78a2c223dc6abb79dd
 
 org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0
 License: Apache-2.0
 Project: https://github.com/Kotlin/kotlinx.coroutines
-Source: https://repo.maven.apache.org/maven2/org/jetbrains/kotlinx/kotlinx-coroutines-android/1.9.0/kotlinx-coroutines-android-1.9.0-sources.jar
+Developers: JetBrains Team
+Binary SHA-256: bd783acd2f9738845d58380f46f45b5cde95d0cb03027d56725338b26bfc4d72
 
 org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.9.0
 License: Apache-2.0
 Project: https://github.com/Kotlin/kotlinx.coroutines
-Source: https://repo.maven.apache.org/maven2/org/jetbrains/kotlinx/kotlinx-coroutines-core-jvm/1.9.0/kotlinx-coroutines-core-jvm-1.9.0-sources.jar
+Developers: JetBrains Team
+Binary SHA-256: ad89c2892235e670f222d819cb3d81188143cb19a05b59df9889ae4269f5c70a
 
 org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.7.3
 License: Apache-2.0
 Project: https://github.com/Kotlin/kotlinx.serialization
-Source: https://repo.maven.apache.org/maven2/org/jetbrains/kotlinx/kotlinx-serialization-core-jvm/1.7.3/kotlinx-serialization-core-jvm-1.7.3-sources.jar
-Copyright 2017-2019 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license.
-Copyright 2017-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license.
-Copyright 2017-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license.
-Copyright 2017-2022 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license.
-Copyright 2017-2023 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license.
+Developers: JetBrains Team
+Binary SHA-256: f0adde45864144475385cf4aa7e0b7feb27f61fcf9472665ed98cc971b06b1eb
 
 org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.7.3
 License: Apache-2.0
 Project: https://github.com/Kotlin/kotlinx.serialization
-Source: https://repo.maven.apache.org/maven2/org/jetbrains/kotlinx/kotlinx-serialization-json-jvm/1.7.3/kotlinx-serialization-json-jvm-1.7.3-sources.jar
-Copyright 2017-2019 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license.
-Copyright 2017-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license.
-Copyright 2017-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license.
-Copyright 2017-2022 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license.
-Copyright 2017-2023 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license.
-Copyright 2017-2024 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license.
+Developers: JetBrains Team
+Binary SHA-256: b1e9138499ed8d20375edda3f2b1c95f3103a258eff6af9edc5ea07100f2b29c
 
 org.jetbrains:annotations:23.0.0
 License: Apache-2.0
 Project: https://github.com/JetBrains/java-annotations
-Source: https://repo.maven.apache.org/maven2/org/jetbrains/annotations/23.0.0/annotations-23.0.0-sources.jar
-Copyright 2000-2020 JetBrains s.r.o.
-Copyright 2000-2021 JetBrains s.r.o.
+Developers: JetBrains Team
+Binary SHA-256: 7b0f19724082cbfcbc66e5abea2b9bc92cf08a1ea11e191933ed43801eb3cd05
 
 org.jetbrains:markdown-jvm:0.7.3
 License: Apache-2.0
 Project: https://github.com/JetBrains/markdown
-Source: https://repo.maven.apache.org/maven2/org/jetbrains/markdown-jvm/0.7.3/markdown-jvm-0.7.3-sources.jar
+Developers: Valentin Fondaratov
+Binary SHA-256: 893abb31f15b6216f74dc704c0c6bf1e567dcf2b62cca29cf42e4f53153637ac
 
 Additional bundled components
 
@@ -755,17 +569,6 @@ Copyright 2016-2024 JetBrains s.r.o and contributors
  * limitations under the License.
  */
 
-===== kotlin-NOTICE.txt =====
-
-=========================================================================
-   ==  NOTICE file corresponding to the section 4 d of                    ==
-   ==  the Apache License, Version 2.0,                                   ==
-   ==  in this case for the Kotlin Compiler distribution.                 ==
-   =========================================================================
-
-   Kotlin Compiler
-   Copyright 2010-2024 JetBrains s.r.o and respective authors and developers
-
 ===== okhttp-publicsuffix-NOTICE.txt =====
 
 Note that publicsuffixes.gz is compiled from The Public Suffix List:
@@ -788,206 +591,78 @@ https://mozilla.org/MPL/2.0/
 ===== Apache-2.0.txt =====
 
 Apache License
-                           Version 2.0, January 2004
-                        http://www.apache.org/licenses/
+Version 2.0, January 2004
+http://www.apache.org/licenses/
 
-   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
 
-   1. Definitions.
+1. Definitions.
 
-      "License" shall mean the terms and conditions for use, reproduction,
-      and distribution as defined by Sections 1 through 9 of this document.
+"License" shall mean the terms and conditions for use, reproduction, and distribution as defined by Sections 1 through 9 of this document.
 
-      "Licensor" shall mean the copyright owner or entity authorized by
-      the copyright owner that is granting the License.
+"Licensor" shall mean the copyright owner or entity authorized by the copyright owner that is granting the License.
 
-      "Legal Entity" shall mean the union of the acting entity and all
-      other entities that control, are controlled by, or are under common
-      control with that entity. For the purposes of this definition,
-      "control" means (i) the power, direct or indirect, to cause the
-      direction or management of such entity, whether by contract or
-      otherwise, or (ii) ownership of fifty percent (50%) or more of the
-      outstanding shares, or (iii) beneficial ownership of such entity.
+"Legal Entity" shall mean the union of the acting entity and all other entities that control, are controlled by, or are under common control with that entity. For the purposes of this definition, "control" means (i) the power, direct or indirect, to cause the direction or management of such entity, whether by contract or otherwise, or (ii) ownership of fifty percent (50%) or more of the outstanding shares, or (iii) beneficial ownership of such entity.
 
-      "You" (or "Your") shall mean an individual or Legal Entity
-      exercising permissions granted by this License.
+"You" (or "Your") shall mean an individual or Legal Entity exercising permissions granted by this License.
 
-      "Source" form shall mean the preferred form for making modifications,
-      including but not limited to software source code, documentation
-      source, and configuration files.
+"Source" form shall mean the preferred form for making modifications, including but not limited to software source code, documentation source, and configuration files.
 
-      "Object" form shall mean any form resulting from mechanical
-      transformation or translation of a Source form, including but
-      not limited to compiled object code, generated documentation,
-      and conversions to other media types.
+"Object" form shall mean any form resulting from mechanical transformation or translation of a Source form, including but not limited to compiled object code, generated documentation, and conversions to other media types.
 
-      "Work" shall mean the work of authorship, whether in Source or
-      Object form, made available under the License, as indicated by a
-      copyright notice that is included in or attached to the work
-      (an example is provided in the Appendix below).
+"Work" shall mean the work of authorship, whether in Source or Object form, made available under the License, as indicated by a copyright notice that is included in or attached to the work (an example is provided in the Appendix below).
 
-      "Derivative Works" shall mean any work, whether in Source or Object
-      form, that is based on (or derived from) the Work and for which the
-      editorial revisions, annotations, elaborations, or other modifications
-      represent, as a whole, an original work of authorship. For the purposes
-      of this License, Derivative Works shall not include works that remain
-      separable from, or merely link (or bind by name) to the interfaces of,
-      the Work and Derivative Works thereof.
+"Derivative Works" shall mean any work, whether in Source or Object form, that is based on (or derived from) the Work and for which the editorial revisions, annotations, elaborations, or other modifications represent, as a whole, an original work of authorship. For the purposes of this License, Derivative Works shall not include works that remain separable from, or merely link (or bind by name) to the interfaces of, the Work and Derivative Works thereof.
 
-      "Contribution" shall mean any work of authorship, including
-      the original version of the Work and any modifications or additions
-      to that Work or Derivative Works thereof, that is intentionally
-      submitted to Licensor for inclusion in the Work by the copyright owner
-      or by an individual or Legal Entity authorized to submit on behalf of
-      the copyright owner. For the purposes of this definition, "submitted"
-      means any form of electronic, verbal, or written communication sent
-      to the Licensor or its representatives, including but not limited to
-      communication on electronic mailing lists, source code control systems,
-      and issue tracking systems that are managed by, or on behalf of, the
-      Licensor for the purpose of discussing and improving the Work, but
-      excluding communication that is conspicuously marked or otherwise
-      designated in writing by the copyright owner as "Not a Contribution."
+"Contribution" shall mean any work of authorship, including the original version of the Work and any modifications or additions to that Work or Derivative Works thereof, that is intentionally submitted to Licensor for inclusion in the Work by the copyright owner or by an individual or Legal Entity authorized to submit on behalf of the copyright owner. For the purposes of this definition, "submitted" means any form of electronic, verbal, or written communication sent to the Licensor or its representatives, including but not limited to communication on electronic mailing lists, source code control systems, and issue tracking systems that are managed by, or on behalf of, the Licensor for the purpose of discussing and improving the Work, but excluding communication that is conspicuously marked or otherwise designated in writing by the copyright owner as "Not a Contribution."
 
-      "Contributor" shall mean Licensor and any individual or Legal Entity
-      on behalf of whom a Contribution has been received by Licensor and
-      subsequently incorporated within the Work.
+"Contributor" shall mean Licensor and any individual or Legal Entity on behalf of whom a Contribution has been received by Licensor and subsequently incorporated within the Work.
 
-   2. Grant of Copyright License. Subject to the terms and conditions of
-      this License, each Contributor hereby grants to You a perpetual,
-      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-      copyright license to reproduce, prepare Derivative Works of,
-      publicly display, publicly perform, sublicense, and distribute the
-      Work and such Derivative Works in Source or Object form.
+2. Grant of Copyright License. Subject to the terms and conditions of this License, each Contributor hereby grants to You a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable copyright license to reproduce, prepare Derivative Works of, publicly display, publicly perform, sublicense, and distribute the Work and such Derivative Works in Source or Object form.
 
-   3. Grant of Patent License. Subject to the terms and conditions of
-      this License, each Contributor hereby grants to You a perpetual,
-      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-      (except as stated in this section) patent license to make, have made,
-      use, offer to sell, sell, import, and otherwise transfer the Work,
-      where such license applies only to those patent claims licensable
-      by such Contributor that are necessarily infringed by their
-      Contribution(s) alone or by combination of their Contribution(s)
-      with the Work to which such Contribution(s) was submitted. If You
-      institute patent litigation against any entity (including a
-      cross-claim or counterclaim in a lawsuit) alleging that the Work
-      or a Contribution incorporated within the Work constitutes direct
-      or contributory patent infringement, then any patent licenses
-      granted to You under this License for that Work shall terminate
-      as of the date such litigation is filed.
+3. Grant of Patent License. Subject to the terms and conditions of this License, each Contributor hereby grants to You a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable (except as stated in this section) patent license to make, have made, use, offer to sell, sell, import, and otherwise transfer the Work, where such license applies only to those patent claims licensable by such Contributor that are necessarily infringed by their Contribution(s) alone or by combination of their Contribution(s) with the Work to which such Contribution(s) was submitted. If You institute patent litigation against any entity (including a cross-claim or counterclaim in a lawsuit) alleging that the Work or a Contribution incorporated within the Work constitutes direct or contributory patent infringement, then any patent licenses granted to You under this License for that Work shall terminate as of the date such litigation is filed.
 
-   4. Redistribution. You may reproduce and distribute copies of the
-      Work or Derivative Works thereof in any medium, with or without
-      modifications, and in Source or Object form, provided that You
-      meet the following conditions:
+4. Redistribution. You may reproduce and distribute copies of the Work or Derivative Works thereof in any medium, with or without modifications, and in Source or Object form, provided that You meet the following conditions:
 
-      (a) You must give any other recipients of the Work or
-          Derivative Works a copy of this License; and
+     (a) You must give any other recipients of the Work or Derivative Works a copy of this License; and
 
-      (b) You must cause any modified files to carry prominent notices
-          stating that You changed the files; and
+     (b) You must cause any modified files to carry prominent notices stating that You changed the files; and
 
-      (c) You must retain, in the Source form of any Derivative Works
-          that You distribute, all copyright, patent, trademark, and
-          attribution notices from the Source form of the Work,
-          excluding those notices that do not pertain to any part of
-          the Derivative Works; and
+     (c) You must retain, in the Source form of any Derivative Works that You distribute, all copyright, patent, trademark, and attribution notices from the Source form of the Work, excluding those notices that do not pertain to any part of the Derivative Works; and
 
-      (d) If the Work includes a "NOTICE" text file as part of its
-          distribution, then any Derivative Works that You distribute must
-          include a readable copy of the attribution notices contained
-          within such NOTICE file, excluding those notices that do not
-          pertain to any part of the Derivative Works, in at least one
-          of the following places: within a NOTICE text file distributed
-          as part of the Derivative Works; within the Source form or
-          documentation, if provided along with the Derivative Works; or,
-          within a display generated by the Derivative Works, if and
-          wherever such third-party notices normally appear. The contents
-          of the NOTICE file are for informational purposes only and
-          do not modify the License. You may add Your own attribution
-          notices within Derivative Works that You distribute, alongside
-          or as an addendum to the NOTICE text from the Work, provided
-          that such additional attribution notices cannot be construed
-          as modifying the License.
+     (d) If the Work includes a "NOTICE" text file as part of its distribution, then any Derivative Works that You distribute must include a readable copy of the attribution notices contained within such NOTICE file, excluding those notices that do not pertain to any part of the Derivative Works, in at least one of the following places: within a NOTICE text file distributed as part of the Derivative Works; within the Source form or documentation, if provided along with the Derivative Works; or, within a display generated by the Derivative Works, if and wherever such third-party notices normally appear. The contents of the NOTICE file are for informational purposes only and do not modify the License. You may add Your own attribution notices within Derivative Works that You distribute, alongside or as an addendum to the NOTICE text from the Work, provided that such additional attribution notices cannot be construed as modifying the License.
 
-      You may add Your own copyright statement to Your modifications and
-      may provide additional or different license terms and conditions
-      for use, reproduction, or distribution of Your modifications, or
-      for any such Derivative Works as a whole, provided Your use,
-      reproduction, and distribution of the Work otherwise complies with
-      the conditions stated in this License.
+     You may add Your own copyright statement to Your modifications and may provide additional or different license terms and conditions for use, reproduction, or distribution of Your modifications, or for any such Derivative Works as a whole, provided Your use, reproduction, and distribution of the Work otherwise complies with the conditions stated in this License.
 
-   5. Submission of Contributions. Unless You explicitly state otherwise,
-      any Contribution intentionally submitted for inclusion in the Work
-      by You to the Licensor shall be under the terms and conditions of
-      this License, without any additional terms or conditions.
-      Notwithstanding the above, nothing herein shall supersede or modify
-      the terms of any separate license agreement you may have executed
-      with Licensor regarding such Contributions.
+5. Submission of Contributions. Unless You explicitly state otherwise, any Contribution intentionally submitted for inclusion in the Work by You to the Licensor shall be under the terms and conditions of this License, without any additional terms or conditions. Notwithstanding the above, nothing herein shall supersede or modify the terms of any separate license agreement you may have executed with Licensor regarding such Contributions.
 
-   6. Trademarks. This License does not grant permission to use the trade
-      names, trademarks, service marks, or product names of the Licensor,
-      except as required for reasonable and customary use in describing the
-      origin of the Work and reproducing the content of the NOTICE file.
+6. Trademarks. This License does not grant permission to use the trade names, trademarks, service marks, or product names of the Licensor, except as required for reasonable and customary use in describing the origin of the Work and reproducing the content of the NOTICE file.
 
-   7. Disclaimer of Warranty. Unless required by applicable law or
-      agreed to in writing, Licensor provides the Work (and each
-      Contributor provides its Contributions) on an "AS IS" BASIS,
-      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-      implied, including, without limitation, any warranties or conditions
-      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
-      PARTICULAR PURPOSE. You are solely responsible for determining the
-      appropriateness of using or redistributing the Work and assume any
-      risks associated with Your exercise of permissions under this License.
+7. Disclaimer of Warranty. Unless required by applicable law or agreed to in writing, Licensor provides the Work (and each Contributor provides its Contributions) on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied, including, without limitation, any warranties or conditions of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A PARTICULAR PURPOSE. You are solely responsible for determining the appropriateness of using or redistributing the Work and assume any risks associated with Your exercise of permissions under this License.
 
-   8. Limitation of Liability. In no event and under no legal theory,
-      whether in tort (including negligence), contract, or otherwise,
-      unless required by applicable law (such as deliberate and grossly
-      negligent acts) or agreed to in writing, shall any Contributor be
-      liable to You for damages, including any direct, indirect, special,
-      incidental, or consequential damages of any character arising as a
-      result of this License or out of the use or inability to use the
-      Work (including but not limited to damages for loss of goodwill,
-      work stoppage, computer failure or malfunction, or any and all
-      other commercial damages or losses), even if such Contributor
-      has been advised of the possibility of such damages.
+8. Limitation of Liability. In no event and under no legal theory, whether in tort (including negligence), contract, or otherwise, unless required by applicable law (such as deliberate and grossly negligent acts) or agreed to in writing, shall any Contributor be liable to You for damages, including any direct, indirect, special, incidental, or consequential damages of any character arising as a result of this License or out of the use or inability to use the Work (including but not limited to damages for loss of goodwill, work stoppage, computer failure or malfunction, or any and all other commercial damages or losses), even if such Contributor has been advised of the possibility of such damages.
 
-   9. Accepting Warranty or Additional Liability. While redistributing
-      the Work or Derivative Works thereof, You may choose to offer,
-      and charge a fee for, acceptance of support, warranty, indemnity,
-      or other liability obligations and/or rights consistent with this
-      License. However, in accepting such obligations, You may act only
-      on Your own behalf and on Your sole responsibility, not on behalf
-      of any other Contributor, and only if You agree to indemnify,
-      defend, and hold each Contributor harmless for any liability
-      incurred by, or claims asserted against, such Contributor by reason
-      of your accepting any such warranty or additional liability.
+9. Accepting Warranty or Additional Liability. While redistributing the Work or Derivative Works thereof, You may choose to offer, and charge a fee for, acceptance of support, warranty, indemnity, or other liability obligations and/or rights consistent with this License. However, in accepting such obligations, You may act only on Your own behalf and on Your sole responsibility, not on behalf of any other Contributor, and only if You agree to indemnify, defend, and hold each Contributor harmless for any liability incurred by, or claims asserted against, such Contributor by reason of your accepting any such warranty or additional liability.
 
-   END OF TERMS AND CONDITIONS
+END OF TERMS AND CONDITIONS
 
-   APPENDIX: How to apply the Apache License to your work.
+APPENDIX: How to apply the Apache License to your work.
 
-      To apply the Apache License to your work, attach the following
-      boilerplate notice, with the fields enclosed by brackets "[]"
-      replaced with your own identifying information. (Don't include
-      the brackets!)  The text should be enclosed in the appropriate
-      comment syntax for the file format. We also recommend that a
-      file or class name and description of purpose be included on the
-      same "printed page" as the copyright notice for easier
-      identification within third-party archives.
+To apply the Apache License to your work, attach the following boilerplate notice, with the fields enclosed by brackets "[]" replaced with your own identifying information. (Don't include the brackets!)  The text should be enclosed in the appropriate comment syntax for the file format. We also recommend that a file or class name and description of purpose be included on the same "printed page" as the copyright notice for easier identification within third-party archives.
 
-   Copyright [yyyy] [name of copyright owner]
+Copyright [yyyy] [name of copyright owner]
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-       http://www.apache.org/licenses/LICENSE-2.0
+http://www.apache.org/licenses/LICENSE-2.0
 
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 ===== BSD-3-Clause-ThreeTenBP.txt =====
 
