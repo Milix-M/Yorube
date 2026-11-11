@@ -22,9 +22,13 @@ def embedded_notices(data, prefix="", depth=0):
             base = Path(name).name.lower()
             if name.endswith("/"):
                 continue
-            if depth < 2 and base.endswith(".jar"):
+            if base.endswith((".jar", ".aar")):
+                if depth >= 2:
+                    raise ValueError("Nested archive exceeds inspection depth: " + prefix + name)
                 found.extend(embedded_notices(archive.read(name), prefix + name + "!/", depth + 1))
-            elif re.match(r"^(license|notice|copying|copyright|third[-_]party)([._-].*)?$", base) or base in {"al2.0", "lgpl2.1"}:
+            elif (re.match(r"^(license|notice|copying|copyright|third[-_]party)([._-].*)?$", base)
+                  or re.search(r"(^|/)(licenses?|notices?|legal)/", name, re.IGNORECASE)
+                  or base in {"al2.0", "lgpl2.1"}):
                 if Path(base).suffix in {".class", ".png", ".jpg", ".so"}:
                     continue
                 raw = archive.read(name)
@@ -35,7 +39,12 @@ def embedded_notices(data, prefix="", depth=0):
     return found
 
 def collect(metadata, artifacts, supplemental, root):
-    libraries = {lib["uniqueId"] + ":" + lib["artifactVersion"]: lib for lib in metadata["libraries"]}
+    libraries = {}
+    for lib in metadata["libraries"]:
+        coordinate = lib["uniqueId"] + ":" + lib["artifactVersion"]
+        if coordinate in libraries and libraries[coordinate] != lib:
+            raise ValueError("Conflicting collected metadata: " + coordinate)
+        libraries[coordinate] = lib
     dependencies, license_files, selected = [], {}, []
     binaries = {a["coordinate"]: a for a in artifacts}
     if len(binaries) != len(artifacts):
@@ -81,6 +90,8 @@ def collect(metadata, artifacts, supplemental, root):
         if actual != file["sha256"]:
             raise ValueError("Supplemental notice/source changed: " + file["path"])
     for component in supplemental["additional_components"]:
+        if component["license_spdx"] not in ALLOWED:
+            raise ValueError("Unapproved bundled-component license: " + component["id"])
         if component["included_via"] not in hashes:
             raise ValueError("Stale bundled component: " + component["id"])
         if component["id"] == "public-suffix-list":

@@ -48,6 +48,26 @@ class LicensePipelineTest(unittest.TestCase):
         self.assertEqual(notices[0]["text"], "Copyright Example")
         self.assertIn("Apache-2.0.txt", licenses)
 
+    def test_legal_directory_contents_are_retained(self):
+        self.binary.write_bytes(archive({"META-INF/licenses/vendor.txt": "Vendor license terms"}))
+        inventory, _, _ = self.collect()
+        self.assertEqual(inventory["dependencies"][0]["embedded_legal_files"][0]["text"], "Vendor license terms")
+
+    def test_deeply_nested_archives_fail_instead_of_being_skipped(self):
+        data = archive({"NOTICE": "Author notice"})
+        for _ in range(4):
+            data = archive({"nested.jar": data})
+        self.binary.write_bytes(data)
+        with self.assertRaisesRegex(ValueError, "Nested archive exceeds inspection depth"):
+            self.collect()
+
+    def test_conflicting_collected_metadata_is_fatal(self):
+        other = copy.deepcopy(self.metadata["libraries"][0])
+        other["licenses"] = ["MIT"]
+        self.metadata["libraries"].append(other)
+        with self.assertRaisesRegex(ValueError, "Conflicting collected metadata"):
+            self.collect()
+
     def test_missing_runtime_dependency_is_fatal(self):
         self.metadata["libraries"].clear()
         with self.assertRaisesRegex(ValueError, "Uncollected runtime dependency"):
