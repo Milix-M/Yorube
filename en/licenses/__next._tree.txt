@@ -1,0 +1,2 @@
+:HL["/Yorube/_next/static/css/ea9da4b27f97880b.css","style"]
+0:{"tree":{"name":"","param":null,"prefetchHints":4176,"slots":{"children":{"name":"(en)","param":null,"prefetchHints":4208,"slots":{"children":{"name":"en","param":null,"prefetchHints":4192,"slots":{"children":{"name":"licenses","param":null,"prefetchHints":4192,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":4256,"slots":null}}}}}}}}},"staleTime":300,"buildId":"uZ1xmfV64viQHKnudWyPC"}
