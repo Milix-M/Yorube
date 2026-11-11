@@ -38,13 +38,6 @@ const content = {
     ],
     docs: "Hermes Agentのドキュメント ↗",
     guide: "ビルド手順 ↗",
-    faq: "よくある質問",
-    questions: [
-      [
-        "バックグラウンドでも通知されますか？",
-        "実行中はフォアグラウンドサービスで状態を確認します。通知の許可や端末の省電力設定、通信状態によって通知が遅れたり、処理が中断されたりする場合があります。",
-      ],
-    ],
   },
   en: {
     lead: "An unofficial Android client for Hermes Agent.",
@@ -83,13 +76,6 @@ const content = {
     ],
     docs: "Hermes Agent documentation ↗",
     guide: "Build instructions ↗",
-    faq: "Frequently asked questions",
-    questions: [
-      [
-        "Do notifications work in the background?",
-        "A foreground service monitors active runs. Notification permissions, battery settings and network conditions can delay notifications or interrupt monitoring.",
-      ],
-    ],
   },
 };
 export function HomePage({ locale }: { locale: Locale }) {
@@ -161,17 +147,6 @@ export function HomePage({ locale }: { locale: Locale }) {
               </li>
             ))}
           </ol>
-        </section>
-        <section className="faq-section wrap">
-          <h2>{c.faq}</h2>
-          <div className="faq-list">
-            {c.questions.map(([title, text]) => (
-              <details key={title}>
-                <summary>{title}</summary>
-                <p>{text}</p>
-              </details>
-            ))}
-          </div>
         </section>
       </main>
       <Footer locale={locale} />

@@ -289,48 +289,6 @@ a:not(.button):hover {
   margin-top: 15px;
   display: inline-block;
 }
-.faq-section {
-  display: grid;
-  grid-template-columns: 1fr 1.6fr;
-  gap: 60px;
-  padding-top: 55px;
-  padding-bottom: 85px;
-  border-top: 1px solid var(--line);
-}
-.faq-section h2 {
-  font-size: 27px;
-}
-.faq-list details {
-  border-bottom: 1px solid var(--line);
-}
-.faq-list summary {
-  cursor: pointer;
-  list-style: none;
-  font-size: 14px;
-  padding: 21px 28px 21px 0;
-  position: relative;
-}
-.faq-list summary::-webkit-details-marker {
-  display: none;
-}
-.faq-list summary:after {
-  content: "＋";
-  position: absolute;
-  right: 3px;
-  color: var(--muted);
-}
-.faq-list details[open] summary:after {
-  content: "−";
-}
-.faq-list details p {
-  font-size: 13px;
-  color: var(--muted);
-  padding: 0 30px 23px 0;
-  line-height: 2;
-}
-.faq-list a {
-  text-decoration: underline;
-}
 .site-footer {
   border-top: 1px solid var(--line);
   padding-top: 38px;
@@ -578,15 +536,6 @@ a:not(.button):hover {
   }
   .steps a {
     margin-top: 9px;
-  }
-  .faq-section {
-    grid-template-columns: 1fr;
-    gap: 22px;
-    padding-top: 43px;
-    padding-bottom: 55px;
-  }
-  .faq-list summary {
-    font-size: 13px;
   }
   .site-footer {
     grid-template-columns: 1fr;
