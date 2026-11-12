@@ -77,6 +77,41 @@ class ChatFlowUiTest {
     }
 
     @Test
+    fun openingRunningHistoryShowsLatestUserMessage() {
+        val subscriptions = AtomicInteger()
+        val history = (0 until 24).flatMap { index ->
+            listOf(
+                """{"id":"u$index","role":"user","content":"Earlier question $index"}""",
+                """{"id":"a$index","role":"assistant","content":"Earlier reply $index"}""",
+            )
+        } + """{"id":"latest","role":"user","content":"Latest active prompt"}"""
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when (request.path) {
+                "/api/sessions/s1/messages" -> MockResponse().setBody(history.joinToString(",", "[", "]"))
+                "/api/sessions/s1" -> MockResponse().setBody("""{"id":"s1","title":"Restored chat","source":"app"}""")
+                "/v1/runs/r1" -> MockResponse().setBody("""{"status":"running","session_id":"s1","pending_controls":[]}""")
+                "/v1/runs/r1/events" -> if (subscriptions.getAndIncrement() == 0)
+                    events(frame("message.delta", """{"delta":"Still running"}"""))
+                else MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.NO_RESPONSE)
+                else -> MockResponse().setBody("{}")
+            }
+        }
+        kotlinx.coroutines.runBlocking { saveSettings() }
+        val app = ApplicationProvider.getApplicationContext<HermesApp>()
+        compose.runOnUiThread { app.container.runStreams.start("r1", "s1", pollFirst = true) }
+        try {
+            compose.setContent { HermesAppTheme { ChatScreen(sessionId = "s1") } }
+            compose.waitUntil(timeoutMillis = 15_000) {
+                compose.onAllNodesWithTag("stopButton").fetchSemanticsNodes().isNotEmpty() &&
+                    compose.onAllNodesWithText("Latest active prompt").fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onNodeWithText("Latest active prompt").assertIsDisplayed()
+        } finally {
+            compose.runOnUiThread { app.container.runStreams.close() }
+        }
+    }
+
+    @Test
     fun additionalInstructionsCanBeSentWithDefaultKeyboardSettings() {
         val steered = java.util.concurrent.atomic.AtomicReference<String?>(null)
         val accepted = java.util.concurrent.atomic.AtomicBoolean(false)

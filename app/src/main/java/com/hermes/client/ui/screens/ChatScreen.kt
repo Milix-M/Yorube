@@ -221,9 +221,9 @@ fun ChatScreen(
     // Manual scrolls never trigger a jump.
     val freshChat = remember(sessionId, instanceNonce) { sessionId.isNullOrBlank() }
     var initialJumpDone by remember(sessionId, instanceNonce) { mutableStateOf(false) }
-    LaunchedEffect(vm.messages.size) {
-        if (blocks.isEmpty()) return@LaunchedEffect
-        if (!initialJumpDone && !vm.busy && !freshChat) {
+    LaunchedEffect(vm.messages.size, vm.historyLoading, vm.busy) {
+        if (blocks.isEmpty() || vm.historyLoading) return@LaunchedEffect
+        if (!initialJumpDone && !freshChat) {
             listState.scrollToItem(lastUserBlockIndex(blocks))
             initialJumpDone = true
         } else if (vm.busy && (atLatestUser || freshChat)) {
