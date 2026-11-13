@@ -44,10 +44,6 @@ jobs:
           cache: npm
           cache-dependency-path: site/package-lock.json
       - run: npm ci
-      - name: Sync generated app licenses
-        run: node scripts/sync-app-legal.mjs ..
-      - name: Check for stale license copies
-        run: git diff --exit-code -- data public/legal LICENSE
       - run: npm run build
       - run: npm run check
       - uses: actions/upload-pages-artifact@v4

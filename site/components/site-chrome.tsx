@@ -93,14 +93,16 @@ export function Footer({ locale = "ja" }: { locale?: Locale }) {
         <small>© 2026 Milix-M</small>
       </div>
       <nav aria-label={en ? "Footer navigation" : "フッターナビゲーション"}>
-        {[
-          ["licenses", en ? "Licenses" : "ライセンス"],
-          ["support", en ? "Support" : "サポート"],
-        ].map(([page, label]) => (
-          <Link key={page} href={route(locale, page)}>
-            {label}
-          </Link>
-        ))}
+        <a
+          href="https://github.com/Milix-M/Yorube/blob/develop/third_party/THIRD_PARTY_NOTICES.txt"
+          target="_blank"
+          rel="noreferrer"
+        >
+          {en ? "Open-source licenses" : "オープンソースライセンス"} ↗
+        </a>
+        <Link href={route(locale, "support")}>
+          {en ? "Support" : "サポート"}
+        </Link>
       </nav>
       <p className="unaffiliated">
         {en

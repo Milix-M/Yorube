@@ -11,9 +11,9 @@
 ## リリース前の確認
 
 1. 公開する変更をdevelopにまとめ、mainへのPRでCIと動作を確認します。
-2. `legal/privacy.json` を確認し、`./gradlew :app:generateThirdPartyNotices` で実依存からライセンスを自動収集・生成します。未検出や、内包コードの補足情報が更新されていない場合は検証で停止します。生成したリポジトリ文書とアプリ内表示を確認してください。
+2. `./gradlew :app:generateThirdPartyNotices` で実依存からライセンスを自動収集・生成します。未検出や、内包コードの補足情報が更新されていない場合は検証で停止します。生成したリポジトリ文書とAPKの同梱文書、アプリ・サイトからのGitHubリンクを確認してください。
 3. `./gradlew :app:verifyThirdPartyNotices :app:jacocoTestReport :app:jacocoCoverageVerification :app:assembleRelease :app:lintRelease` を実行します。
-4. 配布用署名のAPKを新規インストールし、設定、接続テスト、画像添付、承認、通知、バックグラウンド復帰、オフラインの法的文書表示を確認します。仮想端末と実機のどちらで確認したかを記録します。
+4. 配布用署名のAPKを新規インストールし、設定、接続テスト、画像添付、承認、通知、バックグラウンド復帰、GitHubへのライセンスリンクを確認します。仮想端末と実機のどちらで確認したかを記録します。
 5. バージョン名・コードを更新します。タグだけを変更して既存のバージョン番号を再配布しないでください。
 6. `bash scripts/package-release.sh` で署名・バージョン・同梱文書を検証し、配布物を生成します。`app/build/outputs/distribution` で `sha256sum --check SHA256SUMS` を実行します。
 7. 正式な配布URLと対応環境をREADMEなどの配布案内に反映します。過去のdebug APKを新しい修正版として案内しないでください。
@@ -64,8 +64,8 @@ git push origin v0.9.3
 
 ## サイトの更新
 
-サイトのソースはリポジトリ内の `site/` で管理し、https://milix-m.github.io/Yorube/ に配信します。黒基調の日英サイトで、プライバシー・配布状況のページは設けません。アプリ内の文書は引き続きアプリ側で管理します。
+サイトのソースはリポジトリ内の `site/` で管理し、https://milix-m.github.io/Yorube/ に配信します。黒基調の日英サイトです。オープンソースライセンスは、アプリ・サイトともGitHubの自動生成文書へリンクします。
 
-GitHub Pagesの公開元を **GitHub Actions** に設定します。`develop` 向けのPRで静的ビルドとリンク・画像・言語・ライセンス同期を検証し、`develop` への取り込み後に `.github/workflows/site.yml` が公開します。`main` は使用しません。初回公開は検証した静的ファイルを `gh-pages` に配置して行い、その後はActionsを公開元とします。
+GitHub Pagesの公開元を **GitHub Actions** に設定します。`develop` 向けのPRで静的ビルドとリンク・画像・言語・メタデータを検証し、`develop` への取り込み後に `.github/workflows/site.yml` が公開します。
 
-ライセンス更新時は `cd site && node scripts/sync-app-legal.mjs ..` を実行し、同期結果もコミットします。`npm ci && npm run build && npm run check` でPages用の出力を確認できます。詳しくは [サイトのREADME](../site/README.md) を参照してください。
+`site/` で `npm ci`、`npm run build`、`npm run check` を実行して、Pages用の出力を確認します。詳しくは [サイトのREADME](../site/README.md) を参照してください。

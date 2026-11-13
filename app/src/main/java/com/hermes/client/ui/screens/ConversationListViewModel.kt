@@ -11,6 +11,8 @@ import com.hermes.client.data.api.isForeignSurface
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.cancelAndJoin
+import com.hermes.client.data.store.ConversationState
 
 class ConversationListViewModel(
     private val container: AppContainer,
@@ -27,6 +29,8 @@ class ConversationListViewModel(
 
     var showForeign by mutableStateOf(true)
         private set
+    var connectionKey by mutableStateOf("")
+        private set
     private var refreshJob: Job? = null
 
     fun refresh() {
@@ -37,6 +41,7 @@ class ConversationListViewModel(
             error = null
             try {
                 val settings = container.settingsStore.current()
+                connectionKey = ConversationState.profileKey(settings)
                 pinnedIds = settings.pinnedSessionIds
                 showForeign = settings.showForeignSessions
                 val api = container.api(settings)
@@ -45,7 +50,10 @@ class ConversationListViewModel(
                 do {
                     val page = api.listSessions(limit = 50, offset = offset)
                     val before = loaded.size
-                    page.forEach { if (it.key.isNotBlank()) loaded[it.key] = it }
+                    page.forEach {
+                        if (it.key.isNotBlank()) loaded[it.key] = it
+                        container.conversations.rememberTitle(settings, it.key, it.title.orEmpty())
+                    }
                     sessions = sortPinnedFirst(filterForeign(loaded.values.toList(), settings), settings.pinnedSessionIds)
                     offset += page.size
                     // Also stop when an older server ignores offset, avoiding an endless fetch.
@@ -63,8 +71,12 @@ class ConversationListViewModel(
     fun delete(sessionId: String) {
         viewModelScope.launch {
             try {
-                container.api().deleteSession(sessionId)
+                val settings = container.settingsStore.current()
+                container.api(settings).deleteSession(sessionId)
+                // A list fetched before DELETE must not put the removed row back.
+                refreshJob?.cancelAndJoin()
                 sessions = sessions.filterNot { it.key == sessionId }
+                container.conversations.markRead(settings, sessionId)
                 if (pinnedIds.contains(sessionId)) {
                     setPinned(sessionId, false)
                 }

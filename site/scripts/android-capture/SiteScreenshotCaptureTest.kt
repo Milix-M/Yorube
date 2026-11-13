@@ -35,7 +35,7 @@ class SiteScreenshotCaptureTest {
  private fun capture(locale:String, screen:String) {
   val title=if(locale=="ja") "公開チェックリスト" else "Release checklist"
   val question=if(locale=="ja") "公開前に確認することを整理して。" else "What should I check before the release?"
-  val answer=if(locale=="ja") "## 公開前の確認\n\n- アプリの動作と通知を確認\n- ライセンスとプライバシーを確認\n- インストール手順を用意\n\nまずは実機で会話と画像送信を試しましょう。" else "## Release checklist\n\n- Test chat, images and notifications\n- Review licenses and privacy\n- Write the installation steps\n\nStart by testing chat and image uploads on an Android device."
+  val answer=if(locale=="ja") "## 公開前の確認\n\n- アプリの動作と通知を確認\n- ライセンスを確認\n- インストール手順を用意\n\nまずは実機で会話と画像送信を試しましょう。" else "## Release checklist\n\n- Test chat, images and notifications\n- Review licenses\n- Write the installation steps\n\nStart by testing chat and image uploads on an Android device."
   fun escape(s:String)=s.replace("\\","\\\\").replace("\"","\\\"").replace("\n","\\n")
   val server=MockWebServer()
   server.dispatcher=object:Dispatcher(){

@@ -41,6 +41,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        (application as HermesApp).container.conversations.setForeground(true)
+    }
+
+    override fun onPause() {
+        (application as HermesApp).container.conversations.setForeground(false)
+        super.onPause()
+    }
+
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         setIntent(intent)

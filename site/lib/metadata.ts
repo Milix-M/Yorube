@@ -2,19 +2,14 @@ import type { Metadata } from "next";
 import { assetPath, languages } from "./paths";
 
 type Locale = "ja" | "en";
-type Page = "" | "licenses" | "support";
+type Page = "" | "support";
 
 const copy = {
   ja: {
     "": {
       title: "Yorube | Hermes Agentの非公式Androidクライアント",
       description:
-        "自分のHermes APIサーバーに接続して使う非公式のAndroidクライアントです。チャット、画像送信、実行中の追加指示、承認への回答、通知に対応しています。",
-    },
-    licenses: {
-      title: "ライセンス | Yorube",
-      description:
-        "YorubeのMIT Licenseと、アプリで使うライブラリの著作権表示・ライセンス本文を確認できます。",
+        "自分のHermes APIサーバーに接続する非公式Androidクライアントです。画像付きの会話、実行中の追加指示、送信待ち、承認への回答、履歴検索、未読表示、会話ごとの通知に対応しています。",
     },
     support: {
       title: "サポート | Yorube",
@@ -26,12 +21,7 @@ const copy = {
     "": {
       title: "Yorube | Unofficial Android client for Hermes Agent",
       description:
-        "An unofficial Android client for your own Hermes API server. Chat, send images, add instructions during a run, respond to approvals and receive notifications.",
-    },
-    licenses: {
-      title: "Licenses | Yorube",
-      description:
-        "Read Yorube’s MIT License and the copyright notices and license texts for libraries used by the Android app.",
+        "An unofficial Android client for your own Hermes API server. Chat with images, steer or queue messages, respond to approvals, search history and see unread replies and conversation notifications.",
     },
     support: {
       title: "Support | Yorube",

@@ -70,7 +70,7 @@ class ReleaseApkTest(unittest.TestCase):
         legal.mkdir(parents=True)
         self.apk = self.root / 'yorube.apk'
         with zipfile.ZipFile(self.apk, 'w') as archive:
-            for name in ('LICENSES.txt', 'PRIVACY.txt', 'THIRD_PARTY_NOTICES.txt', 'public_suffix_list.dat'):
+            for name in ('LICENSES.txt', 'THIRD_PARTY_NOTICES.txt', 'public_suffix_list.dat'):
                 (legal / name).write_text('Current legal content for ' + name)
                 archive.writestr('assets/legal/' + name, (legal / name).read_bytes())
         self.badging = "package: name='com.hermes.client' versionCode='8' versionName='0.9.3'\n"
@@ -120,6 +120,13 @@ class ReleaseApkTest(unittest.TestCase):
             package_release.verify_apk(self.root, self.apk, '0.9.3', 8, 'aapt2')
             (self.root / 'app/src/main/assets/legal/THIRD_PARTY_NOTICES.txt').write_text('Updated notices')
             with self.assertRaisesRegex(ValueError, 'outdated legal document'):
+                package_release.verify_apk(self.root, self.apk, '0.9.3', 8, 'aapt2')
+
+    def test_privacy_notice_cannot_be_reintroduced_in_the_apk(self):
+        with zipfile.ZipFile(self.apk, 'a') as archive:
+            archive.writestr('assets/legal/PRIVACY.txt', 'Obsolete notice')
+        with patch('package_release.subprocess.run', return_value=subprocess.CompletedProcess([], 0, self.badging, '')):
+            with self.assertRaisesRegex(ValueError, 'must not bundle a privacy notice'):
                 package_release.verify_apk(self.root, self.apk, '0.9.3', 8, 'aapt2')
 
 

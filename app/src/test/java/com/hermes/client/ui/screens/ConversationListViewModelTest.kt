@@ -16,6 +16,7 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -123,6 +124,44 @@ class ConversationListViewModelTest {
         awaitCondition { !vm.loading }
         assertNull(vm.error)
         assertTrue(vm.sessions.isEmpty())
+    }
+
+    @Test fun deletingAConversationDiscardsAnOlderInFlightList() = runVmTest {
+        val release = java.util.concurrent.CountDownLatch(1)
+        val oldFetchStarted = java.util.concurrent.atomic.AtomicBoolean(false)
+        val oldFetchReleased = java.util.concurrent.atomic.AtomicBoolean(false)
+        val fetches = java.util.concurrent.atomic.AtomicInteger()
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
+                if (request.method == "DELETE") return MockResponse().setBody("{}")
+                if (fetches.incrementAndGet() > 1) {
+                    oldFetchStarted.set(true)
+                    release.await(5, java.util.concurrent.TimeUnit.SECONDS)
+                    oldFetchReleased.set(true)
+                }
+                return MockResponse().setBody("""{"sessions":[{"id":"s1","title":"Stale snapshot"}]}""")
+            }
+        }
+        val c = containerWithSettings()
+        val vm = ConversationListViewModel(c)
+        try {
+            vm.refresh()
+            awaitCondition { !vm.loading }
+            assertEquals("s1", vm.sessions.single().key)
+            vm.refresh()
+            awaitCondition { oldFetchStarted.get() }
+            vm.delete("s1")
+            awaitCondition { vm.sessions.isEmpty() }
+            release.countDown()
+            awaitCondition { oldFetchReleased.get() }
+            assertTrue(vm.sessions.isEmpty())
+            assertFalse(vm.loading)
+            assertNull(vm.error)
+        } finally {
+            release.countDown()
+            vm.viewModelScope.cancel()
+            c.runStreams.close()
+        }
     }
 
     @Test

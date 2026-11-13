@@ -37,18 +37,12 @@ parts.append("The MPL-2.0 Public Suffix List source matching OkHttp 4.12.0 is bu
 for directory in ("notices", "licenses"):
     for path in sorted((ROOT / "third_party" / directory).glob("*.txt")):
         parts.append("===== " + path.name + " =====\n\n" + path.read_text().strip())
-privacy = json.loads((ROOT / "legal/privacy.json").read_text())
-privacy_parts = [privacy["title"], "最終更新日: " + privacy["updated"]]
-for section in privacy["sections"]:
-    privacy_parts += [section["title"], *section["paragraphs"]]
 license_text = (ROOT / "LICENSE").read_text()
 notices = "\n\n".join(parts) + "\n"
 outputs = {
     ROOT / "app/src/main/assets/legal/LICENSES.txt": "Yorube — Licenses\n\n" + license_text.rstrip() + "\n\n" + notices,
     ROOT / "app/src/main/assets/legal/THIRD_PARTY_NOTICES.txt": notices,
     ROOT / "third_party/THIRD_PARTY_NOTICES.txt": notices,
-    ROOT / "app/src/main/assets/legal/PRIVACY.txt": "\n\n".join(privacy_parts) + "\n",
-    ROOT / "PRIVACY.md": "# " + privacy["title"] + "\n\n最終更新日: " + privacy["updated"] + "\n\n" + "\n\n".join("## " + s["title"] + "\n\n" + "\n\n".join(s["paragraphs"]) for s in privacy["sections"]) + "\n",
     ROOT / "app/src/main/assets/legal/public_suffix_list.dat": (ROOT / "third_party/sources/public_suffix_list.dat").read_text(),
 }
 for path, content in outputs.items():

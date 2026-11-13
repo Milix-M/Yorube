@@ -199,6 +199,8 @@
     <string name="cmd_cron_usage">/cron list; /cron add 이름 | 일정 | 프롬프트; /cron edit ID 이름 | 일정 | 프롬프트; /cron show|pause|resume|run|remove ID</string>
     <string name="cmd_cron_done">예약 작업: %1$s 완료.</string>
     <string name="cmd_cron_empty">예약된 작업이 없습니다.</string>
-    <string name="privacy_policy">개인정보 처리방침</string>
+    <string name="unread_reply">읽지 않은 답장</string>
+    <string name="attached_image">첨부 이미지</string>
+    <string name="open_link_failed">링크를 열 브라우저를 찾을 수 없습니다.</string>
     <string name="open_source_licenses">오픈소스 라이선스</string>
 </resources>

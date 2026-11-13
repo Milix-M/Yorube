@@ -26,7 +26,20 @@ class RunNotifications(private val container: AppContainer) {
     private val manager = context.getSystemService(NotificationManager::class.java)
     private val preferences = context.getSharedPreferences("run_notifications", 0)
 
-    suspend fun onUpdate(run: ActiveRun, update: RunStreamUpdate) {
+    suspend fun onUpdate(run: ActiveRun, update: RunStreamUpdate,
+        connection: com.hermes.client.data.store.ClientSettings? = null) {
+        val settings = container.settingsStore.snapshot.takeIf { it.isConfigured } ?: container.settingsStore.current()
+        if (connection != null && com.hermes.client.data.store.ConversationState.profileKey(connection) !=
+            com.hermes.client.data.store.ConversationState.profileKey(settings)) return
+        val terminal = when (update) {
+            is RunStreamUpdate.Event -> update.event as? RunEvent.Terminal
+            is RunStreamUpdate.PollTerminal -> RunEvent.Terminal(update.status.status, update.status.output, update.status.error, update.status.pendingSteer)
+            else -> null
+        }
+        val delta = (update as? RunStreamUpdate.Event)?.event as? RunEvent.Delta
+        if (delta?.text?.isNotEmpty() == true || terminal?.status == "completed" && !terminal.output.isNullOrBlank()) {
+            container.conversations.recordReply(settings, run.sessionId, run.runId, terminal != null)
+        }
         when (update) {
             is RunStreamUpdate.ControlsCleared -> dismissControl(run.runId)
             is RunStreamUpdate.Event -> onEvent(run, update.event)
@@ -69,14 +82,28 @@ class RunNotifications(private val container: AppContainer) {
 
     fun dismissControl(runId: String) { manager.cancel("control:$runId", 0) }
 
+    fun dismissSession(settings: com.hermes.client.data.store.ClientSettings, session: String) {
+        val prefix = "session:${com.hermes.client.data.store.ConversationState.profileKey(settings)}:"
+        preferences.all.filter { (key, value) -> key.startsWith(prefix) && value == session }.forEach { (key, _) ->
+            val runId = key.removePrefix(prefix)
+            manager.cancel("control:$runId", 0)
+            manager.cancel("result:$runId", 0)
+            preferences.edit().remove(key).apply()
+        }
+    }
+
     private suspend fun show(run: ActiveRun, eventKey: String, title: Int, body: String, control: Boolean) {
         val settings = container.settingsStore.current()
+        val key = "${com.hermes.client.data.store.ConversationState.profileKey(settings)}|${run.runId}|$eventKey"
+        val seen = preferences.getStringSet("seen", emptySet()).orEmpty()
+        if (key in seen) return
+        if (container.conversations.isVisible(settings, run.sessionId)) {
+            preferences.edit().putStringSet("seen", (seen.toList().takeLast(255) + key).toSet()).apply()
+            return
+        }
         if (!settings.notificationsEnabled || !manager.areNotificationsEnabled()) return
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED) return
-        val key = "${settings.baseUrl}|${run.runId}|$eventKey"
-        val seen = preferences.getStringSet("seen", emptySet()).orEmpty()
-        if (key in seen) return
         fun s(resource: Int) = LocaleHelper.getString(context, settings.language, resource)
         val channel = if (control) "hermes_approvals" else "hermes_runs"
         manager.createNotificationChannel(NotificationChannel(channel,
@@ -89,15 +116,18 @@ class RunNotifications(private val container: AppContainer) {
         }
         val pending = PendingIntent.getActivity(context, 0, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val displayBody = body.ifBlank { s(title) }
         val notification = NotificationCompat.Builder(context, channel)
-            .setSmallIcon(android.R.drawable.stat_notify_chat)
-            .setContentTitle(s(title)).setContentText(body.take(200))
-            .setStyle(NotificationCompat.BigTextStyle().bigText(body.take(2000)))
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(container.conversations.title(settings, run.sessionId) ?: s(R.string.new_chat))
+            .setContentText(displayBody.take(200))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(displayBody.take(2000)))
             .setContentIntent(pending).setAutoCancel(true)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE).build()
         try {
             manager.notify("${if (control) "control" else "result"}:${run.runId}", 0, notification)
             preferences.edit().putStringSet("seen", (seen.toList().takeLast(255) + key).toSet()).apply()
+            preferences.edit().putString("session:${com.hermes.client.data.store.ConversationState.profileKey(settings)}:${run.runId}", run.sessionId).apply()
         } catch (_: SecurityException) {
             // Permission can be revoked after the check; streaming must continue.
         }

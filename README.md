@@ -62,15 +62,14 @@ GitHubのReleaseワークフローでは、キーストアをBase64にした `YO
 - [設計・API仕様](docs/DESIGN.md)
 - [修正内容と検証範囲](docs/PR-AUDIT.md)
 
-## プライバシー・ライセンス・公開準備
+## ライセンス・公開準備
 
-- [プライバシーポリシー](PRIVACY.md)
 - [第三者ソフトウェアの表示と更新手順](third_party/README.md)
 - [公開手順・署名・旧版からの移行](docs/PUBLISHING.md)
 
-設定画面からプライバシーとオープンソースライセンスをオフラインで閲覧できます。本体は[MIT License](LICENSE)で公開しています。第三者ライブラリの利用条件はそれぞれの表示に従います。
+設定画面のオープンソースライセンスから、GitHubの[第三者ソフトウェアの表示](third_party/THIRD_PARTY_NOTICES.txt)を開けます。本体は[MIT License](LICENSE)で公開しています。第三者ライブラリの利用条件はそれぞれの表示に従います。
 
-依存ライセンスはAboutLibrariesでreleaseの実依存から自動収集します。`./gradlew :app:generateThirdPartyNotices` で、リポジトリとアプリ内表示に使う文書を同時生成します。通常のビルドでも再収集と一致検証を行います。内包コードの補足情報と自動検出の範囲は[更新手順](third_party/README.md)を参照してください。
+依存ライセンスはAboutLibrariesでreleaseの実依存から自動収集します。`./gradlew :app:generateThirdPartyNotices` で、リポジトリとAPKに同梱する文書を同時生成します。通常のビルドでも再収集と一致検証を行います。内包コードの補足情報と自動検出の範囲は[更新手順](third_party/README.md)を参照してください。
 
 ## 紹介サイト
 

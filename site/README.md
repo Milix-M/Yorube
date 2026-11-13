@@ -2,7 +2,7 @@
 
 Black-based, bilingual Japanese/English site, statically exported with Next.js and hosted on GitHub Pages at https://milix-m.github.io/Yorube/.
 
-The source lives in `site/` on the app repository's `develop` branch. No server, Sites account, Cloudflare Worker, analytics, external fonts or credentials are required. The website has no privacy or distribution-status pages.
+The source lives in `site/` on the app repository's `develop` branch. No application server, hosting account, analytics, external fonts or credentials are required.
 
 ## Development
 
@@ -10,7 +10,6 @@ Use Node.js 22 or later. From `site/`:
 
 ```sh
 npm ci
-node scripts/sync-app-legal.mjs ..
 npm run dev
 ```
 
@@ -21,24 +20,16 @@ npm run build
 npm run check
 ```
 
-`out/` contains the complete site. Checks cover both languages, internal links and assets, removed routes, and matching generated app notices. The license page covers the Android app; website source is MIT, and its dependencies retain their own terms.
+`out/` contains the complete site. Checks cover both languages, page and sharing metadata, internal links and assets, removed routes, and the GitHub license link. Open-source license links point to the app repository's automatically generated notices; the site does not maintain a separate inventory. Website source is MIT, and its dependencies retain their own terms.
 
 ## Publishing
 
-`.github/workflows/site.yml` validates pull requests targeting `develop`. Changes merged into `develop` build and deploy to GitHub Pages using its `github-pages` environment. The Pages publishing source must be **GitHub Actions**. The workflow uses GitHub's short-lived token and does not require a personal access token or modify `main`.
-
-The first publication can use the checked static output in a `gh-pages` branch, then switch the Pages source to GitHub Actions. Subsequent deployments come from `develop`; the bootstrap branch is not the maintained source.
+`.github/workflows/site.yml` validates pull requests targeting `develop`. Changes merged into `develop` build and deploy to GitHub Pages using its `github-pages` environment. Set the Pages publishing source to **GitHub Actions**. The workflow uses GitHub's short-lived token and does not require a personal access token or modify `main`.
 
 ## Languages and app screenshots
 
 Japanese pages are at `/Yorube/`, English pages at `/Yorube/en/`. The language switch preserves the current page. Keep both languages updated.
 
-`public/screenshots/` contains six unedited Android-rendered PNGs: chat, sidebar and settings in Japanese/English. `provenance.json` records the app commit, method and hashes. They show production Compose screens rendered by Robolectric native graphics with sample data, not photographs of a physical device.
+`public/screenshots/` contains unedited screenshots of the actual Android app: chat, sidebar, settings, sent images and running conversations, in Japanese and English. `provenance.json` records their source, capture method and hashes. Screenshots use a development build and sample conversations; they are not photographs of a physical device.
 
-Refresh them with JDK 17 and the Android SDK configured:
-
-```sh
-node scripts/capture-android.mjs ..
-```
-
-Additional Gradle flags can follow the app path. The helper temporarily installs the capture fixture, runs six captures and removes it afterward. It does not change production app code.
+For updated captures, install the debug APK in an Android virtual device, connect it to a synthetic test server, use the app normally, and capture with `adb exec-out screencap -p`. Do not embed credentials or real conversations. Keep the original PNGs and update the provenance hashes. The older `scripts/capture-android.mjs` fixture remains available for Android-rendered component previews; it is not the source of the current device screenshots.

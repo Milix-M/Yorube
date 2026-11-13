@@ -1,10 +1,28 @@
 import fs from "node:fs";
 import path from "node:path";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 
 const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "/Yorube";
 const output = path.resolve("out");
-const pages = ["", "licenses", "support", "en", "en/licenses", "en/support"];
+const pages = ["", "support", "en", "en/support"];
+const screenshots = JSON.parse(
+  fs.readFileSync("public/screenshots/provenance.json", "utf8"),
+);
+assert.match(screenshots.commit, /^[0-9a-f]{40}$/);
+for (const locale of ["ja", "en"]) {
+  for (const screen of ["chat", "drawer", "settings", "images", "running"]) {
+    const name = `${locale}-${screen}.png`;
+    const png = fs.readFileSync(`public/screenshots/${name}`);
+    assert.equal(
+      createHash("sha256").update(png).digest("hex"),
+      screenshots.images[name],
+      `Stale screenshot provenance: ${name}`,
+    );
+    assert.equal(png.readUInt32BE(16), 720);
+    assert.equal(png.readUInt32BE(20), 1280);
+  }
+}
 let checked = 0;
 const descriptions = new Set();
 for (const page of pages) {
@@ -15,11 +33,15 @@ for (const page of pages) {
   );
   assert.doesNotMatch(
     html,
-    /プライバシー|配布状況|よくある質問|Frequently asked questions|signed distribution is in preparation|Release guide/,
+    /プライバシー|Privacy|privacy policy|配布状況|よくある質問|Frequently asked questions|signed distribution is in preparation|Release guide/,
   );
   const title = html.match(/<title>([^<]+)<\/title>/)?.[1];
   assert.ok(title?.includes("Yorube"), `Missing site title: ${page}`);
   assert.doesNotMatch(title, /[—―─]/);
+  assert.match(
+    html,
+    /href="https:\/\/github.com\/Milix-M\/Yorube\/blob\/develop\/third_party\/THIRD_PARTY_NOTICES.txt"/,
+  );
   const metadata = new Map();
   for (const [tag] of html.matchAll(/<meta\b[^>]*>/g)) {
     const attrs = Object.fromEntries(
@@ -81,8 +103,10 @@ for (const page of pages) {
 }
 for (const removed of [
   "privacy",
+  "licenses",
   "download",
   "en/privacy",
+  "en/licenses",
   "en/download",
   "legal/PRIVACY.txt",
   "legal/PRIVACY.en.txt",
@@ -92,17 +116,6 @@ for (const removed of [
     `Removed route/file was exported: ${removed}`,
   );
 }
-assert.ok(
-  fs
-    .readFileSync("../third_party/THIRD_PARTY_NOTICES.txt")
-    .equals(fs.readFileSync("public/legal/THIRD_PARTY_NOTICES.txt")),
-  "Site notices differ from repository notices",
-);
-assert.equal(
-  JSON.parse(fs.readFileSync("public/legal/dependencies.json", "utf8"))
-    .schema_version,
-  2,
-);
 console.log(
   `Checked ${pages.length} bilingual pages, their titles/descriptions/sharing metadata and ${checked} internal asset/link references.`,
 );

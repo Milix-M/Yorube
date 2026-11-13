@@ -26,8 +26,8 @@ export function ScreenshotGallery({ locale }: { locale: Locale }) {
         <img
           className="app-screenshot"
           src={assetPath(`/screenshots/${locale}-${screen}.png`)}
-          width="824"
-          height="1784"
+          width="720"
+          height="1280"
           alt={
             en ? `Yorube ${label.toLowerCase()} screen` : `Yorubeの${label}画面`
           }

@@ -60,7 +60,9 @@ def verify_apk(root, apk, version, version_code, aapt2):
     if re.search(r'^application-debuggable', result.stdout, re.MULTILINE):
         raise ValueError('A debuggable APK cannot be distributed')
     with zipfile.ZipFile(apk) as archive:
-        for name in ('LICENSES.txt', 'PRIVACY.txt', 'THIRD_PARTY_NOTICES.txt', 'public_suffix_list.dat'):
+        if 'assets/legal/PRIVACY.txt' in archive.namelist():
+            raise ValueError('APK must not bundle a privacy notice')
+        for name in ('LICENSES.txt', 'THIRD_PARTY_NOTICES.txt', 'public_suffix_list.dat'):
             expected = (root / 'app/src/main/assets/legal' / name).read_bytes()
             if archive.read('assets/legal/' + name) != expected:
                 raise ValueError('APK contains an outdated legal document: ' + name)
@@ -97,13 +99,15 @@ def package(root):
     files = {
         'yorube.apk': apk,
         'LICENSE.txt': root / 'LICENSE',
-        'PRIVACY.txt': root / 'app/src/main/assets/legal/PRIVACY.txt',
         'THIRD_PARTY_NOTICES.txt': root / 'app/src/main/assets/legal/THIRD_PARTY_NOTICES.txt',
         'public_suffix_list.dat': root / 'app/src/main/assets/legal/public_suffix_list.dat',
         'release-signing-certificate.pem': root / 'legal/release-signing-certificate.pem',
         'release-signing-certificate.sha256': root / 'legal/release-signing-certificate.sha256',
     }
     output.mkdir(parents=True, exist_ok=True)
+    legacy_privacy = output / 'PRIVACY.txt'
+    if legacy_privacy.is_file():
+        legacy_privacy.unlink()
     allowed = set(files) | {'RELEASE.json', 'SHA256SUMS'}
     if any(p.name not in allowed or not p.is_file() for p in output.iterdir()):
         raise ValueError('Unexpected files in distribution directory; inspect and remove them before packaging')

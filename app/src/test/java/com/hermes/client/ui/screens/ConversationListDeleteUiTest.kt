@@ -48,6 +48,7 @@ class ConversationListDeleteUiTest {
 
     @After
     fun tearDown() {
+        compose.mainClock.autoAdvance = true
         server.shutdown()
     }
 
@@ -55,12 +56,17 @@ class ConversationListDeleteUiTest {
     fun openAndDelete_flow() {
         // Dispatcher (not a fixed queue): the list auto-refreshes on resume,
         // so the number of GETs is not fixed. DELETE must still go through.
+        val deleted = java.util.concurrent.atomic.AtomicBoolean(false)
         server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
             override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
                 return when {
-                    request.method == "DELETE" -> MockResponse().setBody("{}")
+                    request.method == "DELETE" -> {
+                        deleted.set(true)
+                        MockResponse().setBody("{}")
+                    }
                     (request.path ?: "").startsWith("/api/sessions") ->
-                        MockResponse().setBody("""{"sessions":[{"id":"s1","title":"Hello"}]}""")
+                        MockResponse().setBody(if (deleted.get()) """{"sessions":[]}"""
+                            else """{"sessions":[{"id":"s1","title":"Hello"}]}""")
                     else -> MockResponse().setBody("{}")
                 }
             }
@@ -76,34 +82,51 @@ class ConversationListDeleteUiTest {
             }
         }
         var opened: String? = null
+        // Let the IO-backed initial fetch finish before advancing its loading animation.
+        compose.mainClock.autoAdvance = false
         compose.setContent {
             HermesAppTheme {
                 ConversationListScreen(onOpenChat = { id, _ -> opened = id })
             }
         }
         compose.waitUntil(timeoutMillis = 10_000) {
+            compose.mainClock.advanceTimeBy(32)
             compose.onAllNodes(hasText("Hello")).fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithText("Hello").performClick()
         assertEquals("s1", opened)
 
         compose.onNodeWithText("Hello").performTouchInput { longClick() }
+        compose.mainClock.advanceTimeBy(1_000)
         // Long-press now opens the options sheet (pin / delete), then delete confirms.
         assertTrue(
             compose.onAllNodesWithText("Conversation options").fetchSemanticsNodes().isNotEmpty()
         )
         compose.onNodeWithTag("deleteOption").performClick()
+        compose.mainClock.advanceTimeBy(1_000)
         assertTrue(
             compose.onAllNodesWithText("Delete conversation?").fetchSemanticsNodes().isNotEmpty()
         )
         compose.onNodeWithText("Cancel").performClick()
+        compose.mainClock.advanceTimeBy(1_000)
         compose.onNodeWithText("Hello").assertIsDisplayed()
 
         compose.onNodeWithText("Hello").performTouchInput { longClick() }
+        compose.mainClock.advanceTimeBy(1_000)
         compose.onNodeWithTag("deleteOption").performClick()
+        compose.mainClock.advanceTimeBy(1_000)
         compose.onNodeWithText("Delete").performClick()
-        compose.waitUntil(timeoutMillis = 10_000) {
-            compose.onAllNodes(hasText("Hello")).fetchSemanticsNodes().isEmpty()
+        try {
+            compose.waitUntil(timeoutMillis = 10_000) {
+                compose.mainClock.advanceTimeBy(32)
+                compose.onAllNodes(hasText("Hello")).fetchSemanticsNodes().isEmpty()
+            }
+        } catch (failure: Throwable) {
+            val visibleText = compose.onAllNodes(androidx.compose.ui.test.SemanticsMatcher.keyIsDefined(
+                androidx.compose.ui.semantics.SemanticsProperties.Text)).fetchSemanticsNodes().map {
+                it.config[androidx.compose.ui.semantics.SemanticsProperties.Text].joinToString { text -> text.text }
+            }
+            throw AssertionError("DELETE received=${deleted.get()}, requests=${server.requestCount}, text=$visibleText", failure)
         }
         val paths = mutableListOf<String>()
         repeat(3) {
