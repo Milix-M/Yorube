@@ -90,6 +90,17 @@ class ReleaseApkTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'debug signing key'):
                 package_release.verify_signature(self.apk, 'a' * 64, 'apksigner')
 
+    def test_sdk_range_signers_must_all_match_the_same_release_certificate(self):
+        output = 'Number of signers: 1\n' + ''.join(
+            f'Signer (minSdkVersion={minimum}, maxSdkVersion={maximum}) certificate SHA-256 digest: ' + 'a' * 64 + '\n'
+            for minimum, maximum in [(26, 32), (33, 2147483647)])
+        with patch('package_release.subprocess.run', return_value=subprocess.CompletedProcess([], 0, output, '')):
+            package_release.verify_signature(self.apk, 'a' * 64, 'apksigner')
+        output += 'Signer #2 certificate SHA-256 digest: ' + 'b' * 64 + '\n'
+        with patch('package_release.subprocess.run', return_value=subprocess.CompletedProcess([], 0, output, '')):
+            with self.assertRaisesRegex(ValueError, 'does not match'):
+                package_release.verify_signature(self.apk, 'a' * 64, 'apksigner')
+
     def test_wrong_version_and_debuggable_apks_are_rejected(self):
         cases = [(self.badging.replace("versionCode='8'", "versionCode='7'"), 'version'),
                  (self.badging + 'application-debuggable\n', 'debuggable')]

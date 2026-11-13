@@ -54,6 +54,16 @@ jobs:
           test -n "$SIGNING_KEY_ALIAS" && test -n "$SIGNING_KEY_PASSWORD"
           umask 077
           printf '%s' "$SIGNING_STORE_BASE64" | base64 --decode > "$RUNNER_TEMP/yorube-signing.p12"
+          keytool -exportcert -keystore "$RUNNER_TEMP/yorube-signing.p12" \
+            -alias "$SIGNING_KEY_ALIAS" -storepass:env SIGNING_STORE_PASSWORD \
+            > "$RUNNER_TEMP/yorube-certificate.der"
+          actual_certificate=$(sha256sum "$RUNNER_TEMP/yorube-certificate.der" | cut -d ' ' -f 1)
+          expected_certificate=$(tr -d '\r\n ' < legal/release-signing-certificate.sha256)
+          test "$actual_certificate" = "$expected_certificate" || {
+            echo "Configured signing certificate differs from the public certificate: $actual_certificate"
+            exit 1
+          }
+          echo "Signing key matches public certificate: $actual_certificate"
       - name: Build signed release
         env:
           YORUBE_SIGNING_STORE_FILE: ${{ runner.temp }}/yorube-signing.p12
@@ -74,7 +84,7 @@ jobs:
           retention-days: 30
       - name: Remove signing key
         if: always()
-        run: rm -f "$RUNNER_TEMP/yorube-signing.p12"
+        run: rm -f "$RUNNER_TEMP/yorube-signing.p12" "$RUNNER_TEMP/yorube-certificate.der"
 
   publish:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')

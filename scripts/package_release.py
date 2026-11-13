@@ -37,10 +37,14 @@ def verify_signature(apk, expected, apksigner):
                             capture_output=True, text=True)
     if result.returncode:
         raise ValueError('APK signature verification failed')
-    digests = re.findall(r'^Signer #\d+ certificate SHA-256 digest:\s*([0-9a-fA-F]+)',
+    # v3.1 verification can report a signer for each supported SDK range.
+    digests = re.findall(r'^Signer (?:#\d+|\(minSdkVersion=[^\n]+\)) certificate SHA-256 digest:\s*([0-9a-fA-F]+)',
                          result.stdout, re.MULTILINE)
-    if len(digests) != 1 or digests[0].lower() != expected:
-        raise ValueError('APK signing certificate does not match the public release certificate')
+    actual = {digest.lower() for digest in digests}
+    signers = re.search(r'^Number of signers:\s*(\d+)', result.stdout, re.MULTILINE)
+    if actual != {expected} or (signers and int(signers.group(1)) != 1):
+        raise ValueError('APK signing certificate does not match the public release certificate '
+                         f'(expected {expected}; actual {sorted(actual) or "unparsed"}; tool {apksigner})')
     if 'CN=Android Debug' in result.stdout or 'CN=AndroidDebug' in result.stdout:
         raise ValueError('An Android debug signing key cannot be used for distribution')
 
