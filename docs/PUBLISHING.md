@@ -1,6 +1,6 @@
 # 公開手順
 
-対象ブランチは `develop` です。アプリの紹介サイトはGitHub Pagesで配信します。アプリの署名・正式リリースはサイトの公開とは別に実施します。
+アプリは `develop` から `main` へのPRで確認し、`main` に取り込まれたコミットからリリースします。紹介サイトは `develop` からGitHub Pagesへ公開します。
 
 ## ライセンスと配布先
 
@@ -10,12 +10,12 @@
 
 ## リリース前の確認
 
-1. 認証・通信・送信復旧の修正（PR #31）と公開準備の変更をdevelopに取り込みます。
+1. 公開する変更をdevelopにまとめ、mainへのPRでCIと動作を確認します。
 2. `legal/privacy.json` を確認し、`./gradlew :app:generateThirdPartyNotices` で実依存からライセンスを自動収集・生成します。未検出や、内包コードの補足情報が更新されていない場合は検証で停止します。生成したリポジトリ文書とアプリ内表示を確認してください。
 3. `./gradlew :app:verifyThirdPartyNotices :app:jacocoTestReport :app:jacocoCoverageVerification :app:assembleRelease :app:lintRelease` を実行します。
-4. 実機で新規インストール、設定、接続テスト、画像添付、承認、通知、バックグラウンド復帰、オフラインの法的文書表示を確認します。
+4. 配布用署名のAPKを新規インストールし、設定、接続テスト、画像添付、承認、通知、バックグラウンド復帰、オフラインの法的文書表示を確認します。仮想端末と実機のどちらで確認したかを記録します。
 5. バージョン名・コードを更新します。タグだけを変更して既存のバージョン番号を再配布しないでください。
-6. APKの署名を `apksigner verify --print-certs` で確認し、公開予定の証明書のSHA-256を別の信頼できる経路でも案内します。
+6. `bash scripts/package-release.sh` で署名・バージョン・同梱文書を検証し、配布物を生成します。`app/build/outputs/distribution` で `sha256sum --check SHA256SUMS` を実行します。
 7. 正式な配布URLと対応環境をREADMEなどの配布案内に反映します。過去のdebug APKを新しい修正版として案内しないでください。
 
 ## 署名鍵とGitHub Releases
@@ -27,9 +27,32 @@
 - `YORUBE_SIGNING_KEY_ALIAS`
 - `YORUBE_SIGNING_KEY_PASSWORD`
 
-鍵は所有者が安全な場所で生成・バックアップし、今後の更新でも同じ鍵を使います。署名鍵の生成・登録や正式リリースの発行は、この公開準備には含めていません。
+鍵とパスワードは非公開の場所へバックアップし、今後の更新でも同じ鍵を使います。公開する証明書を `legal/release-signing-certificate.pem`、DER形式の証明書のSHA-256を `legal/release-signing-certificate.sha256` に保存します。この2ファイルには秘密鍵を含めません。配布物の生成時に、APKの署名と公開証明書が一致しなければ停止します。
 
-`develop` に存在する確認済みコミットへ `v*` タグを付けると、release workflowが検証・署名・公開します。本体の `LICENSE` が欠落している場合は公開処理を停止します。APK、SHA256SUMS、プライバシー文書、第三者表示、MPL対象のPublic Suffix List原本、本体LICENSEを同時に配布します。
+### 公開せずに配布物を確認する
+
+GitHub Actionsのreleaseを手動実行します。対象ブランチは `develop` または `main` です。
+
+```sh
+gh workflow run release.yml --ref develop
+```
+
+成功した実行の `yorube-release` Artifactから署名済みAPKと同梱ファイルを取得します。手動実行ではタグやGitHub Releaseを作成しません。
+
+配布物にはAPK、本体LICENSE、プライバシー文書、第三者表示、MPL対象のPublic Suffix List原本、公開証明書・フィンガープリント、バージョン・ソースコミットを記録した `RELEASE.json`、全ファイルの `SHA256SUMS` が含まれます。APKのアプリID・バージョン・署名、デバッグ不可の設定、APK内の法的文書との一致を生成時に検証します。
+
+### v0.9.3を公開する
+
+PRをmainへ取り込み、CIが成功したコミットを確認してからタグを付けます。次のタグをpushすると配布物がGitHub Releasesへ公開されます。`v0.*` とハイフンを含むタグはプレリリース扱いです。
+
+```sh
+git fetch origin main
+git log -1 origin/main
+git tag v0.9.3 origin/main
+git push origin v0.9.3
+```
+
+タグのコミットが `origin/main` に含まれない場合、タグとアプリのバージョン名が異なる場合、署名・法的文書・テスト・カバレッジの検証が失敗した場合は公開を停止します。
 
 ## 過去のdebug版からの移行
 

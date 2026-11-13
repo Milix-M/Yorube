@@ -50,7 +50,9 @@ Windowsでは `gradlew.bat :app:assembleDebug` を使います。APKは `app/bui
 | `YORUBE_SIGNING_KEY_ALIAS` | 鍵のエイリアス |
 | `YORUBE_SIGNING_KEY_PASSWORD` | 鍵のパスワード |
 
-GitHubのReleaseワークフローでは、キーストアをBase64にした `YORUBE_SIGNING_STORE_BASE64` と、上記のパスワード・エイリアスをRepository Secretsに登録してください。`develop` に含まれるコミットの `v*` タグで、テスト・カバレッジ検証後に署名済みAPKを公開します。
+GitHubのReleaseワークフローでは、キーストアをBase64にした `YORUBE_SIGNING_STORE_BASE64` と、上記のパスワード・エイリアスをRepository Secretsに登録します。`main` に取り込まれたコミットへ、アプリのバージョン名と一致するタグ（例: `v0.9.3`）を付けると、検証後に署名済みAPKを公開します。手動実行では、公開せずに署名済み配布物を作成できます。[公開手順](docs/PUBLISHING.md)を参照してください。
+
+配布用の[公開証明書](legal/release-signing-certificate.pem)と[SHA-256フィンガープリント](legal/release-signing-certificate.sha256)をリポジトリで公開しています。APKの署名がこの証明書と一致すること、同梱文書がAPK内の文書と一致することを配布物の生成時に検証します。
 
 以前配布したdebug APKと新しい配布版では署名が異なるため、上書き更新できません。以前のアプリをアンインストールしてから配布版を入れ、接続設定を再入力してください。アンインストールすると端末内のキューも消えます。開発版との併用は可能です。
 
