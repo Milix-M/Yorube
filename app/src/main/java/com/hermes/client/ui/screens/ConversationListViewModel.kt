@@ -11,6 +11,7 @@ import com.hermes.client.data.api.isForeignSurface
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.cancelAndJoin
 import com.hermes.client.data.store.ConversationState
 
 class ConversationListViewModel(
@@ -72,6 +73,8 @@ class ConversationListViewModel(
             try {
                 val settings = container.settingsStore.current()
                 container.api(settings).deleteSession(sessionId)
+                // A list fetched before DELETE must not put the removed row back.
+                refreshJob?.cancelAndJoin()
                 sessions = sessions.filterNot { it.key == sessionId }
                 container.conversations.markRead(settings, sessionId)
                 if (pinnedIds.contains(sessionId)) {

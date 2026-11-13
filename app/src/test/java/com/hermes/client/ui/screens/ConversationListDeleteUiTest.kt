@@ -56,12 +56,17 @@ class ConversationListDeleteUiTest {
     fun openAndDelete_flow() {
         // Dispatcher (not a fixed queue): the list auto-refreshes on resume,
         // so the number of GETs is not fixed. DELETE must still go through.
+        val deleted = java.util.concurrent.atomic.AtomicBoolean(false)
         server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
             override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse {
                 return when {
-                    request.method == "DELETE" -> MockResponse().setBody("{}")
+                    request.method == "DELETE" -> {
+                        deleted.set(true)
+                        MockResponse().setBody("{}")
+                    }
                     (request.path ?: "").startsWith("/api/sessions") ->
-                        MockResponse().setBody("""{"sessions":[{"id":"s1","title":"Hello"}]}""")
+                        MockResponse().setBody(if (deleted.get()) """{"sessions":[]}"""
+                            else """{"sessions":[{"id":"s1","title":"Hello"}]}""")
                     else -> MockResponse().setBody("{}")
                 }
             }
