@@ -37,9 +37,9 @@ GitHub Actionsのreleaseを手動実行します。対象ブランチは `develo
 gh workflow run release.yml --ref develop
 ```
 
-成功した実行の `yorube-release` Artifactから署名済みAPKと同梱ファイルを取得します。手動実行ではタグやGitHub Releaseを作成しません。
+成功した実行の `yorube-release` Artifactから署名済みAPKと検証用ファイルを取得します。手動実行ではタグやGitHub Releaseを作成しません。
 
-配布物にはAPK、本体LICENSE、プライバシー文書、第三者表示、MPL対象のPublic Suffix List原本、公開証明書・フィンガープリント、バージョン・ソースコミットを記録した `RELEASE.json`、全ファイルの `SHA256SUMS` が含まれます。APKのアプリID・バージョン・署名、デバッグ不可の設定、APK内の法的文書との一致を生成時に検証します。
+GitHub Releasesへの添付は `yorube.apk` だけです。証明書、ビルド情報、チェックサムなどはCIの検証用に留めます。APKのアプリID・バージョン・署名、デバッグ不可の設定、APK内のライセンス文書との一致を公開前に検証します。本体と第三者のライセンス、Public Suffix List原本はAPK内とリポジトリで確認できます。
 
 ### v0.9.3を公開する
 

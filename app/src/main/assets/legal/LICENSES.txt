@@ -538,7 +538,7 @@ Google / Material Design icon contributors
 Apache-2.0
 https://github.com/google/material-design-icons
 
-The MPL-2.0 Public Suffix List source matching OkHttp 4.12.0 is bundled in this APK at legal/public_suffix_list.dat and accompanies releases as public_suffix_list.dat. It is also maintained at third_party/sources/public_suffix_list.dat in https://github.com/Milix-M/Yorube. This data is unmodified; OkHttp compiles it to a binary resource. MPL terms apply to this data, independently of Yorube.
+The MPL-2.0 Public Suffix List source matching OkHttp 4.12.0 is bundled in this APK at legal/public_suffix_list.dat. It is also maintained at third_party/sources/public_suffix_list.dat in https://github.com/Milix-M/Yorube. This data is unmodified; OkHttp compiles it to a binary resource. MPL terms apply to this data, independently of Yorube.
 
 ===== coroutines-NOTICE.txt =====
 
