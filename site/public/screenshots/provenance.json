@@ -1,13 +1,17 @@
 {
   "repository": "https://github.com/Milix-M/Yorube",
-  "commit": "b29179e8812889a33b5a5f8d805f2df17203a3e7",
-  "method": "Production Compose screens rendered with Robolectric native graphics, Android API 30. Sample server data; dark theme; 412 × 892 dp at xhdpi. PNGs are direct Android View.draw output, without visual editing.",
+  "commit": "659b53b0daf08f1c63462d1261ff17489e8a86bf",
+  "method": "Actual debug APK on ReDroid Android 15 (API 35), ARM64, 720 x 1280 px, 320 dpi, system dark theme. Synthetic local API conversations; Japanese and English app UI. Captured using adb exec-out screencap -p, with no visual editing. The attached image is a previously published Yorube sample Settings screenshot.",
   "images": {
-    "ja-chat.png": "3d6f6c1aa17fa1dfea9fb9302ac49c321c23a0722739faef33eaca23edb2954c",
-    "ja-drawer.png": "557057a6142a1e1f1da7b39d2ef8594ff459b7ffc4118808fb0d1564d6dc8448",
-    "ja-settings.png": "4901008b6a3c92f9df2b1abbec5a1fc94fa394b5af3725271b2d39f72fe33ccc",
-    "en-chat.png": "3643ffe7b5560f25a1193adaed6149d712b2ac46c2718f9119968eb29d962f26",
-    "en-drawer.png": "eeb1e44c0b54f7663477d269de20e78eb5618c563f3e8732ee0c2a76f8d38d04",
-    "en-settings.png": "6657688c20367f1006a3df4dbedacba978ed878b67bab5f083ce0cc3c31be578"
+    "en-chat.png": "359caa5d65504d14a54633e80d14ea47ce75942fd5f8244a7e9e2a446ae8eb0d",
+    "en-drawer.png": "c4549013dd75b7f3de54ad0fab78ac8d52c92a67d2a1dbb596b39adb7957c7eb",
+    "en-images.png": "d4b5e767f8aac159b8ef655efb3170e9d08252ba75e8969abcd0b214462a785d",
+    "en-running.png": "3c7e557ebcc9a978ea1e87f40e8d7eb2234066a5dde8e0ac05607a004b1bf723",
+    "en-settings.png": "3e887d01fb40cd9b32b84e3676668157a04d84159ad78c1309ebbd78c39a5ace",
+    "ja-chat.png": "60aa8e822f72b20842959e6143d2b9292d34b4d9b2c81c7d48e194b3cfa25699",
+    "ja-drawer.png": "07c2da134b7176db0afd8fbe39ed97b42d02bfaf6f584cb9ed193c9c05e81a83",
+    "ja-images.png": "f1ae5f7e2f043ebe32d9c957da8a7f9ba89f21519dcedb48d7535ce0f1dd1cf9",
+    "ja-running.png": "78153e0868af540ccef61d8e9f309240b3b191230325704fc3670a901133c8d4",
+    "ja-settings.png": "19cd21c8f16d81145cc9d80a3ee30d67fb6cca074edef3a729b29fc787aa78da"
   }
 }
