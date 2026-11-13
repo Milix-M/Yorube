@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Night variant: windowBackground must match the dark surface (#131314).
+        During the keyboard resize animation the window background is briefly
+        exposed; the light default would flash white in dark mode. -->
+    <style name="Theme.HermesClient" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#FF131314</item>
+    </style>
+</resources>

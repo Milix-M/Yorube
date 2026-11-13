@@ -4,6 +4,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonObject
 
+data class RunFrame(val sequence: Long?, val event: RunEvent)
+
 /** One parsed SSE frame from GET /v1/runs/{id}/events. */
 sealed interface RunEvent {
     data class Delta(val text: String) : RunEvent
@@ -17,6 +19,8 @@ sealed interface RunEvent {
     ) : RunEvent
     data class SubagentStarted(val summary: String) : RunEvent
     data class SubagentCompleted(val status: String, val summary: String) : RunEvent
+    data class Reasoning(val text: String) : RunEvent
+    data class ControlResolved(val requestId: String?) : RunEvent
     data class ApprovalRequested(val request: ApprovalRequest) : RunEvent
     data class ClarifyRequested(
         val requestId: String,
@@ -43,6 +47,12 @@ fun parseRunEvent(eventName: String, data: JsonObject): RunEvent {
             val text = data.str("text", "content", "delta") ?: ""
             RunEvent.Interim(text, data.bool("already_streamed", "alreadyStreamed") == true)
         }
+        // Structured-reasoning models may emit reasoning chunks on the runs
+        // stream (reasoning.delta / reasoning.available). They are progress
+        // noise, never reply text: fold, don't bubble.
+        name.startsWith("reasoning") -> {
+            RunEvent.Reasoning(data.str("text", "content", "delta") ?: "")
+        }
         name == "tool.started" -> {
             RunEvent.ToolStarted(
                 tool = data.str("tool", "name") ?: "",
@@ -67,14 +77,16 @@ fun parseRunEvent(eventName: String, data: JsonObject): RunEvent {
                 summary = data.str("summary", "output_tail", "preview") ?: "",
             )
         }
-        "clarify" in name -> {
+        name == "approval.responded" || name == "clarify.responded" || name == "clarify.answered" ->
+            RunEvent.ControlResolved(data.str("request_id", "prompt_id", "id"))
+        name == "clarify.request" || name == "clarify.requested" -> {
             RunEvent.ClarifyRequested(
                 requestId = data.str("request_id", "prompt_id", "id") ?: "",
                 executionGeneration = data.long("execution_generation", "generation") ?: 0L,
                 prompt = data.str("prompt", "question", "text") ?: "",
             )
         }
-        "approval" in name -> {
+        name == "approval.request" || name == "approval.requested" -> {
             val requestId = data.str("request_id", "prompt_id", "id") ?: ""
             val generation = data.long("execution_generation", "generation") ?: 0L
             val choices = (data["choices"] as? kotlinx.serialization.json.JsonArray)
@@ -111,4 +123,26 @@ fun parseSseData(raw: String): JsonObject? {
     } catch (_: Exception) {
         null
     }
+}
+
+/**
+ * Tool previews often arrive as raw JSON blobs such as
+ * {"output":"...","exit_code":0,"error":null}. Show the human part
+ * (output, else error) instead of the raw blob, truncated to stay readable.
+ */
+fun humanPreview(raw: String, maxLen: Int = 200): String {
+    val text = raw.trim()
+    if (text.startsWith("{") && text.endsWith("}")) {
+        val parsed = try {
+            HermesJson.parseToJsonElement(text).jsonObject
+        } catch (_: Exception) {
+            null
+        }
+        if (parsed != null) {
+            val chosen = parsed.str("output")?.ifBlank { null }
+                ?: parsed.str("error")?.ifBlank { null }
+            if (chosen != null) return chosen.take(maxLen)
+        }
+    }
+    return if (text.length <= maxLen) text else text.take(maxLen) + "…"
 }

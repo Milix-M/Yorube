@@ -7,6 +7,14 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.withContext
+import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
+import java.util.concurrent.TimeUnit
+
+/** Missing requests must fail a test instead of blocking the whole CI job. */
+fun MockWebServer.takeRequestOrFail(): RecordedRequest =
+    takeRequest(5, TimeUnit.SECONDS)
+        ?: throw AssertionError("Expected an HTTP request within 5 seconds")
 
 /**
  * Polls [cond] until true. Each round pumps the test scheduler (so Main-bound

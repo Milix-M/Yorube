@@ -11,6 +11,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
@@ -20,13 +21,24 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          # PR-scoped caches can be reused by subsequent commits in this PR.
+          cache-read-only: false
       - name: Install Android packages
         run: |
           export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
           yes | sdkmanager --licenses > /dev/null
           sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-      - name: Run tests with 100% line coverage gate
-        run: ./gradlew :app:jacocoTestReport :app:createDebugUnitTestCoverageReport :app:jacocoCoverageVerification --no-daemon --stacktrace
+      - name: Test license collection failure cases
+        run: python3 -m unittest discover -s scripts/tests
+      - name: Verify generated legal documents
+        run: python3 scripts/generate_legal.py --check
+      - name: Test, verify 100% line coverage, and build APK
+        run: ./gradlew :app:jacocoTestReport :app:jacocoCoverageVerification :app:assembleDebug --build-cache --no-daemon --stacktrace
+      - name: Summarize test outcomes and slow tests
+        if: always()
+        run: python3 scripts/test_summary.py app/build/test-results/testDebugUnitTest >> "$GITHUB_STEP_SUMMARY"
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -36,11 +48,10 @@ jobs:
             app/build/reports/tests/testDebugUnitTest
             app/build/test-results/testDebugUnitTest
             app/build/reports/jacoco
-            app/build/reports/coverage
             app/build/outputs/unit_test_code_coverage
-      - name: Build debug APK
-        run: ./gradlew :app:assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
         with:
-          name: app-debug
+          name: app-debug-development-only
           path: app/build/outputs/apk/debug/app-debug.apk
+      - name: Validate release build
+        run: ./gradlew :app:assembleRelease :app:lintDebug --no-daemon

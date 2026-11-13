@@ -14,6 +14,39 @@ class RunEventsTest {
         buildJsonObject { pairs.forEach { (k, v) -> put(k, v) } }
 
     @Test
+    fun humanPreview_extractsOutputFromJsonBlob() {
+        assertEquals(
+            "done ok",
+            humanPreview("""{"output":"done ok","exit_code":0,"error":null}"""),
+        )
+    }
+
+    @Test
+    fun humanPreview_fallsBackToError() {
+        assertEquals("boom", humanPreview("""{"output":"","error":"boom"}"""))
+    }
+
+    @Test
+    fun humanPreview_keepsPlainText() {
+        assertEquals("ls -la", humanPreview("ls -la"))
+        assertEquals("{oops", humanPreview("{oops"))
+        assertEquals("not json}", humanPreview("not json}"))
+    }
+
+    @Test
+    fun humanPreview_invalidJsonFallsBackToRaw() {
+        assertEquals("{not json}", humanPreview("{not json}"))
+    }
+
+    @Test
+    fun humanPreview_truncatesLongText() {
+        val long = "x".repeat(500)
+        val shown = humanPreview(long)
+        assertTrue(shown.length <= 201)
+        assertTrue(shown.endsWith("…"))
+    }
+
+    @Test
     fun delta_usesFirstNonBlankKey() {
         val e = parseRunEvent("message.delta", obj("delta" to "hel", "text" to "lo"))
         assertEquals(RunEvent.Delta("hel"), e)
@@ -99,6 +132,14 @@ class RunEventsTest {
     }
 
     @Test
+    fun reasoning_mapsText() {
+        val e = parseRunEvent("reasoning.delta", obj("text" to "hmm"))
+        assertEquals(RunEvent.Reasoning("hmm"), e)
+        val blank = parseRunEvent("reasoning.available", JsonObject(emptyMap()))
+        assertEquals(RunEvent.Reasoning(""), blank)
+    }
+
+    @Test
     fun unknownName_isKept() {
         val e = parseRunEvent("something.new", JsonObject(emptyMap()))
         assertEquals(RunEvent.Unknown("something.new"), e)
@@ -135,5 +176,69 @@ class RunEventsTest {
         val n = buildJsonObject { put("n", 42) }
         assertEquals(42L, n.long("missing", "n"))
         assertEquals(42L, n.long("n"))
+    }
+
+    @Test
+    fun bool_readsFirstPresent() {
+        val t = buildJsonObject { put("b", true) }
+        assertEquals(true, t.bool("missing", "b"))
+        assertEquals(null, obj("a" to "x").bool("missing"))
+        assertEquals(null, obj("a" to "x").bool())
+        val s = obj("a" to "x")
+        assertEquals(null, s.bool("a"))
+    }
+
+    @Test
+    fun interim_withoutAlreadyStreamed_defaultsFalse() {
+        val e = parseRunEvent(
+            "message.interim",
+            buildJsonObject { put("text", "working") }
+        ) as RunEvent.Interim
+        assertEquals("working", e.text)
+        assertEquals(false, e.alreadyStreamed)
+    }
+
+    @Test
+    fun humanPreview_bothBlankFallsThrough() {
+        assertEquals(
+            """{"output":"","error":""}""",
+            humanPreview("""{"output":"","error":""}""")
+        )
+        assertEquals(
+            """{"output":"  ","error":"  "}""".take(200),
+            humanPreview("""{"output":"  ","error":"  "}""")
+        )
+    }
+
+    @Test
+    fun humanPreview_longJsonOutput_truncates() {
+        val longOut = "y".repeat(500)
+        val shown = humanPreview("""{"output":"$longOut"}""")
+        assertTrue(shown.length <= 200)
+        assertTrue(shown.length == 200)
+    }
+
+    @Test
+    fun parseRunEvent_coversAllBranches() {
+        // Delta empty.
+        assertEquals(RunEvent.Delta(""), parseRunEvent("message.delta", JsonObject(emptyMap())))
+        // Tool started empty.
+        assertEquals(RunEvent.ToolStarted("", ""), parseRunEvent("tool.started", JsonObject(emptyMap())))
+        // Subagent start/complete empty.
+        assertEquals(RunEvent.SubagentStarted(""), parseRunEvent("subagent.start", JsonObject(emptyMap())))
+        assertEquals(
+            RunEvent.SubagentCompleted("", ""),
+            parseRunEvent("subagent.complete", JsonObject(emptyMap()))
+        )
+        // Clarify with missing prompt -> empty.
+        val c = parseRunEvent("clarify.request", JsonObject(emptyMap())) as RunEvent.ClarifyRequested
+        assertEquals("", c.prompt)
+        // Approval with missing fields.
+        val a = parseRunEvent("approval.request", JsonObject(emptyMap())) as RunEvent.ApprovalRequested
+        assertEquals("", a.request.requestId)
+        // Terminal missing fields.
+        val t = parseRunEvent("run.failed", JsonObject(emptyMap())) as RunEvent.Terminal
+        assertEquals("failed", t.status)
+        assertEquals(null, t.output)
     }
 }

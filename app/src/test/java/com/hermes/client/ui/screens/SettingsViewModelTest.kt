@@ -8,12 +8,14 @@ import com.hermes.client.data.store.ClientSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.withContext
 import com.hermes.client.testutil.awaitCondition
 import com.hermes.client.testutil.runVmTest
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -53,6 +55,12 @@ class SettingsViewModelTest {
         val container = AppContainer(app)
         val vm = SettingsViewModel(container)
 
+        // Settle init()'s async load first: it overwrites every field, so
+        // editing before it lands races the save below.
+        testScheduler.advanceUntilIdle()
+        withContext(Dispatchers.IO) { Thread.sleep(300) }
+        testScheduler.advanceUntilIdle()
+
         vm.baseUrl = "https://example.com:8642"
         vm.apiKey = "k"
         vm.model = "m"
@@ -64,8 +72,16 @@ class SettingsViewModelTest {
         vm.firebaseSenderId = "sender"
         vm.cfClientId = "cid"
         vm.cfClientSecret = "csec"
+        vm.language = "ja"
+        vm.showForeignSessions = false
+        vm.enterToSend = true
+        vm.notificationsEnabled = false
         vm.save()
 
+        // Wait for the ViewModel-side completion first: distinguishes a lost
+        // DataStore write (assertion below shows the actual content) from a
+        // hung save (timeout here).
+        awaitCondition { vm.saved }
         val saved = awaitStored(container, "https://example.com:8642")
             assertEquals("https://example.com:8642", saved.baseUrl)
             assertEquals("k", saved.apiKey)
@@ -78,6 +94,10 @@ class SettingsViewModelTest {
             assertEquals("sender", saved.firebaseSenderId)
             assertEquals("cid", saved.cfClientId)
             assertEquals("csec", saved.cfClientSecret)
+            assertEquals("ja", saved.language)
+            assertEquals(false, saved.showForeignSessions)
+            assertEquals(true, saved.enterToSend)
+            assertEquals(false, saved.notificationsEnabled)
     }
 
     private suspend fun TestScope.awaitStored(c: AppContainer, expectedBaseUrl: String): ClientSettings {
@@ -150,7 +170,7 @@ class SettingsViewModelTest {
         vm.test()
         val result = awaitTested(vm)
         assertTrue(result.contains("health=true"))
-        assertTrue(result.contains("fcm_ready=false"))
+        assertFalse(result.contains("fcm_ready"))
     }
 
     @Test
@@ -171,12 +191,41 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun test_reportsOkFlag() = runVmTest {
+        val url = server.url("").toString().removeSuffix("/")
+        val c = container()
+        c.settingsStore.save(ClientSettings(baseUrl = url, apiKey = "k"))
+        awaitStored(c, url)
+        server.enqueue(MockResponse().setBody("""{"status":"ok"}"""))
+        server.enqueue(
+            MockResponse().setBody("""{"features":{"run_stop":true},"endpoints":{}}""")
+        )
+        val vm = SettingsViewModel(c)
+        vm.baseUrl = url
+        vm.apiKey = "k"
+        assertEquals(null, vm.testOk)
+        vm.test()
+        awaitCondition { !vm.testing && vm.testResult.isNotEmpty() }
+        assertEquals(true, vm.testOk)
+    }
+
+    @Test
+    fun test_notConfigured_reportsNotOk() = runVmTest {
+        val vm = SettingsViewModel(container())
+        assertEquals(null, vm.testOk)
+        vm.test()
+        awaitCondition { !vm.testing && vm.testResult.isNotEmpty() }
+        assertEquals(false, vm.testOk)
+    }
+
+    @Test
     fun test_apiThrows() = runVmTest {
         val c = container()
         c.settingsStore.save(ClientSettings(baseUrl = "notaurl", apiKey = "k"))
         awaitStored(c, "notaurl")
         val vm = SettingsViewModel(c)
-        vm.baseUrl = "https://example.com"
+        awaitCondition { vm.baseUrl == "notaurl" }
+        vm.baseUrl = "notaurl"
         vm.apiKey = "k"
         vm.test()
         val result = awaitTested(vm)

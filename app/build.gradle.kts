@@ -1,3 +1,4 @@
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.file.FileCollection
 import org.gradle.api.tasks.testing.Test
 import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
@@ -6,10 +7,10 @@ import org.gradle.testing.jacoco.tasks.JacocoReport
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
     jacoco
+    id("com.mikepenz.aboutlibraries.plugin") version "15.3.0"
 }
 
 android {
@@ -20,20 +21,19 @@ android {
         applicationId = "com.hermes.client"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.2"
+        versionCode = 8
+        versionName = "0.9.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
-        getByName("debug") {
-            // Fixed key for all CI builds so updates install over older ones.
-            // Debug-only key: never use for store releases.
-            storeFile = rootProject.file("keystore/debug.p12")
-            storePassword = "android"
-            storeType = "PKCS12"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
+        providers.environmentVariable("YORUBE_SIGNING_STORE_FILE").orNull?.let { signingFile ->
+            create("distribution") {
+                storeFile = file(signingFile)
+                storePassword = providers.environmentVariable("YORUBE_SIGNING_STORE_PASSWORD").get()
+                keyAlias = providers.environmentVariable("YORUBE_SIGNING_KEY_ALIAS").get()
+                keyPassword = providers.environmentVariable("YORUBE_SIGNING_KEY_PASSWORD").get()
+            }
         }
     }
 
@@ -42,6 +42,8 @@ android {
             enableUnitTestCoverage = true
         }
         release {
+            isDebuggable = false
+            signingConfig = signingConfigs.findByName("distribution")
             isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -49,17 +51,18 @@ android {
             )
         }
         debug {
-            // Debug keeps cleartext guards in code: http is allowed only for
-            // 10.0.2.2 / localhost (emulator loopback). See HermesApi.
-            manifestPlaceholders["cleartextPermitted"] = "true"
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-dev"
         }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
     }
     buildFeatures {
         compose = true
@@ -76,15 +79,15 @@ dependencies {
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
+    implementation(libs.compose.material.icons.core)
+    implementation(libs.compose.material.icons.extended)
     implementation(libs.navigation.compose)
     implementation(libs.coroutines.android)
     implementation(libs.okhttp)
     implementation(libs.serialization.json)
     implementation(libs.datastore.preferences)
-    // FCM only. No google-services plugin: FirebaseApp is initialized
-    // manually from Settings (FirebaseConfig), so the build works without
-    // google-services.json. See data/fcm/FirebaseInit.kt.
-    implementation(libs.firebase.messaging)
+    implementation(libs.markdown.renderer)
+    implementation(libs.markdown.renderer.m3)
     testImplementation(libs.junit)
     testImplementation(libs.mockwebserver)
     testImplementation(libs.coroutines.test)
@@ -92,6 +95,9 @@ dependencies {
     testImplementation(libs.compose.ui.test)
     testImplementation(libs.compose.ui.test.junit4)
     testImplementation(libs.robolectric)
+    // Pin the native test libraries with Linux ARM64 support.
+    testImplementation(libs.robolectric.native)
+    testImplementation(libs.conscrypt)
     testImplementation(libs.test.core)
 }
 
@@ -108,6 +114,18 @@ jacoco {
 }
 
 tasks.withType<Test> {
+    // Robolectric 4.17 requires access to these JDK internals on Java 17+.
+    jvmArgs(
+        "--add-opens=java.base/java.lang=ALL-UNNAMED",
+        "--add-opens=java.base/java.util=ALL-UNNAMED",
+        "--add-opens=java.base/java.io=ALL-UNNAMED",
+        "--add-opens=java.base/java.net=ALL-UNNAMED",
+        "--add-opens=java.base/java.security=ALL-UNNAMED",
+        "--add-opens=java.base/java.text=ALL-UNNAMED",
+        "--add-opens=java.base/jdk.internal.access=ALL-UNNAMED",
+        "--add-opens=java.desktop/java.awt.font=ALL-UNNAMED",
+        "--add-opens=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED",
+    )
     configure<JacocoTaskExtension> {
         isIncludeNoLocationClasses = true
         excludes = listOf("jdk.internal.*")
@@ -131,11 +149,11 @@ val jacocoExcludes = listOf(
 fun jacocoClassDirs(): FileCollection {
     val buildDir = layout.buildDirectory.get().asFile
     return files(
-        fileTree("$buildDir/intermediates/javac/debug/classes") {
+        fileTree("$buildDir/intermediates/javac/debug/compileDebugJavaWithJavac/classes") {
             include("com/hermes/client/**/*")
             exclude(jacocoExcludes)
         },
-        fileTree("$buildDir/tmp/kotlin-classes/debug") {
+        fileTree("$buildDir/intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes") {
             include("com/hermes/client/**/*")
             exclude(jacocoExcludes)
         },
@@ -156,6 +174,7 @@ tasks.register<JacocoReport>("jacocoTestReport") {
         xml.required.set(true)
         html.required.set(true)
     }
+    doFirst { check(jacocoClassDirs().files.isNotEmpty()) { "No application classes found for coverage" } }
     classDirectories.setFrom(jacocoClassDirs())
     sourceDirectories.setFrom(files("src/main/java"))
     executionData.setFrom(jacocoExec())
@@ -172,7 +191,63 @@ tasks.register<JacocoCoverageVerification>("jacocoCoverageVerification") {
             }
         }
     }
+    doFirst { check(jacocoClassDirs().files.isNotEmpty()) { "No application classes found for coverage" } }
     classDirectories.setFrom(jacocoClassDirs())
     sourceDirectories.setFrom(files("src/main/java"))
     executionData.setFrom(jacocoExec())
 }
+
+fun releaseDependencyCoordinates(): List<String> =
+    configurations.getByName("releaseRuntimeClasspath").resolvedConfiguration.resolvedArtifacts
+        .map { it.moduleVersion.id.toString() }.distinct().sorted()
+
+tasks.register("exportReleaseDependencies") {
+    doLast {
+        val report = layout.buildDirectory.file("reports/legal/release-dependencies.txt").get().asFile
+        report.parentFile.mkdirs()
+        report.writeText(releaseDependencyCoordinates().joinToString("\n", postfix = "\n"))
+    }
+}
+
+val exportReleaseArtifacts = tasks.register("exportReleaseArtifacts") {
+    doLast {
+        val artifacts = configurations.getByName("releaseRuntimeClasspath").incoming.artifacts.artifacts.map {
+            val component = it.id.componentIdentifier
+            check(component is ModuleComponentIdentifier) {
+                "Cannot collect licenses for local/project artifact: " + component + ". Add a reviewed collection rule first."
+            }
+            mapOf("coordinate" to "${component.group}:${component.module}:${component.version}", "file" to it.file.absolutePath)
+        }.distinctBy { it["coordinate"] to it["file"] }.sortedBy { it["coordinate"] }
+        val output = layout.buildDirectory.file("reports/legal/release-artifacts.json").get().asFile
+        output.parentFile.mkdirs()
+        output.writeText(groovy.json.JsonOutput.toJson(artifacts))
+    }
+}
+
+val collectThirdPartyLicenses = tasks.register<Exec>("collectThirdPartyLicenses") {
+    dependsOn("exportLibraryDefinitions", exportReleaseArtifacts)
+    workingDir(rootProject.projectDir)
+    commandLine("python3", "scripts/collect_licenses.py")
+}
+tasks.register<Exec>("generateThirdPartyNotices") {
+    group = "documentation"
+    description = "Automatically collect licenses and generate repository/APK notices"
+    dependsOn(collectThirdPartyLicenses)
+    workingDir(rootProject.projectDir)
+    commandLine("python3", "scripts/generate_legal.py")
+}
+val verifyCollectedLicenses = tasks.register<Exec>("verifyCollectedLicenses") {
+    dependsOn("exportLibraryDefinitions", exportReleaseArtifacts)
+    workingDir(rootProject.projectDir)
+    commandLine("python3", "scripts/collect_licenses.py", "--check")
+}
+val verifyThirdPartyNotices = tasks.register<Exec>("verifyThirdPartyNotices") {
+    group = "verification"
+    description = "Reject missing licenses and stale repository/APK notices"
+    dependsOn(verifyCollectedLicenses)
+    workingDir(rootProject.projectDir)
+    commandLine("python3", "scripts/generate_legal.py", "--check")
+}
+tasks.named("preBuild") { dependsOn(verifyThirdPartyNotices) }
+
+apply(from = "licenses.gradle")

@@ -8,8 +8,8 @@ import androidx.lifecycle.viewModelScope
 import com.hermes.client.AppContainer
 import com.hermes.client.R
 import com.hermes.client.data.api.featureEnabled
-import com.hermes.client.data.fcm.FirebaseInit
 import com.hermes.client.data.store.ClientSettings
+import com.hermes.client.data.store.LANGUAGE_SYSTEM
 import com.hermes.client.data.store.SettingsStore
 import kotlinx.coroutines.launch
 
@@ -21,7 +21,7 @@ class SettingsViewModel(
 
     var baseUrl by mutableStateOf("")
     var apiKey by mutableStateOf("")
-    var model by mutableStateOf("hermes-agent")
+    var model by mutableStateOf("")
     var provider by mutableStateOf("")
     var relayUrl by mutableStateOf("")
     var firebaseProjectId by mutableStateOf("")
@@ -30,9 +30,15 @@ class SettingsViewModel(
     var firebaseSenderId by mutableStateOf("")
     var cfClientId by mutableStateOf("")
     var cfClientSecret by mutableStateOf("")
+    var language by mutableStateOf(LANGUAGE_SYSTEM)
+    var showForeignSessions by mutableStateOf(true)
+    var enterToSend by mutableStateOf(false)
+    var notificationsEnabled by mutableStateOf(true)
     var fcmToken by mutableStateOf("")
         private set
     var testResult by mutableStateOf("")
+        private set
+    var testOk by mutableStateOf<Boolean?>(null)
         private set
     var testing by mutableStateOf(false)
         private set
@@ -53,27 +59,47 @@ class SettingsViewModel(
             cfClientId = s.cfClientId
             cfClientSecret = s.cfClientSecret
             fcmToken = s.fcmToken
+            language = s.language
+            showForeignSessions = s.showForeignSessions
+            enterToSend = s.enterToSend
+            notificationsEnabled = s.notificationsEnabled
         }
     }
 
     fun save() {
         viewModelScope.launch {
-            store.save(
-                ClientSettings(
-                    baseUrl = baseUrl,
-                    apiKey = apiKey,
-                    model = model,
-                    provider = provider,
-                    relayUrl = relayUrl,
-                    fcmToken = fcmToken,
-                    firebaseProjectId = firebaseProjectId,
-                    firebaseAppId = firebaseAppId,
-                    firebaseApiKey = firebaseApiKey,
-                    firebaseSenderId = firebaseSenderId,
-                    cfClientId = cfClientId,
-                    cfClientSecret = cfClientSecret,
-                )
+            // Preserve the session marks: the screen never edits them.
+            val stored = store.current()
+            val keepForeign = stored.foreignSessionIds
+            val keepAppOwned = stored.appOwnedSessionIds
+            val newSettings = stored.copy(
+                baseUrl = baseUrl,
+                apiKey = apiKey,
+                model = model,
+                provider = provider,
+                relayUrl = relayUrl,
+                fcmToken = fcmToken,
+                firebaseProjectId = firebaseProjectId,
+                firebaseAppId = firebaseAppId,
+                firebaseApiKey = firebaseApiKey,
+                firebaseSenderId = firebaseSenderId,
+                cfClientId = cfClientId,
+                cfClientSecret = cfClientSecret,
+                language = language,
+                showForeignSessions = showForeignSessions,
+                enterToSend = enterToSend,
+                notificationsEnabled = notificationsEnabled,
+                appOwnedSessionIds = keepAppOwned,
+                foreignSessionIds = keepForeign,
             )
+            if (container.runStreams.working.value &&
+                (stored.baseUrl != newSettings.baseUrl.trim().removeSuffix("/") || stored.apiKey != newSettings.apiKey.trim() ||
+                 stored.cfClientId != newSettings.cfClientId.trim() || stored.cfClientSecret != newSettings.cfClientSecret.trim())) {
+                testResult = container.appContext.getString(R.string.settings_connection_busy)
+                testOk = false
+                return@launch
+            }
+            store.save(newSettings, preserveSessionState = true)
             saved = true
         }
     }
@@ -81,6 +107,7 @@ class SettingsViewModel(
     fun test() {
         viewModelScope.launch {
             testing = true
+            testOk = null
             val ctx = container.appContext
             testResult = ctx.getString(R.string.err_checking)
             try {
@@ -89,9 +116,10 @@ class SettingsViewModel(
                 )
                 if (!before.isConfigured) {
                     testResult = ctx.getString(R.string.err_health_key)
+                    testOk = false
                     return@launch
                 }
-                val api = container.api()
+                val api = container.api(draft())
                 val healthy = api.checkHealth()
                 val caps = try {
                     api.getCapabilities()
@@ -99,18 +127,16 @@ class SettingsViewModel(
                     testResult = ctx.getString(
                         R.string.err_health_caps, healthy.toString(), (e.message ?: "").take(120)
                     )
+                    testOk = false
                     return@launch
                 }
                 val flags = listOf("run_status", "run_events_sse", "run_stop", "run_steer", "run_approval_response")
                     .joinToString(", ") { "$it=${caps.featureEnabled(it)}" }
-                val fcm = if (draft().firebaseConfigured) {
-                    FirebaseInit.ensureInitialized(container.appContext, draft())
-                } else {
-                    false
-                }
-                testResult = "health=$healthy\n$flags\nfcm_ready=$fcm"
+                testResult = "health=$healthy\n$flags"
+                testOk = healthy
             } catch (e: Exception) {
                 testResult = (e.message ?: e.javaClass.simpleName).take(300)
+                testOk = false
             } finally {
                 testing = false
             }
@@ -123,5 +149,7 @@ class SettingsViewModel(
         firebaseProjectId = firebaseProjectId, firebaseAppId = firebaseAppId,
         firebaseApiKey = firebaseApiKey, firebaseSenderId = firebaseSenderId,
         cfClientId = cfClientId, cfClientSecret = cfClientSecret,
+        language = language, showForeignSessions = showForeignSessions,
+        enterToSend = enterToSend, notificationsEnabled = notificationsEnabled,
     )
 }

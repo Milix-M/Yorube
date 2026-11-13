@@ -3,33 +3,110 @@ name: release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      YORUBE_APKSIGNER: /usr/local/lib/android/sdk/build-tools/36.0.0/apksigner
+      YORUBE_AAPT2: /usr/local/lib/android/sdk/build-tools/36.0.0/aapt2
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify release version and main ancestry
+        run: python3 scripts/verify_release_ref.py
+      - name: Verify license and generated legal documents
+        run: |
+          test -s LICENSE || { echo "Missing Yorube LICENSE; restore it before publishing."; exit 1; }
+          python3 scripts/generate_legal.py --check
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
       - name: Install Android packages
         run: |
           export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
           yes | sdkmanager --licenses > /dev/null
-          sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;36.0.0"
+      - name: Test license and release failure cases
+        run: python3 -m unittest discover -s scripts/tests
       - name: Run tests with 100% line coverage gate
         run: ./gradlew :app:jacocoTestReport :app:jacocoCoverageVerification --no-daemon
-      - name: Build debug APK
-        run: ./gradlew :app:assembleDebug --no-daemon
-      - name: Publish APK to Release
+      - name: Load private signing key
+        env:
+          SIGNING_STORE_BASE64: ${{ secrets.YORUBE_SIGNING_STORE_BASE64 }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.YORUBE_SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.YORUBE_SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.YORUBE_SIGNING_KEY_PASSWORD }}
+        run: |
+          test -n "$SIGNING_STORE_BASE64" && test -n "$SIGNING_STORE_PASSWORD"
+          test -n "$SIGNING_KEY_ALIAS" && test -n "$SIGNING_KEY_PASSWORD"
+          umask 077
+          printf '%s' "$SIGNING_STORE_BASE64" | base64 --decode > "$RUNNER_TEMP/yorube-signing.p12"
+          keytool -exportcert -keystore "$RUNNER_TEMP/yorube-signing.p12" \
+            -alias "$SIGNING_KEY_ALIAS" -storepass:env SIGNING_STORE_PASSWORD \
+            > "$RUNNER_TEMP/yorube-certificate.der"
+          actual_certificate=$(sha256sum "$RUNNER_TEMP/yorube-certificate.der" | cut -d ' ' -f 1)
+          expected_certificate=$(tr -d '\r\n ' < legal/release-signing-certificate.sha256)
+          test "$actual_certificate" = "$expected_certificate" || {
+            echo "Configured signing certificate differs from the public certificate: $actual_certificate"
+            exit 1
+          }
+          echo "Signing key matches public certificate: $actual_certificate"
+      - name: Build signed release
+        env:
+          YORUBE_SIGNING_STORE_FILE: ${{ runner.temp }}/yorube-signing.p12
+          YORUBE_SIGNING_STORE_PASSWORD: ${{ secrets.YORUBE_SIGNING_STORE_PASSWORD }}
+          YORUBE_SIGNING_KEY_ALIAS: ${{ secrets.YORUBE_SIGNING_KEY_ALIAS }}
+          YORUBE_SIGNING_KEY_PASSWORD: ${{ secrets.YORUBE_SIGNING_KEY_PASSWORD }}
+        run: ./gradlew :app:assembleRelease :app:lintRelease --no-daemon
+      - name: Verify signature, APK contents, notices, source and checksums
+        run: |
+          bash scripts/package-release.sh
+          cd app/build/outputs/distribution
+          sha256sum --check SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yorube-release
+          path: app/build/outputs/distribution/*
+          if-no-files-found: error
+          retention-days: 30
+      - name: Remove signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/yorube-signing.p12" "$RUNNER_TEMP/yorube-certificate.der"
+
+  publish:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: yorube-release
+          path: distribution
+      - name: Verify downloaded checksums
+        working-directory: distribution
+        run: sha256sum --check SHA256SUMS
+      - name: Publish verified APK to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: app/build/outputs/apk/debug/app-debug.apk
+          files: distribution/*
+          fail_on_unmatched_files: true
           generate_release_notes: true
+          prerelease: ${{ startsWith(github.ref_name, 'v0.') || contains(github.ref_name, '-') }}

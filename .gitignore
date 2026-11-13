@@ -1,5 +1,6 @@
 local.properties
 .gradle/
+.kotlin/
 build/
 app/build/
 captures/
@@ -7,6 +8,8 @@ captures/
 google-services.json
 *.jks
 *.keystore
+*.p12
+*.pfx
 __pycache__/
 .venv/
 /outputs/

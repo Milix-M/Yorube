@@ -1,0 +1,13 @@
+<resources>
+    <string name="message_too_large">添付を含めた送信データが10 MBを超えています。画像を減らすか、本文を短くしてください。</string>
+    <string name="approval_once">今回だけ許可</string>
+    <string name="approval_session">この会話で許可</string>
+    <string name="approval_always">常に許可</string>
+    <string name="approval_deny">拒否</string>
+    <string name="image_limit">添付できる画像は3枚までです。</string>
+    <string name="image_too_large">5 MB以下の画像を選んでください。</string>
+    <string name="image_unreadable">画像を読み込めませんでした。JPEG・PNG・WebP・GIFの画像を選んでください。</string>
+    <string name="image_while_running">画像は現在の実行が終わってから送信できます。</string>
+    <string name="remove_attachment">画像を削除</string>
+    <string name="send_outcome_unknown">前回のメッセージは受理された可能性があります。再送する前にサーバーの履歴を確認してください。</string>
+</resources>

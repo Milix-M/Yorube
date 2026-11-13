@@ -1,5 +1,6 @@
 package com.hermes.client
 
+import com.hermes.client.testutil.takeRequestOrFail
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import com.hermes.client.data.store.ClientSettings
@@ -42,6 +43,22 @@ class AppContainerTest {
     }
 
     @Test
+    fun successiveApiInstancesReuseConnectionsWithoutRetainingOldCredentials() = runVmTest {
+        val c = AppContainer(ApplicationProvider.getApplicationContext<Application>())
+        val settings = ClientSettings(baseUrl = server.url("/").toString(), apiKey = "first",
+            cfClientId = "id", cfClientSecret = "secret")
+        repeat(2) { server.enqueue(MockResponse().setBody("{}")) }
+        c.api(settings).getCapabilities()
+        c.api(settings.copy(apiKey = "second", cfClientId = "", cfClientSecret = "")).getCapabilities()
+        val first = server.takeRequest()
+        val second = server.takeRequest()
+        assertEquals(0, first.sequenceNumber)
+        assertEquals(1, second.sequenceNumber)
+        assertEquals("Bearer second", second.getHeader("Authorization"))
+        assertNull(second.getHeader("CF-Access-Client-Secret"))
+    }
+
+    @Test
     fun api_sendsCloudflareHeadersWhenConfigured() = runVmTest {        val url = server.url("").toString().removeSuffix("/")
         val app = ApplicationProvider.getApplicationContext<Application>()
         val c = AppContainer(app)
@@ -56,7 +73,7 @@ class AppContainerTest {
         awaitStored(c, url)
         server.enqueue(MockResponse().setBody("""{"status":"ok"}"""))
         c.api().checkHealth()
-        val req = server.takeRequest()
+        val req = server.takeRequestOrFail()
         assertEquals("id", req.getHeader("CF-Access-Client-Id"))
         assertEquals("s", req.getHeader("CF-Access-Client-Secret"))
         assertEquals("Bearer k", req.getHeader("Authorization"))
@@ -71,7 +88,7 @@ class AppContainerTest {
         awaitStored(c, url)
         server.enqueue(MockResponse().setBody("""{"status":"ok"}"""))
         c.api().checkHealth()
-        val req = server.takeRequest()
+        val req = server.takeRequestOrFail()
         assertNull(req.getHeader("CF-Access-Client-Id"))
         assertNull(req.getHeader("CF-Access-Client-Secret"))
     }
