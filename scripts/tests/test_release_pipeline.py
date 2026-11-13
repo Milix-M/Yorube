@@ -101,6 +101,11 @@ class ReleaseApkTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'does not match'):
                 package_release.verify_signature(self.apk, 'a' * 64, 'apksigner')
 
+    def test_build_tools_37_scheme_specific_signer_output(self):
+        output = 'Number of signers: 1\nV2 Signer: certificate DN: CN=Yorube\nV2 Signer: certificate SHA-256 digest: ' + 'a' * 64 + '\n'
+        with patch('package_release.subprocess.run', return_value=subprocess.CompletedProcess([], 0, output, '')):
+            package_release.verify_signature(self.apk, 'a' * 64, 'apksigner')
+
     def test_wrong_version_and_debuggable_apks_are_rejected(self):
         cases = [(self.badging.replace("versionCode='8'", "versionCode='7'"), 'version'),
                  (self.badging + 'application-debuggable\n', 'debuggable')]

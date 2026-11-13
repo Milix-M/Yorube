@@ -19,6 +19,8 @@ jobs:
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      YORUBE_APKSIGNER: /usr/local/lib/android/sdk/build-tools/36.0.0/apksigner
+      YORUBE_AAPT2: /usr/local/lib/android/sdk/build-tools/36.0.0/aapt2
     steps:
       - uses: actions/checkout@v4
         with:
@@ -38,7 +40,7 @@ jobs:
         run: |
           export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
           yes | sdkmanager --licenses > /dev/null
-          sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;36.0.0"
       - name: Test license and release failure cases
         run: python3 -m unittest discover -s scripts/tests
       - name: Run tests with 100% line coverage gate

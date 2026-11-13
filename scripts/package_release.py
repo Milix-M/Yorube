@@ -37,8 +37,8 @@ def verify_signature(apk, expected, apksigner):
                             capture_output=True, text=True)
     if result.returncode:
         raise ValueError('APK signature verification failed')
-    # v3.1 verification can report a signer for each supported SDK range.
-    digests = re.findall(r'^Signer (?:#\d+|\(minSdkVersion=[^\n]+\)) certificate SHA-256 digest:\s*([0-9a-fA-F]+)',
+    # Build Tools 37 uses "V2 Signer:"; older tools use "Signer #1" or SDK ranges.
+    digests = re.findall(r'^(?:Signer[^\n]*|V\d+(?:\.\d+)? Signer[^\n]*) certificate SHA-256 digest:\s*([0-9a-fA-F]+)',
                          result.stdout, re.MULTILINE)
     actual = {digest.lower() for digest in digests}
     signers = re.search(r'^Number of signers:\s*(\d+)', result.stdout, re.MULTILINE)
