@@ -3,6 +3,7 @@ package com.hermes.client.data.store
 import android.content.Context
 import android.content.res.Configuration
 import android.os.Build
+import android.view.ContextThemeWrapper
 import java.util.Locale
 
 /**
@@ -29,7 +30,11 @@ object LocaleHelper {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             config.setLocales(android.os.LocaleList(locale))
         }
-        return base.createConfigurationContext(config)
+        // Keep the Activity in the ContextWrapper chain so Compose can still
+        // find its ActivityResultRegistryOwner when launching the image picker.
+        return ContextThemeWrapper(base, base.theme).apply {
+            applyOverrideConfiguration(config)
+        }
     }
 
     /** Resolves a string with the user's language, mirroring resource lookup. */

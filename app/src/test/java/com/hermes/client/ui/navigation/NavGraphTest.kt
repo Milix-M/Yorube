@@ -2,6 +2,7 @@ package com.hermes.client.ui.navigation
 
 import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.hasTextExactly
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -65,6 +66,28 @@ class NavGraphTest {
     private fun waitFor(text: String) {
         compose.waitUntil(timeoutMillis = 15_000) {
             compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
+    @Test
+    fun japaneseLanguageKeepsImageAttachmentAvailable() {
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest) =
+                MockResponse().setBody("""{"sessions":[]}""")
+        }
+        saveSettings()
+        val app = ApplicationProvider.getApplicationContext<HermesApp>()
+        kotlinx.coroutines.runBlocking {
+            val settings = app.container.settingsStore.current()
+            app.container.settingsStore.save(settings.copy(language = "ja"))
+        }
+        val originalLocale = java.util.Locale.getDefault()
+        try {
+            compose.setContent { HermesAppTheme { NavGraph(null) } }
+            waitFor("新しい会話")
+            compose.onNodeWithTag("attachButton").assertIsEnabled()
+        } finally {
+            java.util.Locale.setDefault(originalLocale)
         }
     }
 
