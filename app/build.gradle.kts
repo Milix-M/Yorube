@@ -114,6 +114,8 @@ jacoco {
 }
 
 tasks.withType<Test> {
+    // Robolectric native graphics and Compose window registries must not leak across classes.
+    forkEvery = 1
     // Robolectric 4.17 requires access to these JDK internals on Java 17+.
     jvmArgs(
         "--add-opens=java.base/java.lang=ALL-UNNAMED",

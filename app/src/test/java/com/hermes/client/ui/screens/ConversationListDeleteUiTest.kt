@@ -116,9 +116,17 @@ class ConversationListDeleteUiTest {
         compose.onNodeWithTag("deleteOption").performClick()
         compose.mainClock.advanceTimeBy(1_000)
         compose.onNodeWithText("Delete").performClick()
-        compose.waitUntil(timeoutMillis = 10_000) {
-            compose.mainClock.advanceTimeBy(32)
-            compose.onAllNodes(hasText("Hello")).fetchSemanticsNodes().isEmpty()
+        try {
+            compose.waitUntil(timeoutMillis = 10_000) {
+                compose.mainClock.advanceTimeBy(32)
+                compose.onAllNodes(hasText("Hello")).fetchSemanticsNodes().isEmpty()
+            }
+        } catch (failure: Throwable) {
+            val visibleText = compose.onAllNodes(androidx.compose.ui.test.SemanticsMatcher.keyIsDefined(
+                androidx.compose.ui.semantics.SemanticsProperties.Text)).fetchSemanticsNodes().map {
+                it.config[androidx.compose.ui.semantics.SemanticsProperties.Text].joinToString { text -> text.text }
+            }
+            throw AssertionError("DELETE received=${deleted.get()}, requests=${server.requestCount}, text=$visibleText", failure)
         }
         val paths = mutableListOf<String>()
         repeat(3) {
