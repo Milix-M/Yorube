@@ -7,9 +7,12 @@ import com.hermes.client.data.notifications.RunNotifications
 import com.hermes.client.data.stream.RunStreamEngine
 import com.hermes.client.data.store.ClientSettings
 import com.hermes.client.data.store.SettingsStore
+import com.hermes.client.data.store.ConversationState
 
 class AppContainer(val appContext: android.content.Context) {
     val settingsStore = SettingsStore(appContext)
+    val conversations = ConversationState(appContext)
+    val messageImages = com.hermes.client.data.attachments.MessageImageStore(appContext)
     private val httpClient = HermesApi.defaultClient()
     val runNotifications by lazy { RunNotifications(this) }
 

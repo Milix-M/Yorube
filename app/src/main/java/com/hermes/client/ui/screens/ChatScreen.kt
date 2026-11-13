@@ -186,6 +186,28 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     // Input behavior follows Settings: Enter sends only when opted in.
     val displaySettings by app.container.settingsStore.settings.collectAsState(initial = ClientSettings())
+    val visibilityOwner = remember(vm) { Any() }
+    val viewLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    androidx.compose.runtime.DisposableEffect(viewLifecycle, vm.sessionId, displaySettings.baseUrl, displaySettings.apiKey) {
+        fun show() {
+            vm.visibilityOwner = visibilityOwner
+            app.container.conversations.show(visibilityOwner, displaySettings, vm.sessionId)
+            app.container.runNotifications.dismissSession(displaySettings, vm.sessionId)
+        }
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            when (event) {
+                androidx.lifecycle.Lifecycle.Event.ON_RESUME -> show()
+                androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> app.container.conversations.hide(visibilityOwner)
+                else -> Unit
+            }
+        }
+        viewLifecycle.addObserver(observer)
+        if (viewLifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) show()
+        onDispose {
+            viewLifecycle.removeObserver(observer)
+            app.container.conversations.hide(visibilityOwner)
+        }
+    }
     val messageSnapshot = vm.messages.toList()
     val blocks = remember(messageSnapshot) { buildChatBlocks(messageSnapshot) }
 
@@ -246,15 +268,19 @@ fun ChatScreen(
         messageSnapshot.firstOrNull { it.kind == MsgKind.USER }
             ?.text?.trim()?.take(32)?.ifBlank { null }
     }
-    val displayTitle = title?.ifBlank { null }
+    val displayTitle = app.container.conversations.title(displaySettings, vm.sessionId)
+        ?: title?.takeIf { sessionId == vm.sessionId }?.ifBlank { null }
         ?: serverTitle
         ?: firstUser
         ?: stringResource(R.string.new_chat)
+    LaunchedEffect(vm.sessionId, displayTitle, displaySettings.baseUrl, displaySettings.apiKey) {
+        app.container.conversations.rememberTitle(displaySettings, vm.sessionId, displayTitle)
+    }
 
     // A fresh chat becomes history as soon as the server assigns a session:
     // refresh the list so the header (and drawer) learn its title.
     LaunchedEffect(vm.sessionId) {
-        if (sessionId.isNullOrBlank() && vm.sessionId.isNotBlank()) {
+        if (vm.sessionId.isNotBlank() && vm.sessionId != sessionId) {
             onSessionCreated(vm.sessionId)
         }
     }
@@ -720,6 +746,7 @@ internal fun ChatInputBar(
                         onClick = steerAndClose,
                         modifier = Modifier.testTag("steerButton"),
                     )
+                    Spacer(Modifier.width(10.dp))
                     // While running, the send button itself becomes the stop button.
                     CircleStopButton(
                         onClick = onStop,
@@ -1113,6 +1140,31 @@ private fun TypingDots() {
 }
 
 @Composable
+private fun MessageImagePreview(image: com.hermes.client.data.attachments.MessageImage) {
+    val store = (LocalContext.current.applicationContext as HermesApp).container.messageImages
+    val bitmap by androidx.compose.runtime.produceState<android.graphics.Bitmap?>(null, image.token) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { store.preview(image) }
+    }
+    var expanded by remember(image.token) { mutableStateOf(false) }
+    val fallback = stringResource(R.string.attached_image)
+    val description = image.name.ifBlank { fallback }
+    val close = stringResource(R.string.close)
+    val loaded = bitmap
+    if (loaded == null) Text(description, style = MaterialTheme.typography.bodySmall)
+    else Image(loaded.asImageBitmap(), contentDescription = description,
+        contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+        modifier = Modifier.widthIn(max = 264.dp).heightIn(max = 300.dp)
+            .clip(RoundedCornerShape(12.dp)).clickable { expanded = true }.testTag("messageImage"))
+    if (expanded && loaded != null) {
+        AlertDialog(onDismissRequest = { expanded = false },
+            confirmButton = { TextButton(onClick = { expanded = false }) { Text(close) } },
+            text = { Image(loaded.asImageBitmap(), contentDescription = description,
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp).testTag("expandedMessageImage")) })
+    }
+}
+
+@Composable
 private fun MessageRow(msg: UiMessage, showCursor: Boolean, modifier: Modifier = Modifier) {
     when (msg.kind) {
         MsgKind.USER -> {
@@ -1129,12 +1181,15 @@ private fun MessageRow(msg: UiMessage, showCursor: Boolean, modifier: Modifier =
                     shadowElevation = 1.dp,
                     modifier = Modifier.widthIn(max = 340.dp),
                 ) {
-                    SelectionContainer {
-                        Text(
-                            msg.text,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 11.dp),
-                        )
+                    Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        msg.images.forEach { image -> MessageImagePreview(image) }
+                        if (msg.text.isNotBlank()) {
+                            SelectionContainer {
+                                Text(msg.text, style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp))
+                            }
+                        }
                     }
                 }
             }

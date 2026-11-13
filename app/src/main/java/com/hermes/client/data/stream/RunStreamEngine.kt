@@ -120,6 +120,7 @@ class RunStreamEngine(private val container: AppContainer) {
     private val restoreMutex = Mutex()
 
     private class Record(val active: ActiveRun, var endpoint: String = "") {
+        var notificationSettings: com.hermes.client.data.store.ClientSettings? = null
         val journal = ArrayList<RunStreamUpdate>()
         val version = MutableStateFlow(0L)
         var job: Job? = null
@@ -182,7 +183,8 @@ class RunStreamEngine(private val container: AppContainer) {
 
     /** Creation belongs to app scope too: leaving the screen must not orphan an accepted run. */
     suspend fun createTracked(request: com.hermes.client.data.api.RunCreateRequest,
-        settings: com.hermes.client.data.store.ClientSettings, key: String? = null): ActiveRun = withContext(Dispatchers.Main.immediate) {
+        settings: com.hermes.client.data.store.ClientSettings, key: String? = null,
+        userMessageIndex: Int? = null): ActiveRun = withContext(Dispatchers.Main.immediate) {
         val identity = listOf(settings.baseUrl, settings.apiKey, settings.cfClientId, settings.cfClientSecret, key) to
             request.copy(model = null, provider = null, modelOptions = null)
         creations[identity]?.let { return@withContext it.await() }
@@ -231,6 +233,17 @@ class RunStreamEngine(private val container: AppContainer) {
                     status.sessionId?.takeIf { it.isNotBlank() }?.let { record.sessionId = it }
                 } catch (e: CancellationException) { throw e } catch (_: Exception) { }
                 if (record.sessionId.isNotBlank()) container.settingsStore.markAppOwned(record.sessionId)
+                if (pending.request.images.isNotEmpty()) {
+                    withContext(Dispatchers.IO) {
+                        try {
+                            val images = container.messageImages.stage(settings, pending.request.images)
+                            container.messageImages.bind(settings, record.sessionId, userMessageIndex,
+                                accepted.runId, pending.request.input, images)
+                        } catch (_: Exception) {
+                            // Preview storage must not orphan a run already accepted by the server.
+                        }
+                    }
+                }
                 acknowledgeQueued(pending, settings.baseUrl)
                 withContext(Dispatchers.IO) { outbox.accepted(pending.key) }
                 launchRecord(record, pollFirst = false, settings = settings)
@@ -250,6 +263,7 @@ class RunStreamEngine(private val container: AppContainer) {
         record.job = scope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
             try {
                 val configuration = settings ?: container.settingsStore.current()
+                record.notificationSettings = configuration
                 record.endpoint = configuration.baseUrl
                 persist()
                 val api = container.api(configuration)
@@ -333,7 +347,7 @@ class RunStreamEngine(private val container: AppContainer) {
         record.version.value++
         mutableUpdates.emit(update)
         try {
-            container.runNotifications.onUpdate(ActiveRun(record.active.runId, record.sessionId), update)
+            container.runNotifications.onUpdate(ActiveRun(record.active.runId, record.sessionId), update, record.notificationSettings)
         } catch (e: CancellationException) { throw e } catch (_: Exception) {
             // A notification failure must never break the execution stream.
         }

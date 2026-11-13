@@ -47,6 +47,7 @@ data class UiMessage(
     val id: Long,
     val kind: MsgKind,
     val text: String,
+    val images: List<com.hermes.client.data.attachments.MessageImage> = emptyList(),
 )
 
 data class ClarifyPrompt(
@@ -108,6 +109,7 @@ class ChatViewModel(
      * only holds the hook; without a host it stays a no-op.
      */
     var navigateToFreshChat: () -> Unit = {}
+    var visibilityOwner: Any? = null
 
     /**
      * True while the run is still working toward its reply: no assistant
@@ -209,12 +211,24 @@ class ChatViewModel(
      * Renders one session history into bubbles, folding machine content into
      * the activity log. Shared by history loads and fork-and-continue.
      */
-    private fun renderHistory(history: List<SessionMessage>) {
+    private suspend fun renderHistory(history: List<SessionMessage>) {
+        val settings = container.settingsStore.current()
+        val savedImages = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            var userIndex = 0
+            val lastUser = history.count { it.role == "user" } - 1
+            history.map { message ->
+                if (message.role == "user") container.messageImages.restore(settings, sessionId, userIndex++, lastUser, message.text)
+                else null
+            }
+        }
         messages.clear()
-        for (m in history) {
+        for ((position, m) in history.withIndex()) {
             if (m.text.isBlank()) continue
             when (m.role) {
-                "user" -> messages.add(UiMessage(idSeq++, MsgKind.USER, m.text))
+                "user" -> {
+                    val saved = savedImages[position]
+                    messages.add(UiMessage(idSeq++, MsgKind.USER, saved?.text ?: m.text, saved?.images.orEmpty()))
+                }
                 "assistant" -> {
                     val split = splitUserFacing(m.text)
                     if (split.visible.isNotBlank()) {
@@ -263,8 +277,7 @@ class ChatViewModel(
         if (busy || attaching || historyLoading || foreignBlocked || commandRunning) return
         input = ""
         val images = attachments.map { it.image }
-        messages.add(UiMessage(idSeq++, MsgKind.USER, listOf(text, images.joinToString("\n") { "[${it.name}]" })
-            .filter { it.isNotBlank() }.joinToString("\n")))
+        messages.add(UiMessage(idSeq++, MsgKind.USER, text))
         startRun(text, history = null, images = images)
     }
 
@@ -672,6 +685,7 @@ class ChatViewModel(
             if (id.isNullOrBlank()) {
                 postErrorMessage(s(R.string.cmd_new_failed))
             } else {
+                container.conversations.rememberTitle(container.settingsStore.current(), id, name)
                 markAppOwned(id)
                 openSession(id)
             }
@@ -799,6 +813,7 @@ class ChatViewModel(
         } else {
             launchGuarded {
                 container.api().updateSessionTitle(targetSessionId, name)
+                container.conversations.rememberTitle(container.settingsStore.current(), targetSessionId, name)
                 postStatusMessage(s(R.string.cmd_title_set, name))
             }
         }
@@ -1327,10 +1342,12 @@ class ChatViewModel(
         assistantIndex = -1
         lastSentText = text
         lastSentImages = images
-        viewModelScope.launch { doStartRun(text, history, images) }
+        val messageId = messages.lastOrNull { it.kind == MsgKind.USER }?.id
+        val userIndex = (messages.count { it.kind == MsgKind.USER } - 1).coerceAtLeast(0)
+        viewModelScope.launch { doStartRun(text, history, images, messageId, userIndex) }
     }
 
-    private suspend fun doStartRun(text: String, history: List<HistoryMessage>?, images: List<RunImage>) {
+    private suspend fun doStartRun(text: String, history: List<HistoryMessage>?, images: List<RunImage>, messageId: Long?, userIndex: Int) {
         val settings = container.settingsStore.current()
         uiLanguage = settings.language
         if (!settings.isConfigured) {
@@ -1340,13 +1357,24 @@ class ChatViewModel(
         }
         val id: String
         try {
+            if (images.isNotEmpty()) {
+                val previews = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    container.messageImages.stage(settings, images)
+                }
+                val index = messages.indexOfFirst { it.id == messageId }
+                if (index >= 0) messages[index] = messages[index].copy(images = previews)
+            }
             val accepted = container.runStreams.createTracked(
                 RunCreateRequest(input = text, sessionId = sessionId.ifBlank { null }, conversationHistory = history,
                     model = settings.model.ifBlank { null }, provider = settings.provider.ifBlank { null }, modelOptions = settings.modelOptions,
-                    images = images), settings)
+                    images = images), settings, userMessageIndex = userIndex)
             id = accepted.runId
             runId = id
             sessionId = accepted.sessionId
+            container.conversations.adopt(visibilityOwner, settings, sessionId)
+            if (container.conversations.title(settings, sessionId).isNullOrBlank()) {
+                container.conversations.rememberTitle(settings, sessionId, text.lineSequence().firstOrNull().orEmpty().take(80))
+            }
             attachments.clear()
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e

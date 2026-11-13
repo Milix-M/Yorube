@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.core.app.ApplicationProvider
@@ -85,6 +86,15 @@ class ConversationListScreenTest {
         }
         // No date section headers: the flat list shows the row directly.
         compose.onNodeWithText("Hello").assertIsDisplayed()
+        compose.onNodeWithTag("unread-s1", useUnmergedTree = true).assertDoesNotExist()
+        val settings = kotlinx.coroutines.runBlocking { app.container.settingsStore.current() }
+        compose.runOnIdle { app.container.conversations.recordReply(settings, "s1", "r", true) }
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("unread-s1", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("unread-s1", useUnmergedTree = true).assertIsDisplayed()
+        compose.runOnIdle { app.container.conversations.markRead(settings, "s1") }
+        compose.onNodeWithTag("unread-s1", useUnmergedTree = true).assertDoesNotExist()
         assertTrue(
             compose.onAllNodesWithText("Today").fetchSemanticsNodes().isEmpty()
         )

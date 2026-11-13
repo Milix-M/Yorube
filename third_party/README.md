@@ -9,7 +9,7 @@ Generated outputs:
 - `aboutlibraries.json`: automatically collected metadata and full license texts for the actual runtime artifacts.
 - `dependencies.json`: normalized inventory, binary hashes and embedded notices.
 - `THIRD_PARTY_NOTICES.txt`: repository-readable full notices, identical to the APK asset of that name.
-- `app/src/main/assets/legal/LICENSES.txt`: the app's MIT license followed by the same third-party notices, shown offline in Settings.
+- `app/src/main/assets/legal/LICENSES.txt`: the app's MIT license followed by the same third-party notices, bundled in the APK. Settings links to the notices on GitHub.
 
 Every Android pre-build runs `:app:verifyThirdPartyNotices`. It recollects actual dependency metadata and checks the committed outputs. Missing dependencies, missing/unapproved licenses, missing full texts, stale outputs, and unsupported local/project artifacts fail instead of being silently omitted. CI also tests these failure cases. New license types require updating `license-policy.json` after review.
 
@@ -35,4 +35,4 @@ The source is also included in the APK. Releases attach only the APK; the source
 2. Resolve missing/unapproved metadata and re-review invalidated bundled-component evidence. Do not bypass errors with blanket exclusions.
 3. Review and commit all generated output changes together.
 4. Run `:app:verifyThirdPartyNotices` and `python3 -m unittest discover -s scripts/tests`.
-5. Sync the site using its `scripts/sync-app-legal.mjs` helper.
+5. Check that the app and website links still open the repository notices on GitHub.

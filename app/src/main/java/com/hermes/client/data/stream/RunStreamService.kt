@@ -75,7 +75,7 @@ class RunStreamService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_notify_sync)
+            .setSmallIcon(com.hermes.client.R.drawable.ic_notification)
             .setContentTitle(getString(R.string.stream_notification_title))
             .setContentText(getString(R.string.stream_notification_text))
             .setContentIntent(pending)

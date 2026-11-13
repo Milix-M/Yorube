@@ -48,6 +48,7 @@ class ConversationListDeleteUiTest {
 
     @After
     fun tearDown() {
+        compose.mainClock.autoAdvance = true
         server.shutdown()
     }
 
@@ -76,33 +77,42 @@ class ConversationListDeleteUiTest {
             }
         }
         var opened: String? = null
+        // Let the IO-backed initial fetch finish before advancing its loading animation.
+        compose.mainClock.autoAdvance = false
         compose.setContent {
             HermesAppTheme {
                 ConversationListScreen(onOpenChat = { id, _ -> opened = id })
             }
         }
         compose.waitUntil(timeoutMillis = 10_000) {
+            compose.mainClock.advanceTimeBy(32)
             compose.onAllNodes(hasText("Hello")).fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithText("Hello").performClick()
         assertEquals("s1", opened)
 
         compose.onNodeWithText("Hello").performTouchInput { longClick() }
+        compose.mainClock.advanceTimeBy(1_000)
         // Long-press now opens the options sheet (pin / delete), then delete confirms.
         assertTrue(
             compose.onAllNodesWithText("Conversation options").fetchSemanticsNodes().isNotEmpty()
         )
         compose.onNodeWithTag("deleteOption").performClick()
+        compose.mainClock.advanceTimeBy(1_000)
         assertTrue(
             compose.onAllNodesWithText("Delete conversation?").fetchSemanticsNodes().isNotEmpty()
         )
         compose.onNodeWithText("Cancel").performClick()
+        compose.mainClock.advanceTimeBy(1_000)
         compose.onNodeWithText("Hello").assertIsDisplayed()
 
         compose.onNodeWithText("Hello").performTouchInput { longClick() }
+        compose.mainClock.advanceTimeBy(1_000)
         compose.onNodeWithTag("deleteOption").performClick()
+        compose.mainClock.advanceTimeBy(1_000)
         compose.onNodeWithText("Delete").performClick()
         compose.waitUntil(timeoutMillis = 10_000) {
+            compose.mainClock.advanceTimeBy(32)
             compose.onAllNodes(hasText("Hello")).fetchSemanticsNodes().isEmpty()
         }
         val paths = mutableListOf<String>()

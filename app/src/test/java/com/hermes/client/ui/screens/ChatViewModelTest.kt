@@ -2506,7 +2506,7 @@ class ChatViewModelTest {
         vm.navigateToFreshChat = { navigations++ }
         vm.input = "/new exp"
         vm.onSend()
-        awaitCondition { vm.sessionId == "titled-1" }
+        awaitCondition { vm.sessionId == "titled-1" && !vm.historyLoading }
         assertEquals(0, navigations)
         val bodies = pollBodies { it.startsWith("/api/sessions") }
         assertTrue(bodies.any { it.contains("\"title\":\"exp\"") })
@@ -2577,7 +2577,7 @@ class ChatViewModelTest {
         awaitCondition { !vm.historyLoading }
         vm.input = "/branch"
         vm.onSend()
-        awaitCondition { vm.sessionId == "s2" }
+        awaitCondition { vm.sessionId == "s2" && !vm.historyLoading }
         awaitCondition { vm.messages.any { it.text.contains("second history") } }
         assertTrue(lastStatus(vm).contains("Branched to session s2"))
     }
@@ -2674,7 +2674,7 @@ class ChatViewModelTest {
         val vm = ChatViewModel(c, null)
         vm.input = "/resume Second"
         vm.onSend()
-        awaitCondition { vm.sessionId == "s2" }
+        awaitCondition { vm.sessionId == "s2" && !vm.historyLoading }
         awaitCondition { vm.messages.any { it.text.contains("second history") } }
     }
 
@@ -2685,7 +2685,7 @@ class ChatViewModelTest {
         val vm = ChatViewModel(c, null)
         vm.input = "/resume econ"
         vm.onSend()
-        awaitCondition { vm.sessionId == "s2" }
+        awaitCondition { vm.sessionId == "s2" && !vm.historyLoading }
     }
 
     @Test

@@ -173,11 +173,12 @@ fun NavGraph(startSessionId: String?) {
             // the chat in place (no navigation, no transition), just closing
             // the drawer. From another session, navigate home as usual.
             var homeNonce by rememberSaveable { mutableIntStateOf(0) }
+            var displayedSessionId by remember(sessionId, homeNonce) { mutableStateOf(sessionId) }
             ModalNavigationDrawer(
                 drawerState = drawerState,
                 drawerContent = {
                     ConversationDrawerContent(
-                        selectedSessionId = sessionId,
+                        selectedSessionId = displayedSessionId,
                         drawerState = drawerState,
                         onOpenChat = { id, chatTitle ->
                             scope.launch { drawerState.close() }
@@ -216,7 +217,7 @@ fun NavGraph(startSessionId: String?) {
                             popUpTo(Routes.CHAT) { inclusive = true }
                         }
                     },
-                    onSessionCreated = { startVm.refresh() },
+                    onSessionCreated = { displayedSessionId = it; startVm.refresh() },
                     // At the home root there is nothing to pop: stay instead of a blank screen.
                     onNavigateBack = { if (navController.previousBackStackEntry != null) navController.popBackStack() },
                     onOpenDrawer = { scope.launch { drawerState.open() } },

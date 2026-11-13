@@ -50,6 +50,7 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -64,6 +65,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -91,6 +94,7 @@ fun ConversationListScreen(
                 ConversationListViewModel(app.container) as T
         }
     )
+    val unreadByConnection by app.container.conversations.unread.collectAsState()
     val snackbar = remember { SnackbarHostState() }
     var pendingMenu by remember { mutableStateOf<SessionInfo?>(null) }
     var pendingDelete by remember { mutableStateOf<String?>(null) }
@@ -168,6 +172,7 @@ fun ConversationListScreen(
                     loading = vm.loading,
                     sessions = vm.sessions.filterQuery(query),
                     pinnedIds = vm.pinnedIds,
+                    unreadIds = unreadByConnection[vm.connectionKey].orEmpty(),
                     onOpenChat = onOpenChat,
                     onShowOptions = { pendingMenu = it },
                 )
@@ -215,6 +220,7 @@ fun ConversationDrawerContent(
                 ConversationListViewModel(app.container) as T
         }
     )
+    val unreadByConnection by app.container.conversations.unread.collectAsState()
     var pendingMenu by remember { mutableStateOf<SessionInfo?>(null) }
     var pendingDelete by remember { mutableStateOf<String?>(null) }
 
@@ -259,6 +265,7 @@ fun ConversationDrawerContent(
                     loading = vm.loading,
                     sessions = vm.sessions,
                     pinnedIds = vm.pinnedIds,
+                    unreadIds = unreadByConnection[vm.connectionKey].orEmpty(),
                     selectedKey = selectedSessionId,
                     compact = true,
                     onOpenChat = onOpenChat,
@@ -375,6 +382,7 @@ fun ConversationSearchScreen(
                 ConversationListViewModel(app.container) as T
         }
     )
+    val unreadByConnection by app.container.conversations.unread.collectAsState()
     var pendingMenu by remember { mutableStateOf<SessionInfo?>(null) }
     var pendingDelete by remember { mutableStateOf<String?>(null) }
     var query by remember { mutableStateOf("") }
@@ -411,6 +419,7 @@ fun ConversationSearchScreen(
                     loading = vm.loading,
                     sessions = vm.sessions.filterQuery(query),
                     pinnedIds = vm.pinnedIds,
+                    unreadIds = unreadByConnection[vm.connectionKey].orEmpty(),
                     onOpenChat = onOpenChat,
                     onShowOptions = { pendingMenu = it },
                 )
@@ -489,6 +498,7 @@ private fun ConversationListBody(
     pinnedIds: Set<String>,
     onOpenChat: (String?, String?) -> Unit,
     onShowOptions: (SessionInfo) -> Unit,
+    unreadIds: Set<String> = emptySet(),
     selectedKey: String? = null,
     compact: Boolean = false,
 ) {
@@ -528,6 +538,8 @@ private fun ConversationListBody(
                 item(key = "session-${s.key.ifBlank { s.displayTitle }}") {
                     val selected = selectedKey != null && s.key == selectedKey
                     val pinned = pinnedIds.contains(s.key)
+                    val unread = s.key in unreadIds
+                    val unreadLabel = stringResource(R.string.unread_reply)
                     Surface(
                         color = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
                         shape = RoundedCornerShape(18.dp),
@@ -549,10 +561,17 @@ private fun ConversationListBody(
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                         style = MaterialTheme.typography.bodyMedium.copy(
-                                            fontWeight = FontWeight.Medium
+                                            fontWeight = if (unread) FontWeight.Bold else FontWeight.Medium
                                         ),
                                         modifier = Modifier.weight(1f, fill = false),
                                     )
+                                    if (unread) {
+                                        Box(Modifier.padding(start = 8.dp).size(8.dp)
+                                            .clip(androidx.compose.foundation.shape.CircleShape)
+                                            .background(MaterialTheme.colorScheme.primary)
+                                            .testTag("unread-${s.key}")
+                                            .then(Modifier.semantics { contentDescription = unreadLabel }))
+                                    }
                                     if (pinned) {
                                         Box(
                                             modifier = Modifier
