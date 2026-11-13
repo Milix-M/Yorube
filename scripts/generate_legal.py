@@ -33,7 +33,7 @@ for component in inventory["additional_components"]:
         "Source: " + component["source_url"],
     ]).strip())
 parts.append("Material Symbols auto_awesome (ic_hero_spark.xml)\nGoogle / Material Design icon contributors\nApache-2.0\nhttps://github.com/google/material-design-icons")
-parts.append("The MPL-2.0 Public Suffix List source matching OkHttp 4.12.0 is bundled in this APK at legal/public_suffix_list.dat and accompanies releases as public_suffix_list.dat. It is also maintained at third_party/sources/public_suffix_list.dat in https://github.com/Milix-M/Yorube. This data is unmodified; OkHttp compiles it to a binary resource. MPL terms apply to this data, independently of Yorube.")
+parts.append("The MPL-2.0 Public Suffix List source matching OkHttp 4.12.0 is bundled in this APK at legal/public_suffix_list.dat. It is also maintained at third_party/sources/public_suffix_list.dat in https://github.com/Milix-M/Yorube. This data is unmodified; OkHttp compiles it to a binary resource. MPL terms apply to this data, independently of Yorube.")
 for directory in ("notices", "licenses"):
     for path in sorted((ROOT / "third_party" / directory).glob("*.txt")):
         parts.append("===== " + path.name + " =====\n\n" + path.read_text().strip())

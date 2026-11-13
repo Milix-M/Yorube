@@ -27,7 +27,7 @@ Material Symbols auto_awesome (`ic_hero_spark.xml`) is attributed under Apache-2
 python3 scripts/verify_publicsuffix.py third_party/sources/public_suffix_list.dat /path/to/okhttp-4.12.0.jar
 ```
 
-The source is also included in the APK and release attachments. Yorube-original code is MIT licensed; third-party terms remain independent.
+The source is also included in the APK. Releases attach only the APK; the source and license notices remain available in the APK and this repository. Yorube-original code is MIT licensed; third-party terms remain independent.
 
 ## Updating
 
